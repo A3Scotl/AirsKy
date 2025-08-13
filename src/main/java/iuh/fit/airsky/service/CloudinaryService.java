@@ -30,7 +30,7 @@ public class CloudinaryService {
         try {
             // Upload file vào thư mục "booking"
             Map uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap(
-                    "folder", "benhvien1a",
+                    "folder", "airsky",
                     "resource_type", "image"
             ));
             return uploadResult.get("secure_url").toString();

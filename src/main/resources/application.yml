@@ -2,10 +2,15 @@ spring:
   application:
     name: AirsKy
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mariadb://localhost:3306/fly
+    username: root
+    password: root
+    driver-class-name: org.mariadb.jdbc.Driver
+#  datasource:
+#    url: ${DB_URL}
+#    username: ${DB_USERNAME}
+#    password: ${DB_PASSWORD}
+#    driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
       ddl-auto: update
@@ -17,21 +22,36 @@ spring:
   sql:
     init:
       mode: always
-
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${SPRING_MAIL_USERNAME}
+    password: ${SPRING_MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 jwt:
   secret: ${JWT_SECRET}
   access:
     expiration: 3600000
   refresh:
-    expiration: 86400000
+    expiration: 604800000
 
-verification:
-  code:
-    expiration: 300000
+#verification:
+#  code:
+#    expiration: 300000
 
 cloudinary:
   cloud_name: ${CLOUDINARY_CLOUD_NAME}
   api_key: ${CLOUDINARY_API_KEY}
   api_secret: ${CLOUDINARY_API_SECRET}
-recaptcha:
-  secret: ${RECAPTCHA_SECRET_KEY}
+#recaptcha:
+#  secret: ${RECAPTCHA_SECRET_KEY}
+
