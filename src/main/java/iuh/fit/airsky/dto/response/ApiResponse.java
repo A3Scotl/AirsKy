@@ -1,26 +1,13 @@
-/*
- * @ (#) ApiResponse.java 1.0 8/12/2025
- *
- * Copyright (c) 2025 IUH.All rights reserved
- */
-
-package iuh.fit.airsky.response;
-
-/*
- * @description
- * @author : Nguyen Truong An
- * @date : 8/12/2025
- * @version 1.0
- */
+package iuh.fit.airsky.dto.response;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
 import java.time.ZonedDateTime;
-
 @Data
-@NoArgsConstructor
 @AllArgsConstructor
+@NoArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class ApiResponse<T> {
     private boolean success;
     private String message;

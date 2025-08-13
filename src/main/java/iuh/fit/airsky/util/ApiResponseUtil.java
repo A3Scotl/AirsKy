@@ -12,7 +12,7 @@ package iuh.fit.airsky.util;
  * @date : 8/12/2025
  * @version 1.0
  */
-import iuh.fit.airsky.response.ApiResponse;
+import iuh.fit.airsky.dto.response.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
