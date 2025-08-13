@@ -1,51 +1,56 @@
-/*
- * @ (#) User.java 1.0 8/12/2025
- *
- * Copyright (c) 2025 IUH.All rights reserved
- */
-
 package iuh.fit.airsky.model;
 
-/*
- * @description
- * @author : Nguyen Truong An
- * @date : 8/12/2025
- * @version 1.0
- */
-import iuh.fit.airsky.base.BaseEntity;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
-@Data
-@EqualsAndHashCode(callSuper = true)
+import java.util.Collection;
+import java.util.List;
+
 @Entity
-@Table(name = "users", indexes = {@Index(name = "idx_username", columnList = "username", unique = true),
-        @Index(name = "idx_email", columnList = "email", unique = true)})
-public class User extends BaseEntity {
-
-    @Column(nullable = false, unique = true, length = 50)
-    private String username;
-
-    @Column(nullable = false, length = 255)
-    private String password; // Hashed
-
-    @Column(nullable = false, unique = true, length = 100)
-    private String email;
-
-    @Column(length = 50)
+@Table(name = "users", indexes = {
+        @Index(name = "idx_user_email", columnList = "email")
+})
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class User implements UserDetails {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
     private String firstName;
-
-    @Column(length = 50)
     private String lastName;
 
-    @Column(length = 255)
-    private String avatar;
-
-    @Column(length = 20)
+    // `unique = true` cũng sẽ yêu cầu database tạo một unique constraint, thường đi kèm index
+    @Column(unique = true, nullable = false)
+    private String email;
+    private String password;
     private String phone;
+    private boolean isVerified = false;
 
-    @ManyToOne
-    @JoinColumn(name = "role_id", nullable = false)
+    @Enumerated(EnumType.STRING)
     private Role role;
+
+    // UserDetails implementation
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return List.of(new SimpleGrantedAuthority(role.name()));
+    }
+
+    @Override
+    public String getUsername() {
+        return email;
+    }
+
+    // Các phương thức còn lại của UserDetails
+    @Override public boolean isAccountNonExpired() { return true; }
+    @Override public boolean isAccountNonLocked() { return true; }
+    @Override public boolean isCredentialsNonExpired() { return true; }
+    @Override public boolean isEnabled() { return true; }
 }
