@@ -2,6 +2,7 @@ package iuh.fit.airsky.service.impl;
 
 import iuh.fit.airsky.dto.request.*;
 import iuh.fit.airsky.dto.response.AuthResponse;
+import iuh.fit.airsky.dto.response.UserRespone;
 import iuh.fit.airsky.exception.AuthException;
 import iuh.fit.airsky.model.Role;
 import iuh.fit.airsky.model.User;
@@ -133,6 +134,18 @@ public class AuthServiceImpl implements AuthService {
         verificationTokenRepository.deleteByEmail(request.getEmail());
 
         return new AuthResponse("Email verified successfully", null);
+    }
+
+    @Override
+    public UserRespone getUserByEmail(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new AuthException("User not found"));
+        UserRespone res = new UserRespone();
+        res.setEmail(user.getEmail());
+        res.setFirstName(user.getFirstName());
+        res.setLastName(user.getLastName());
+        res.setPhone(user.getPhone());
+        return res;
     }
 
 

@@ -17,6 +17,12 @@ import java.time.ZonedDateTime;
 @Component
 public class CustomAuthExceptionHandler implements AuthenticationEntryPoint, AccessDeniedHandler {
 
+    private final ObjectMapper objectMapper;
+
+    public CustomAuthExceptionHandler(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
     private void writeError(HttpServletResponse response, HttpStatus status, String message, String error, String path) throws IOException {
         ApiResponse<Object> apiResponse = new ApiResponse<>(
                 false,
@@ -29,18 +35,17 @@ public class CustomAuthExceptionHandler implements AuthenticationEntryPoint, Acc
 
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setStatus(status.value());
-        new ObjectMapper().writeValue(response.getOutputStream(), apiResponse);
+        objectMapper.writeValue(response.getOutputStream(), apiResponse); // dùng objectMapper đã inject
     }
 
-    // Xử lý khi chưa đăng nhập hoặc token sai
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response, org.springframework.security.core.AuthenticationException authException) throws IOException {
         writeError(response, HttpStatus.UNAUTHORIZED, "Unauthorized", "INVALID_TOKEN_OR_NOT_LOGGED_IN", request.getRequestURI());
     }
 
-    // Xử lý khi không đủ quyền
     @Override
     public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException) throws IOException {
         writeError(response, HttpStatus.FORBIDDEN, "Access Denied", "FORBIDDEN", request.getRequestURI());
     }
 }
+
