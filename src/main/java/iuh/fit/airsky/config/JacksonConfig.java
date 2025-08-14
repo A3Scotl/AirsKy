@@ -1,0 +1,32 @@
+/*
+ * @ (#) JacksonConfig.java 1.0 8/14/2025
+ *
+ * Copyright (c) 2025 IUH.All rights reserved
+ */
+
+package iuh.fit.airsky.config;
+
+/*
+ * @description
+ * @author : Nguyen Truong An
+ * @date : 8/14/2025
+ * @version 1.0
+ */
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class JacksonConfig {
+
+    @Bean
+    public Jackson2ObjectMapperBuilderCustomizer jacksonCustomizer() {
+        return builder -> {
+            builder.modules(new JavaTimeModule());
+            builder.featuresToDisable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        };
+    }
+}

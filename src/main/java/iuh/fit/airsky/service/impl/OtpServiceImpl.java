@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Random;
@@ -24,35 +25,37 @@ public class OtpServiceImpl implements OtpService {
     private static final int MAX_RESEND_COUNT = 3;
     private static final long RESEND_TIME_WINDOW_MINUTES = 60;
     private static final long MIN_INTERVAL_SECONDS = 60;
+
     private final VerificationTokenRepository verificationTokenRepository;
     private final EmailService emailService;
 
     @Value("${app.verification.expiration-minutes:5}")
     private int verificationExpirationMinutes;
 
-    @Override
+    @Transactional
     public void createAndSendOtp(String email) {
-        String verificationCode = generateVerificationCode(email);
         LocalDateTime now = LocalDateTime.now();
+        String verificationCode = generateVerificationCode(email);
 
-        verificationTokenRepository.findByEmail(email)
-                .ifPresent(verificationTokenRepository::delete);
+        // Sử dụng lock để tránh race condition
+        VerificationToken token = verificationTokenRepository.findByEmailForUpdate(email)
+                .orElse(VerificationToken.builder()
+                        .email(email)
+                        .resendCount(0)
+                        .build());
 
-        VerificationToken token = VerificationToken.builder()
-                .email(email)
-                .code(verificationCode)
-                .timestamp(now)
-                .resendCount(0)
-                .lastResendTime(now)
-                .build();
+        token.setCode(verificationCode);
+        token.setTimestamp(now);
+        token.setLastResendTime(now);
+        token.setResendCount(0); // reset resend count khi tạo mới OTP
 
         verificationTokenRepository.save(token);
         sendOtpEmail(email, verificationCode);
     }
 
-    @Override
+    @Transactional
     public void resendOtp(String email) {
-        VerificationToken token = verificationTokenRepository.findByEmail(email)
+        VerificationToken token = verificationTokenRepository.findByEmailForUpdate(email)
                 .orElseThrow(() -> new AuthException("No password reset request found"));
 
         validateResendLimit(token);
@@ -95,17 +98,14 @@ public class OtpServiceImpl implements OtpService {
         return String.valueOf(code);
     }
 
-
-
     private void validateResendLimit(VerificationToken token) {
         LocalDateTime now = LocalDateTime.now();
-        // Check khoảng cách tối thiểu giữa 2 lần gửi
+
         if (token.getLastResendTime() != null &&
-                java.time.Duration.between(token.getLastResendTime(), now).getSeconds() < MIN_INTERVAL_SECONDS) {
+                Duration.between(token.getLastResendTime(), now).getSeconds() < MIN_INTERVAL_SECONDS) {
             throw new AuthException("Please wait at least " + MIN_INTERVAL_SECONDS + " seconds before requesting another OTP.");
         }
 
-        // Check giới hạn số lần gửi trong thời gian quy định
         if (token.getResendCount() >= MAX_RESEND_COUNT &&
                 now.isBefore(token.getLastResendTime().plusMinutes(RESEND_TIME_WINDOW_MINUTES))) {
             throw new AuthException("Resend limit reached. Please try again later.");

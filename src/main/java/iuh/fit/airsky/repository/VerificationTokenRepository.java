@@ -6,7 +6,10 @@
 package iuh.fit.airsky.repository;
 
 import iuh.fit.airsky.model.VerificationToken;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.Optional;
 
@@ -18,5 +21,10 @@ import java.util.Optional;
  */
 public interface VerificationTokenRepository extends JpaRepository<VerificationToken, Long> {
     Optional<VerificationToken> findByEmail(String email);
-    Optional<VerificationToken> deleteByEmail(String email);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT v FROM VerificationToken v WHERE v.email = :email")
+    Optional<VerificationToken> findByEmailForUpdate(String email);
+
+    void deleteByEmail(String email);
 }

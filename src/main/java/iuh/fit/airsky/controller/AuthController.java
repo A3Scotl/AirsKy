@@ -3,6 +3,8 @@ package iuh.fit.airsky.controller;
 import iuh.fit.airsky.dto.request.*;
 import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.AuthResponse;
+import iuh.fit.airsky.dto.response.UserRespone;
+import iuh.fit.airsky.exception.AuthException;
 import iuh.fit.airsky.exception.EmailNotVerifiedException;
 import iuh.fit.airsky.exception.InvalidCredentialsException;
 import iuh.fit.airsky.service.AuthService;
@@ -15,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -72,7 +75,16 @@ public class AuthController {
             return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Forgot password failed", ex.getMessage(), "/api/v1/auth/forgot-password");
         }
     }
-
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<AuthResponse>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        try {
+            authService.resetPassword(request);
+            return ApiResponseUtil.buildResponse(true, "Password reset successful", null, "/api/v1/auth/reset-password");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Reset password failed", ex.getMessage(), "/api/v1/auth/reset-password");
+        }
+    }
     @PostMapping("/resend-verification")
     public ResponseEntity<ApiResponse<AuthResponse>> resendVerificationCode(@Valid @RequestBody ForgotPasswordRequest request) {
         try {
@@ -84,16 +96,7 @@ public class AuthController {
         }
     }
 
-    @PostMapping("/reset-password")
-    public ResponseEntity<ApiResponse<AuthResponse>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        try {
-            authService.resetPassword(request);
-            return ApiResponseUtil.buildResponse(true, "Password reset successful", null, "/api/v1/auth/reset-password");
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Reset password failed", ex.getMessage(), "/api/v1/auth/reset-password");
-        }
-    }
+
 
     @PostMapping("/change-password")
     @PreAuthorize("hasAnyRole('ADMIN','USER')")
@@ -108,6 +111,21 @@ public class AuthController {
             return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Change password failed", ex.getMessage(), "/api/v1/auth/change-password");
         }
     }
+    @GetMapping("/profile/me")
+    @PreAuthorize("hasAnyRole('ADMIN','USER')")
+    public ResponseEntity<ApiResponse<UserRespone>> getUserProfile() {
+        try {
+            String email = SecurityContextHolder.getContext().getAuthentication().getName();
+            UserRespone user = authService.getUserByEmail(email);
+            return ApiResponseUtil.buildResponse(true, "Get user profile successful", user, "/api/v1/auth/profile/me");
+        } catch (AuthException ex) {
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage(), "INVALID_CREDENTIALS", "/api/v1/auth/profile/me");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Get user profile failed", ex.getMessage(), "/api/v1/auth/profile/me");
+        }
+    }
+
 
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(HttpServletResponse response) {
