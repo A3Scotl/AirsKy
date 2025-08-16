@@ -9,6 +9,11 @@ spring:
   jackson:
     serialization:
       write-dates-as-timestamps: false
+  mvc:
+    dispatch-options-request: true
+  web:
+      resources:
+        add-mappings: false
 #  redis:
 #    host: localhost
 #    port: 6379

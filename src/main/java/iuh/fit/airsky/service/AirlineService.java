@@ -1,14 +1,16 @@
 package iuh.fit.airsky.service;
 
-import iuh.fit.airsky.model.Airline;
-import org.springframework.data.domain.Page;
+import iuh.fit.airsky.dto.request.AirlineRequest;
+import iuh.fit.airsky.dto.response.AirlineResponse;
+import iuh.fit.airsky.dto.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 
+import java.util.Optional;
+
 public interface AirlineService {
-    Page<Airline> searchAirlines(String keyword, Pageable pageable);
-    Page<Airline> getAllAirlines(Pageable pageable);
-    Airline getAirlineById(Long id);
-    Airline saveAirline(Airline airline);
-    Airline updateAirline(Long id, Airline airline);
-    void deleteAirline(Long id);
+    AirlineResponse createAirline(AirlineRequest request);
+    AirlineResponse updateAirline(Long id, AirlineRequest request);
+    Optional<AirlineResponse> findById(Long id);
+    PageResponse<AirlineResponse> findAll(Pageable pageable);
+    void softDelete(Long id);
 }

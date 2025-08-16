@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import jakarta.transaction.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -25,4 +26,6 @@ public interface GateRepository extends JpaRepository<Gate, Long> {
     @Transactional
     @Query("UPDATE Gate g SET g.deleted = true, g.deletedAt = :now, g.active = false WHERE g.gateId = :id")
     void softDeleteById(Long id, LocalDateTime now);
+
+    List<Gate> findAllByAirport_AirportId(Long airportAirportId);
 }

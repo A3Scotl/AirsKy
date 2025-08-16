@@ -25,4 +25,6 @@ public interface AirlineRepository extends JpaRepository<Airline, Long> {
     @Transactional
     @Query("UPDATE Airline a SET a.deleted = true, a.deletedAt = :now, a.active = false WHERE a.airlineId = :id")
     void softDeleteById(Long id, LocalDateTime now);
+
+    Optional<Airline> findByAirlineCode(String airlineCode);
 }

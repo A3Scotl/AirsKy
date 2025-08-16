@@ -1,16 +1,19 @@
 package iuh.fit.airsky.service;
 
-import iuh.fit.airsky.model.Flight;
-import org.springframework.data.domain.Page;
+import iuh.fit.airsky.dto.request.FlightRequest;
+import iuh.fit.airsky.dto.response.FlightResponse;
+import iuh.fit.airsky.dto.response.PageResponse;
+import iuh.fit.airsky.enums.FlightStatusType;
 import org.springframework.data.domain.Pageable;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Optional;
 
 public interface FlightService {
-    Page<Flight> searchFlights(Long departureAirportId, Long arrivalAirportId, LocalDate departureDate, Pageable pageable);
-    Page<Flight> getAllFlights(Pageable pageable);
-    Flight getFlightById(Long id);
-    Flight saveFlight(Flight flight);
-    Flight updateFlight(Long id, Flight flight);
-    void deleteFlight(Long id);
+    FlightResponse createFlight(FlightRequest request);
+    FlightResponse updateFlight(Long id, FlightRequest request);
+    Optional<FlightResponse> findById(Long id);
+    PageResponse<FlightResponse> findAll(Pageable pageable);
+    PageResponse<FlightResponse> searchFlights(Long departureAirportId, Long arrivalAirportId, LocalDateTime startTime, LocalDateTime endTime, FlightStatusType status, Pageable pageable);
+    void delete(Long id);
 }

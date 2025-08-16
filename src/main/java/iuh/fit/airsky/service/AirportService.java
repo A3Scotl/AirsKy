@@ -1,14 +1,16 @@
 package iuh.fit.airsky.service;
 
-import iuh.fit.airsky.model.Airport;
-import org.springframework.data.domain.Page;
+import iuh.fit.airsky.dto.request.AirportRequest;
+import iuh.fit.airsky.dto.response.AirportResponse;
+import iuh.fit.airsky.dto.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 
+import java.util.Optional;
+
 public interface AirportService {
-    Page<Airport> searchAirports(String keyword, Pageable pageable);
-    Page<Airport> getAllAirports(Pageable pageable);
-    Airport getAirportById(Long id);
-    Airport saveAirport(Airport airport);
-    Airport updateAirport(Long id, Airport airport);
-    void deleteAirport(Long id);
+    AirportResponse createAirport(AirportRequest request);
+    AirportResponse updateAirport(Long id, AirportRequest request);
+    Optional<AirportResponse> findById(Long id);
+    PageResponse<AirportResponse> findAll(Pageable pageable);
+    void softDelete(Long id);
 }

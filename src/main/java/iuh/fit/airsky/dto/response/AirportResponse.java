@@ -2,6 +2,7 @@ package iuh.fit.airsky.dto.response;
 
 import lombok.Data;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class AirportResponse {
@@ -15,4 +16,5 @@ public class AirportResponse {
     private boolean isActive;
     private LocalDateTime deletedAt;
     private boolean deleted;
+    private List<GateResponse> gates;
 }

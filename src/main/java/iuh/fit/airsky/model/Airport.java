@@ -4,6 +4,8 @@ import iuh.fit.airsky.base.BaseFullSoftDeleteEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.List;
+
 @Entity
 @Table(name = "airports",
         indexes = {
@@ -31,5 +33,8 @@ public class Airport  extends BaseFullSoftDeleteEntity {
 
     @Column(length = 50)
     private String country;
+    @OneToMany(mappedBy = "airport", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<Gate> gates;
+
 
 }

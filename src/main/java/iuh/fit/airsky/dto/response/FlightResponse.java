@@ -9,14 +9,14 @@ import java.time.LocalDateTime;
 public class FlightResponse {
     private Long flightId;
     private String flightNumber;
-    private Long airlineId;
-    private Long departureAirportId;
-    private Long arrivalAirportId;
+    private String airlineName;
+    private String departureAirportName;
+    private String arrivalAirportName;
     private LocalDateTime departureTime;
     private LocalDateTime arrivalTime;
     private Integer duration;
     private String stops;
-    private Long gateId;
+    private String gateName;
     private Integer availableSeats;
     private BigDecimal basePrice;
     private FlightStatusType status;

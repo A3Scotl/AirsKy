@@ -10,6 +10,6 @@ public class UserRequest {
     private String email;
     private String password;
     private String phone;
-    private boolean isVerified;
+    private boolean isVerified = true;
     private Role role;
 }
