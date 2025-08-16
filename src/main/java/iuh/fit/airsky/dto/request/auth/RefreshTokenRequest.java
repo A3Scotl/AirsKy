@@ -1,4 +1,4 @@
-package iuh.fit.airsky.dto.request;
+package iuh.fit.airsky.dto.request.auth;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;

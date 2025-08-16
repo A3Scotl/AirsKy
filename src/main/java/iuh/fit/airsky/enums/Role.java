@@ -1,4 +1,4 @@
-package iuh.fit.airsky.model;
+package iuh.fit.airsky.enums;
 
 public enum Role {
     ADMIN, USER
