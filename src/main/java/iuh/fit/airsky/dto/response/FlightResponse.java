@@ -3,6 +3,7 @@ package iuh.fit.airsky.dto.response;
 import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.enums.FlightType;
 import lombok.Data;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -11,13 +12,16 @@ public class FlightResponse {
     private Long flightId;
     private String flightNumber;
     private String airlineName;
-    private String departureAirportName;
-    private String arrivalAirportName;
+    private String from;
+    private String fromCode;
+    private String to;
+    private String toCode;
+    private String aircraft;
     private LocalDateTime departureTime;
     private LocalDateTime arrivalTime;
     private Integer duration;
     private String stops;
-    private String gateName;
+    private String gate;
     private FlightType type;
     private String businessName;
     private Integer availableSeats;
@@ -25,4 +29,5 @@ public class FlightResponse {
     private FlightStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
 }

@@ -2,6 +2,7 @@ package iuh.fit.airsky.mapper;
 
 import iuh.fit.airsky.dto.request.FlightRequest;
 import iuh.fit.airsky.dto.response.FlightResponse;
+import iuh.fit.airsky.model.Aircraft;
 import iuh.fit.airsky.model.Flight;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -21,10 +22,14 @@ public interface FlightMapper {
             expression = "java(entity.getBusiness() != null ? (entity.getBusiness().getBusinessName() != null ? entity.getBusiness().getBusinessName() : entity.getBusiness().getFirstName() + ' ' + entity.getBusiness().getLastName()) : null)")
 
     @Mapping(target = "airlineName", expression = "java(entity.getAirline() != null ? entity.getAirline().getAirlineName() : null)")
-    @Mapping(target = "departureAirportName", expression = "java(entity.getDepartureAirport() != null ? entity.getDepartureAirport().getAirportName() : null)")
-    @Mapping(target = "arrivalAirportName", expression = "java(entity.getArrivalAirport() != null ? entity.getArrivalAirport().getAirportName() : null)")
-    @Mapping(target = "gateName", expression = "java(entity.getGate() != null ? entity.getGate().getGateName() : null)")
+    @Mapping(target = "from", expression = "java(entity.getDepartureAirport() != null ? entity.getDepartureAirport().getAirportName() : null)")
+    @Mapping(target = "to", expression = "java(entity.getArrivalAirport() != null ? entity.getArrivalAirport().getAirportName() : null)")
+    @Mapping(target = "fromCode", expression = "java(entity.getDepartureAirport() != null ? entity.getDepartureAirport().getAirportCode() : null)")
+    @Mapping(target = "toCode", expression = "java(entity.getArrivalAirport() != null ? entity.getArrivalAirport().getAirportCode() : null)")
+    @Mapping(target = "gate", expression = "java(entity.getGate() != null ? entity.getGate().getGateName() : null)")
+    @Mapping(target = "aircraft", expression = "java(entity.getAircraft() != null ? entity.getAircraft().getAircraftName() : null)")
     FlightResponse toResponseDTO(Flight entity);
+
 }
 
 

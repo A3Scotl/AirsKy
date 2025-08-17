@@ -75,4 +75,8 @@ public class Flight  extends BaseAuditOnlyEntity {
     @Column(length = 50)
     private FlightType type;//    DOMESTIC , INTERNATIONAL
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "aircraft_id")
+    private Aircraft aircraft;
+
 }

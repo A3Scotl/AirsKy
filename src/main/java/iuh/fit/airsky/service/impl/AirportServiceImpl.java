@@ -6,7 +6,9 @@ import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.AirportMapper;
 import iuh.fit.airsky.model.Airport;
+import iuh.fit.airsky.model.Country;
 import iuh.fit.airsky.repository.AirportRepository;
+import iuh.fit.airsky.repository.CountryRepository;
 import iuh.fit.airsky.service.AirportService;
 import iuh.fit.airsky.util.GenerateCodeUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -24,11 +26,12 @@ public class AirportServiceImpl implements AirportService {
     private final AirportRepository airportRepository;
     private final AirportMapper airportMapper;
     private final GenerateCodeUtil generateCodeUtil;
-
-    public AirportServiceImpl(AirportRepository airportRepository, AirportMapper airportMapper, GenerateCodeUtil generateCodeUtil) {
+    private final CountryRepository countryRepository;
+    public AirportServiceImpl(AirportRepository airportRepository, AirportMapper airportMapper, GenerateCodeUtil generateCodeUtil, CountryRepository countryRepository) {
         this.airportRepository = airportRepository;
         this.airportMapper = airportMapper;
         this.generateCodeUtil = generateCodeUtil;
+        this.countryRepository = countryRepository;
     }
 
     @Override
@@ -44,15 +47,24 @@ public class AirportServiceImpl implements AirportService {
     @Override
     public AirportResponse updateAirport(Long id, AirportRequest request) {
         log.info("Updating airport with ID: {}", id);
+
         Airport airport = airportRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Airport not found with id " + id));
+
         airport.setAirportName(request.getAirportName());
-        airport.setCity(request.getCity());
-        airport.setCountry(request.getCountry());
+
+        if (request.getCountryId() != null) {
+            Country country = countryRepository.findById(request.getCountryId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Country not found with id " + request.getCountryId()));
+            airport.setCountry(country);
+        }
+
         Airport updated = airportRepository.save(airport);
         log.info("Airport updated with ID: {}", updated.getAirportId());
+
         return airportMapper.toResponseDTO(updated);
     }
+
 
     @Override
     public Optional<AirportResponse> findById(Long id) {

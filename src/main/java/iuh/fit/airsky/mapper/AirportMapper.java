@@ -4,6 +4,8 @@ import iuh.fit.airsky.dto.request.AirportRequest;
 import iuh.fit.airsky.dto.response.AirportResponse;
 import iuh.fit.airsky.dto.response.GateResponse;
 import iuh.fit.airsky.model.Airport;
+
+import iuh.fit.airsky.model.Gate;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -14,28 +16,23 @@ public interface AirportMapper {
     @Mapping(target = "airportId", ignore = true)
     Airport toEntity(AirportRequest dto);
 
-    default AirportResponse toResponseDTO(Airport airport) {
-        if (airport == null) return null;
+    @Mapping(target = "country", expression = "java(airport.getCountry() != null ? airport.getCountry().getCountryName() : null)")
+    @Mapping(target = "gates", expression = "java(mapGates(airport.getGates()))")
+    AirportResponse toResponseDTO(Airport airport);
 
-        AirportResponse response = new AirportResponse();
-        response.setAirportId(airport.getAirportId());
-        response.setAirportCode(airport.getAirportCode());
-        response.setAirportName(airport.getAirportName());
-        response.setCity(airport.getCity());
-        response.setCountry(airport.getCountry());
-
-        if (airport.getGates() != null) {
-            List<GateResponse> gates = airport.getGates().stream()
-                    .map(g -> {
-                        GateResponse gr = new GateResponse();
-                        gr.setGateId(g.getGateId());
-                        gr.setGateName(g.getGateName());
-                        return gr;
-                    })
-                    .toList();
-            response.setGates(gates);
-        }
-
-        return response;
+    // Map List<Gate> -> List<GateResponse>
+    default List<GateResponse> mapGates(List<Gate> gates) {
+        if (gates == null) return null;
+        return gates.stream().map(g -> {
+            GateResponse gr = new GateResponse();
+            gr.setGateId(g.getGateId());
+            gr.setGateName(g.getGateName());
+//            gr.setAirportId(
+//                    g.getAirport() != null ? g.getAirport().getAirportId() : null
+//            );
+            return gr;
+        }).toList();
     }
+
 }
+

@@ -16,7 +16,7 @@ import java.util.Optional;
 @Repository
 public interface AirportRepository extends JpaRepository<Airport, Long> {
 
-    @EntityGraph(attributePaths = "gates")
+    @EntityGraph(attributePaths = {"gates", "country"})
     @Query("SELECT a FROM Airport a WHERE a.deleted = false")
     Page<Airport> findAll(Pageable pageable);
 

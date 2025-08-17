@@ -28,11 +28,10 @@ public class Airport  extends BaseFullSoftDeleteEntity {
     @Column(name = "airport_name", length = 100)
     private String airportName;
 
-    @Column(length = 50)
-    private String city;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "country_id")
+    private Country country;
 
-    @Column(length = 50)
-    private String country;
     @OneToMany(mappedBy = "airport", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Gate> gates;
 
