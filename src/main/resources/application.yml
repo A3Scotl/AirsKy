@@ -9,6 +9,15 @@ spring:
   jackson:
     serialization:
       write-dates-as-timestamps: false
+  mvc:
+    dispatch-options-request: true
+  web:
+      resources:
+        add-mappings: false
+#  redis:
+#    host: localhost
+#    port: 6379
+#    password:
 #  datasource:
 #    url: ${DB_URL}
 #    username: ${DB_USERNAME}
@@ -25,10 +34,6 @@ spring:
   sql:
     init:
       mode: always
-  data:
-    redis:
-      host: localhost
-      port: 6379
   mail:
     host: smtp.gmail.com
     port: 587

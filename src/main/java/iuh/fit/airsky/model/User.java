@@ -1,26 +1,31 @@
 package iuh.fit.airsky.model;
 
+import iuh.fit.airsky.base.BaseFullSoftDeleteEntity;
+import iuh.fit.airsky.enums.Role;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "users", indexes = {
         @Index(name = "idx_user_email", columnList = "email")
 })
 @Data
-@Builder
+@SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-public class User implements UserDetails {
+public class User  extends BaseFullSoftDeleteEntity implements UserDetails {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -33,6 +38,7 @@ public class User implements UserDetails {
     private String password;
     private String phone;
     private boolean isVerified = false;
+    private String businessName;
 
     @Enumerated(EnumType.STRING)
     private Role role;
@@ -42,10 +48,17 @@ public class User implements UserDetails {
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority(role.name()));
     }
+    private LocalDateTime lastLogin;
 
     @Override
     public String getUsername() {
         return email;
+    }
+    public String getDisplayName() {
+        if (role == Role.BUSINESS && businessName != null) {
+            return businessName;
+        }
+        return firstName + " " + lastName;
     }
 
     // Các phương thức còn lại của UserDetails

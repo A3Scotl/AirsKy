@@ -1,12 +1,14 @@
 package iuh.fit.airsky.controller;
 
-import iuh.fit.airsky.dto.request.*;
+import iuh.fit.airsky.dto.request.auth.*;
 import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.AuthResponse;
-import iuh.fit.airsky.dto.response.UserRespone;
+import iuh.fit.airsky.dto.response.UserResponse;
 import iuh.fit.airsky.exception.AuthException;
 import iuh.fit.airsky.exception.EmailNotVerifiedException;
 import iuh.fit.airsky.exception.InvalidCredentialsException;
+import iuh.fit.airsky.mapper.UserMapper;
+import iuh.fit.airsky.model.User;
 import iuh.fit.airsky.service.AuthService;
 import iuh.fit.airsky.util.ApiResponseUtil;
 import jakarta.servlet.http.Cookie;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final UserMapper userMapper;
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(@Valid @RequestBody RegisterRequest request) {
@@ -113,18 +116,35 @@ public class AuthController {
     }
     @GetMapping("/profile/me")
     @PreAuthorize("hasAnyRole('ADMIN','USER')")
-    public ResponseEntity<ApiResponse<UserRespone>> getUserProfile() {
+    public ResponseEntity<ApiResponse<UserResponse>> getUserProfile() {
         try {
             String email = SecurityContextHolder.getContext().getAuthentication().getName();
-            UserRespone user = authService.getUserByEmail(email);
-            return ApiResponseUtil.buildResponse(true, "Get user profile successful", user, "/api/v1/auth/profile/me");
+            UserResponse user = authService.getUserByEmail(email);
+
+            return ApiResponseUtil.buildResponse(
+                    true,
+                    "Get user profile successful",
+                    user,
+                    "/api/v1/auth/profile/me"
+            );
         } catch (AuthException ex) {
-            return ApiResponseUtil.buildErrorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage(), "INVALID_CREDENTIALS", "/api/v1/auth/profile/me");
+            return ApiResponseUtil.buildErrorResponse(
+                    HttpStatus.UNAUTHORIZED,
+                    ex.getMessage(),
+                    "INVALID_CREDENTIALS",
+                    "/api/v1/auth/profile/me"
+            );
         } catch (Exception ex) {
             ex.printStackTrace();
-            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Get user profile failed", ex.getMessage(), "/api/v1/auth/profile/me");
+            return ApiResponseUtil.buildErrorResponse(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Get user profile failed",
+                    ex.getMessage(),
+                    "/api/v1/auth/profile/me"
+            );
         }
     }
+
 
 
     @PostMapping("/logout")

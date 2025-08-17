@@ -23,29 +23,27 @@ public class CustomAuthExceptionHandler implements AuthenticationEntryPoint, Acc
         this.objectMapper = objectMapper;
     }
 
-    private void writeError(HttpServletResponse response, HttpStatus status, String message, String error, String path) throws IOException {
+    private void writeError(HttpServletResponse response, HttpStatus status, String message, ErrorCode errorCode, String path) throws IOException {
         ApiResponse<Object> apiResponse = new ApiResponse<>(
                 false,
                 message,
                 null,
-                error,
+                errorCode.name(),
                 ZonedDateTime.now(),
                 path
         );
-
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setStatus(status.value());
-        objectMapper.writeValue(response.getOutputStream(), apiResponse); // dùng objectMapper đã inject
+        objectMapper.writeValue(response.getOutputStream(), apiResponse);
     }
 
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response, org.springframework.security.core.AuthenticationException authException) throws IOException {
-        writeError(response, HttpStatus.UNAUTHORIZED, "Unauthorized", "INVALID_TOKEN_OR_NOT_LOGGED_IN", request.getRequestURI());
+        writeError(response, HttpStatus.UNAUTHORIZED, "Unauthorized", ErrorCode.INVALID_TOKEN_OR_NOT_LOGGED_IN, request.getRequestURI());
     }
 
     @Override
     public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException) throws IOException {
-        writeError(response, HttpStatus.FORBIDDEN, "Access Denied", "FORBIDDEN", request.getRequestURI());
+        writeError(response, HttpStatus.FORBIDDEN, "Access Denied", ErrorCode.FORBIDDEN, request.getRequestURI());
     }
 }
-
