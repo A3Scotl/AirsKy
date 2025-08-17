@@ -51,7 +51,8 @@ public class SecurityConfig {
             "/api/v1/auth/reset-password",
             "/api/v1/airports/**",
             "/api/v1/flights/**",
-            "/api/v1/airlines/**"
+            "/api/v1/airlines/**",
+            "/api/v1/bookings/**"
     };
     private static final String[] PERMISION_ROUTES = {
             "/api/v1/auth/change-password",
@@ -71,7 +72,7 @@ public class SecurityConfig {
 
                         .requestMatchers(PUBLIC_ROUTES).permitAll()
                         .requestMatchers(PERMISION_ROUTES)
-                        .hasAnyRole("USER", "ADMIN")
+                        .hasAnyRole("BUSINESS", "CUSTOMER", "ADMIN")
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
