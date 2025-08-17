@@ -1,6 +1,6 @@
 package iuh.fit.airsky.repository;
 
-import iuh.fit.airsky.enums.FlightStatusType;
+import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.model.Flight;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,8 +15,16 @@ import java.util.Optional;
 
 @Repository
 public interface FlightRepository extends JpaRepository<Flight, Long> {
-    @EntityGraph(attributePaths = {"airline", "departureAirport", "arrivalAirport", "gate"})
+    @EntityGraph(attributePaths = {"airline", "departureAirport", "arrivalAirport", "gate", "business"})
     Page<Flight> findAll(Pageable pageable);
+
+//    @Query("SELECT f FROM Flight f " +
+//            "JOIN FETCH f.airline " +
+//            "JOIN FETCH f.departureAirport " +
+//            "JOIN FETCH f.arrivalAirport " +
+//            "LEFT JOIN FETCH f.gate " +
+//            "JOIN FETCH f.business")
+//    Page<Flight> findAllWithBusiness(Pageable pageable);
 
 
     @Query("SELECT f FROM Flight f WHERE f.departureAirport.airportId = :departureAirportId " +
@@ -27,7 +35,7 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
                                @Param("arrivalAirportId") Long arrivalAirportId,
                                @Param("startTime") LocalDateTime startTime,
                                @Param("endTime") LocalDateTime endTime,
-                               @Param("status") FlightStatusType status,
+                               @Param("status") FlightStatus status,
                                Pageable pageable);
 
     Optional<Flight> findByFlightNumber(String flightNumber);

@@ -1,6 +1,7 @@
 package iuh.fit.airsky.dto.response;
 
-import iuh.fit.airsky.enums.FlightStatusType;
+import iuh.fit.airsky.enums.FlightStatus;
+import iuh.fit.airsky.enums.FlightType;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -17,9 +18,11 @@ public class FlightResponse {
     private Integer duration;
     private String stops;
     private String gateName;
+    private FlightType type;
+    private String businessName;
     private Integer availableSeats;
     private BigDecimal basePrice;
-    private FlightStatusType status;
+    private FlightStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

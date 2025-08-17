@@ -26,7 +26,7 @@ public class RegisterRequest {
         req.setEmail(email);
         req.setPassword(password);
         req.setPhone(phone);
-        req.setRole(Role.USER);       // default USER
+        req.setRole(Role.CUSTOMER);       // default CUSTOMER
         req.setVerified(false);       // default chưa xác thực
         return req;
     }

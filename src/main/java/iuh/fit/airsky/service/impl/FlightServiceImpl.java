@@ -3,7 +3,7 @@ package iuh.fit.airsky.service.impl;
 import iuh.fit.airsky.dto.request.FlightRequest;
 import iuh.fit.airsky.dto.response.FlightResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
-import iuh.fit.airsky.enums.FlightStatusType;
+import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.FlightMapper;
 import iuh.fit.airsky.model.Flight;
@@ -91,7 +91,7 @@ public class FlightServiceImpl implements FlightService {
     }
 
     @Override
-    public PageResponse<FlightResponse> searchFlights(Long departureAirportId, Long arrivalAirportId, LocalDateTime startTime, LocalDateTime endTime, FlightStatusType status, Pageable pageable) {
+    public PageResponse<FlightResponse> searchFlights(Long departureAirportId, Long arrivalAirportId, LocalDateTime startTime, LocalDateTime endTime, FlightStatus status, Pageable pageable) {
         log.info("Searching flights with departureAirportId: {}, arrivalAirportId: {}, startTime: {}, endTime: {}, status: {}", departureAirportId, arrivalAirportId, startTime, endTime, status);
         Page<Flight> page = flightRepository.searchFlights(departureAirportId, arrivalAirportId, startTime, endTime, status, pageable);
         return new PageResponse<>(page.map(flightMapper::toResponseDTO));

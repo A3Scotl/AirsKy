@@ -38,6 +38,7 @@ public class User  extends BaseFullSoftDeleteEntity implements UserDetails {
     private String password;
     private String phone;
     private boolean isVerified = false;
+    private String businessName;
 
     @Enumerated(EnumType.STRING)
     private Role role;
@@ -48,9 +49,16 @@ public class User  extends BaseFullSoftDeleteEntity implements UserDetails {
         return List.of(new SimpleGrantedAuthority(role.name()));
     }
     private LocalDateTime lastLogin;
+
     @Override
     public String getUsername() {
         return email;
+    }
+    public String getDisplayName() {
+        if (role == Role.BUSINESS && businessName != null) {
+            return businessName;
+        }
+        return firstName + " " + lastName;
     }
 
     // Các phương thức còn lại của UserDetails

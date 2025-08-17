@@ -1,8 +1,8 @@
 package iuh.fit.airsky.model;
 
 import iuh.fit.airsky.base.BaseAuditOnlyEntity;
-import iuh.fit.airsky.base.BaseFullSoftDeleteEntity;
-import iuh.fit.airsky.enums.FlightStatusType;
+import iuh.fit.airsky.enums.FlightStatus;
+import iuh.fit.airsky.enums.FlightType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -50,6 +50,10 @@ public class Flight  extends BaseAuditOnlyEntity {
     private LocalDateTime arrivalTime;
 
     private Integer duration;
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "business_id", nullable = false)
+    private User business;
+
 
     @Column(length = 20)
     private String stops;
@@ -65,6 +69,10 @@ public class Flight  extends BaseAuditOnlyEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(length = 50)
-    private FlightStatusType status;//    ON_TIME,DELAYED,CANCELLED
+    private FlightStatus status;//    ON_TIME,DELAYED,CANCELLED
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 50)
+    private FlightType type;//    DOMESTIC , INTERNATIONAL
 
 }

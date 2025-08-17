@@ -4,7 +4,7 @@ import iuh.fit.airsky.dto.request.FlightRequest;
 import iuh.fit.airsky.dto.response.FlightResponse;
 import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
-import iuh.fit.airsky.enums.FlightStatusType;
+import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.service.FlightService;
 import iuh.fit.airsky.util.ApiResponseUtil;
@@ -83,7 +83,7 @@ public class FlightController {
             @RequestParam Long arrivalAirportId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
-            @RequestParam(required = false) FlightStatusType status,
+            @RequestParam(required = false) FlightStatus status,
             Pageable pageable) {
         try {
             PageResponse<FlightResponse> response = flightService.searchFlights(departureAirportId, arrivalAirportId, startTime, endTime, status, pageable);

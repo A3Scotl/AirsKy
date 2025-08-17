@@ -1,6 +1,7 @@
 package iuh.fit.airsky.dto.request;
 
-import iuh.fit.airsky.enums.FlightStatusType;
+import iuh.fit.airsky.enums.FlightStatus;
+import iuh.fit.airsky.enums.FlightType;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -18,5 +19,8 @@ public class FlightRequest {
     private Long gateId;
     private Integer availableSeats;
     private BigDecimal basePrice;
-    private FlightStatusType status;
+    private FlightStatus status;
+    private FlightType type;
+    private Long businessId;
+
 }
