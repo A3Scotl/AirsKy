@@ -1,5 +1,5 @@
 package iuh.fit.airsky.enums;
 
 public enum FlightType {
-    DOMESTIC , INTERNATIONAL
+    ONE_WAY,DOMESTIC , INTERNATIONAL
 }

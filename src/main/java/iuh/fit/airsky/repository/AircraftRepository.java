@@ -8,6 +8,8 @@ package iuh.fit.airsky.repository;
 import iuh.fit.airsky.model.Aircraft;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Optional;
+
 /*
  * @description
  * @author : Nguyen Truong An
@@ -15,4 +17,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * @version 1.0
  */
 public interface AircraftRepository extends JpaRepository<Aircraft, Long> {
+    Optional<Aircraft> findByAircraftCode(String code);
 }

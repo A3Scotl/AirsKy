@@ -1,13 +1,13 @@
 package iuh.fit.airsky.model;
 
 import iuh.fit.airsky.base.BaseAuditOnlyEntity;
-import iuh.fit.airsky.base.BaseFullSoftDeleteEntity;
 import iuh.fit.airsky.enums.ReservationStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "bookings",
@@ -46,8 +46,8 @@ public class Booking extends BaseAuditOnlyEntity {
 
     private ReservationStatus status;
 
-    private Integer adultCount;
-    private Integer childCount;
-    private Integer infantCount;
 
+    // 🔹 Thêm danh sách hành khách
+    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<Passenger> passengers;
 }

@@ -51,7 +51,7 @@ public class BookingController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS', 'CUSTOMER','ADMIN')")
+//    @PreAuthorize("hasAnyRole('BUSINESS', 'CUSTOMER','ADMIN')")
     public ResponseEntity<ApiResponse<BookingResponse>> getBooking(@PathVariable Long id) {
         try {
             return bookingService.findById(id)

@@ -37,4 +37,11 @@ public class Aircraft extends BaseFullSoftDeleteEntity {
     @Column(name = "aircraft_name", length = 100)
     private String aircraftName;
 
+
+    @Column(name = "total_seats")
+    private Integer totalSeats;
+
+    @Column(name = "seat_layout", length = 10)
+    private String seatLayout; // ví dụ "3-3" hoặc "4-3"
+
 }

@@ -3,8 +3,10 @@ package iuh.fit.airsky.service.impl;
 import iuh.fit.airsky.dto.request.PassengerRequest;
 import iuh.fit.airsky.dto.response.PassengerResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
+import iuh.fit.airsky.dto.response.PassengerSeatResponse;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.PassengerMapper;
+import iuh.fit.airsky.model.Booking;
 import iuh.fit.airsky.model.Passenger;
 import iuh.fit.airsky.repository.BookingRepository;
 import iuh.fit.airsky.repository.PassengerRepository;
@@ -14,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -34,7 +37,7 @@ public class PassengerServiceImpl implements PassengerService {
     public PassengerResponse createPassenger(PassengerRequest request) {
         log.info("Creating new passenger for booking ID: {}", request.getBookingId());
         Passenger passenger = passengerMapper.toEntity(request);
-        passenger.setReservation(bookingRepository.findById(request.getBookingId())
+        passenger.setBooking(bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found with id " + request.getBookingId())));
         Passenger saved = passengerRepository.save(passenger);
         log.info("Passenger created with ID: {}", saved.getPassengerId());
@@ -79,4 +82,14 @@ public class PassengerServiceImpl implements PassengerService {
         passengerRepository.deleteById(id);
         log.info("Passenger deleted: {}", id);
     }
+    public List<PassengerSeatResponse> getPassengersWithSeats(Long bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Booking not found"));
+
+        return booking.getPassengers()
+                .stream()
+                .map(passengerMapper::toPassengerSeatResponse)
+                .toList();
+    }
+
 }

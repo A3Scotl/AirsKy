@@ -10,7 +10,7 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface FlightMapper {
 
-    @Mapping(target = "business", ignore = true)
+    @Mapping(target = "business.id", source = "businessId")
     @Mapping(target = "flightId", ignore = true)
     @Mapping(target = "airline", ignore = true)
     @Mapping(target = "departureAirport", ignore = true)

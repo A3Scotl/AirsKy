@@ -24,7 +24,7 @@ public class Passenger {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "booking_id", nullable = false)
-    private Booking reservation;
+    private Booking booking;
 
     @Column(name = "first_name", length = 50)
     private String firstName;
@@ -40,4 +40,8 @@ public class Passenger {
     @Enumerated(EnumType.STRING)
     @Column(length = 10)
     private PassengerType type; //     ADULT,CHILD,INFANT
+
+    @OneToOne
+    @JoinColumn(name = "seat_id")
+    private Seat seat;
 }

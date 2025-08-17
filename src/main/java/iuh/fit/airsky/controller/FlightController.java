@@ -4,9 +4,11 @@ import iuh.fit.airsky.dto.request.FlightRequest;
 import iuh.fit.airsky.dto.response.FlightResponse;
 import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
+import iuh.fit.airsky.dto.response.SeatResponse;
 import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.service.FlightService;
+import iuh.fit.airsky.service.SeatService;
 import iuh.fit.airsky.util.ApiResponseUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -27,9 +30,10 @@ import java.time.LocalDateTime;
 public class FlightController {
 
     private final FlightService flightService;
+    private final SeatService seatService;
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+//    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<FlightResponse>> createFlight(@Valid @RequestBody FlightRequest request) {
         try {
             FlightResponse response = flightService.createFlight(request);
@@ -107,4 +111,12 @@ public class FlightController {
             return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Deletion failed", ex.getMessage(), "/api/v1/flights/" + id);
         }
     }
+
+
+    @GetMapping("/{id}/seats")
+    public ResponseEntity<ApiResponse<List<SeatResponse>>> getSeatsByFlight(@PathVariable("id") Long flightId) {
+        List<SeatResponse> seats = seatService.getSeatsByFlight(flightId);
+        return ApiResponseUtil.buildResponse(true, "Seats retrieved successfully", seats, "/api/v1/flights/" + flightId + "/seats");
+    }
+
 }

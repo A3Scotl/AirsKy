@@ -6,12 +6,12 @@ import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.FlightMapper;
+import iuh.fit.airsky.model.Aircraft;
 import iuh.fit.airsky.model.Flight;
-import iuh.fit.airsky.repository.AirlineRepository;
-import iuh.fit.airsky.repository.AirportRepository;
-import iuh.fit.airsky.repository.FlightRepository;
-import iuh.fit.airsky.repository.GateRepository;
+import iuh.fit.airsky.repository.*;
+import iuh.fit.airsky.service.AircraftService;
 import iuh.fit.airsky.service.FlightService;
+import iuh.fit.airsky.service.SeatService;
 import iuh.fit.airsky.util.GenerateCodeUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -31,20 +31,29 @@ public class FlightServiceImpl implements FlightService {
     private final AirportRepository airportRepository;
     private final GateRepository gateRepository;
     private final GenerateCodeUtil generateCodeUtil;
+    private final SeatService seatService;
+    private final AircraftRepository aircraftRepository;
 
-    public FlightServiceImpl(FlightRepository flightRepository, FlightMapper flightMapper, AirlineRepository airlineRepository, AirportRepository airportRepository, GateRepository gateRepository, GenerateCodeUtil generateCodeUtil) {
+    public FlightServiceImpl(FlightRepository flightRepository, FlightMapper flightMapper, AirlineRepository airlineRepository, AirportRepository airportRepository, GateRepository gateRepository, GenerateCodeUtil generateCodeUtil, SeatService seatService,  AircraftRepository aircraftRepository) {
         this.flightRepository = flightRepository;
         this.flightMapper = flightMapper;
         this.airlineRepository = airlineRepository;
         this.airportRepository = airportRepository;
         this.gateRepository = gateRepository;
         this.generateCodeUtil = generateCodeUtil;
+        this.seatService = seatService;
+        this.aircraftRepository = aircraftRepository;
+
     }
 
     @Override
     public FlightResponse createFlight(FlightRequest request) {
         log.info("Creating new flight");
         Flight flight = flightMapper.toEntity(request);
+        Aircraft aircraft = aircraftRepository.findById(flight.getAircraft().getAircraftId())
+                .orElseThrow(() -> new ResourceNotFoundException("Aircraft not found"));
+        flight.setAircraft(aircraft);
+
         flight.setAirline(airlineRepository.findById(request.getAirlineId())
                 .orElseThrow(() -> new ResourceNotFoundException("Airline not found with id " + request.getAirlineId())));
         String airlineCode = flight.getAirline().getAirlineCode();
@@ -56,6 +65,7 @@ public class FlightServiceImpl implements FlightService {
         flight.setGate(gateRepository.findById(request.getGateId())
                 .orElseThrow(() -> new ResourceNotFoundException("Gate not found with id " + request.getGateId())));
         Flight saved = flightRepository.save(flight);
+        seatService.createSeatsForFlight(saved);
         log.info("Flight created with ID: {}", saved.getFlightId());
         return flightMapper.toResponseDTO(saved);
     }

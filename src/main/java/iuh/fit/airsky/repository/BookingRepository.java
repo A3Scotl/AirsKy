@@ -9,6 +9,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Long> {
-    @EntityGraph(attributePaths = {"flight","travelClass"})
+    @EntityGraph(attributePaths = {"flight","travelClass","passengers"})
     Page<Booking> findAll(Pageable pageable);
 }

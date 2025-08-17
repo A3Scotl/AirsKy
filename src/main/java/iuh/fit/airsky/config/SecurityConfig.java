@@ -52,7 +52,9 @@ public class SecurityConfig {
             "/api/v1/airports/**",
             "/api/v1/flights/**",
             "/api/v1/airlines/**",
-            "/api/v1/bookings/**"
+            "/api/v1/bookings/**",
+            "/api/v1/aircrafts/**",
+
     };
     private static final String[] PERMISION_ROUTES = {
             "/api/v1/auth/change-password",

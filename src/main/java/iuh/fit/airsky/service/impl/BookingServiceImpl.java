@@ -3,19 +3,21 @@ package iuh.fit.airsky.service.impl;
 import iuh.fit.airsky.dto.request.BookingRequest;
 import iuh.fit.airsky.dto.response.BookingResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
+import iuh.fit.airsky.enums.SeatStatus;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.BookingMapper;
 import iuh.fit.airsky.model.Booking;
-import iuh.fit.airsky.repository.BookingRepository;
-import iuh.fit.airsky.repository.FlightRepository;
-import iuh.fit.airsky.repository.TravelClassRepository;
-import iuh.fit.airsky.repository.UserRepository;
+import iuh.fit.airsky.model.Passenger;
+import iuh.fit.airsky.model.Seat;
+import iuh.fit.airsky.repository.*;
 import iuh.fit.airsky.service.BookingService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -27,28 +29,54 @@ public class BookingServiceImpl implements BookingService {
     private final UserRepository userRepository;
     private final FlightRepository flightRepository;
     private final TravelClassRepository travelClassRepository;
-
-    public BookingServiceImpl(BookingRepository bookingRepository, BookingMapper bookingMapper, UserRepository userRepository, FlightRepository flightRepository, TravelClassRepository travelClassRepository) {
+    private final SeatRepository seatRepository;
+    public BookingServiceImpl(BookingRepository bookingRepository, BookingMapper bookingMapper, UserRepository userRepository, FlightRepository flightRepository, TravelClassRepository travelClassRepository, SeatRepository seatRepository) {
         this.bookingRepository = bookingRepository;
         this.bookingMapper = bookingMapper;
         this.userRepository = userRepository;
         this.flightRepository = flightRepository;
         this.travelClassRepository = travelClassRepository;
+        this.seatRepository = seatRepository;
     }
 
-    @Override
+    @Transactional
     public BookingResponse createBooking(BookingRequest request) {
-        log.info("Creating new booking for user ID: {}", request.getUserId());
         Booking booking = bookingMapper.toEntity(request);
+
+        // Set user, flight, class
         booking.setUserId(userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id " + request.getUserId())));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found")));
         booking.setFlight(flightRepository.findById(request.getFlightId())
-                .orElseThrow(() -> new ResourceNotFoundException("Flight not found with id " + request.getFlightId())));
+                .orElseThrow(() -> new ResourceNotFoundException("Flight not found")));
         booking.setTravelClass(travelClassRepository.findById(request.getClassId())
-                .orElseThrow(() -> new ResourceNotFoundException("TravelClass not found with id " + request.getClassId())));
-        Booking saved = bookingRepository.save(booking);
-        log.info("Booking created with ID: {}", saved.getBookingId());
-        return bookingMapper.toResponseDTO(saved);
+                .orElseThrow(() -> new ResourceNotFoundException("TravelClass not found")));
+
+        // Map passengers
+        if (request.getPassengers() != null && !request.getPassengers().isEmpty()) {
+            List<Passenger> passengers = request.getPassengers().stream().map(p -> {
+                Passenger passenger = new Passenger();
+                passenger.setFirstName(p.getFirstName());
+                passenger.setLastName(p.getLastName());
+                passenger.setDateOfBirth(p.getDateOfBirth());
+                passenger.setPassportNumber(p.getPassportNumber());
+                passenger.setType(p.getType());
+
+                if (p.getSeatId() != null) {
+                    Seat seat = seatRepository.findById(p.getSeatId())
+                            .orElseThrow(() -> new ResourceNotFoundException("Seat not found"));
+                    seat.setStatus(SeatStatus.BOOKED);
+                    seat.setBookedBy(passenger); // seat now references passenger
+                    passenger.setSeat(seat);
+                }
+
+                passenger.setBooking(booking);
+                return passenger;
+            }).toList();
+            booking.setPassengers(passengers);
+        }
+
+        Booking savedBooking = bookingRepository.saveAndFlush(booking); // flush ngay
+        return bookingMapper.toResponseDTO(savedBooking);
     }
 
     @Override
@@ -59,9 +87,6 @@ public class BookingServiceImpl implements BookingService {
         booking.setBookingDate(request.getBookingDate());
         booking.setTotalAmount(request.getTotalAmount());
         booking.setStatus(request.getStatus());
-        booking.setAdultCount(request.getAdultCount());
-        booking.setChildCount(request.getChildCount());
-        booking.setInfantCount(request.getInfantCount());
         Booking updated = bookingRepository.save(booking);
         log.info("Booking updated with ID: {}", updated.getBookingId());
         return bookingMapper.toResponseDTO(updated);
