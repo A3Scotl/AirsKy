@@ -9,9 +9,9 @@ import java.util.List;
 @Data
 public class BookingResponse {
     private Long bookingId;
-    private Long userId;
-    private Long flightId;
-    private Long classId;
+    private String userEmail;
+    private String flightNumber;
+    private String travelClass;
     private LocalDateTime bookingDate;
     private BigDecimal totalAmount;
     private ReservationStatus status;

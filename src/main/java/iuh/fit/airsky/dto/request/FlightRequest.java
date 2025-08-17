@@ -13,6 +13,7 @@ public class FlightRequest {
     private Long airlineId;
     private Long departureAirportId;
     private Long arrivalAirportId;
+    private Long aircraftId;
     private LocalDateTime departureTime;
     private LocalDateTime arrivalTime;
     private Integer duration;
@@ -23,7 +24,7 @@ public class FlightRequest {
     private FlightStatus status;
     private FlightType type;
     private Long businessId;
-    private Aircraft aircraft;
+
 
 
 }
