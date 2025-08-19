@@ -49,6 +49,7 @@ public class SecurityConfig {
             "/api/v1/auth/resend-verification",
             "/api/v1/auth/verify-registration",
             "/api/v1/auth/reset-password",
+            "/api/v1/auth/google-login",
             "/api/v1/airports/**",
             "/api/v1/flights/**",
             "/api/v1/airlines/**",
