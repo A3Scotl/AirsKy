@@ -74,4 +74,16 @@ public class UserServiceImpl implements UserService {
         log.info("User soft deleted: {}", id);
     }
 
+    @Override
+    public Optional<User> findByEmail(String email) {
+        log.info("Finding user by email: {}", email);
+        return userRepository.findByEmail(email);
+    }
+
+    @Override
+    public User save(User user) {
+        log.info("Saving user: {}", user.getEmail());
+        return userRepository.save(user);
+    }
+
 }
