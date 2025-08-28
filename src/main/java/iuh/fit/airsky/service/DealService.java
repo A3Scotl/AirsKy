@@ -27,4 +27,5 @@ public interface DealService {
     boolean canUserUseDeal(String dealCode, Long userId);
     PageResponse<DealUsageResponse> getDealUsageHistory(Long dealId, Pageable pageable);
     PageResponse<DealUsageResponse> getUserDealUsageHistory(Long userId, Pageable pageable);
+    PageResponse<DealResponse> refreshDealStatuses(Pageable pageable);
 }

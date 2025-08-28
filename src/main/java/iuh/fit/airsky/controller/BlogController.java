@@ -5,6 +5,7 @@ import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.BlogResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.service.BlogService;
+import iuh.fit.airsky.service.BlogLikeService;
 import iuh.fit.airsky.service.CloudinaryService;
 import iuh.fit.airsky.repository.UserRepository;
 import iuh.fit.airsky.util.ApiResponseUtil;
@@ -33,6 +34,7 @@ public class BlogController {
     private final BlogService blogService;
     private final CloudinaryService cloudinaryService;
     private final UserRepository userRepository;
+    private final BlogLikeService blogLikeService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMIN')")
@@ -153,6 +155,15 @@ public class BlogController {
             log.error("Error updating blog: ", e);
             return ApiResponseUtil.buildResponse(false, e.getMessage(), null, "/api/v1/blogs/" + id);
         }
+    }
+
+    @GetMapping("/liked")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<PageResponse<BlogResponse>>> getLikedBlogs(@PageableDefault Pageable pageable) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        Long userId = getUserIdFromAuthentication(auth);
+        PageResponse<BlogResponse> response = blogLikeService.getLikedBlogs(userId, pageable);
+        return ApiResponseUtil.buildResponse(true, "Lấy danh sách bài viết đã tim thành công", response, "/api/v1/blogs/liked");
     }
 
     @GetMapping("/{id}")
@@ -304,6 +315,48 @@ public class BlogController {
         } catch (Exception e) {
             log.error("Error uploading editor image: ", e);
             return ApiResponseUtil.buildResponse(false, "Lỗi upload ảnh: " + e.getMessage(), null, "/api/v1/blogs/upload-image");
+        }
+    }
+
+    @PostMapping("/{id}/save")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> saveBlog(@PathVariable Long id) {
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            Long userId = getUserIdFromAuthentication(auth);
+            blogService.saveBlog(id, userId);
+            return ApiResponseUtil.buildResponse(true, "Đã lưu bài viết thành công", null, "/api/v1/blogs/" + id + "/save");
+        } catch (Exception e) {
+            log.error("Error saving blog: ", e);
+            return ApiResponseUtil.buildResponse(false, e.getMessage(), null, "/api/v1/blogs/" + id + "/save");
+        }
+    }
+
+    @DeleteMapping("/{id}/save")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> unsaveBlog(@PathVariable Long id) {
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            Long userId = getUserIdFromAuthentication(auth);
+            blogService.unsaveBlog(id, userId);
+            return ApiResponseUtil.buildResponse(true, "Đã bỏ lưu bài viết thành công", null, "/api/v1/blogs/" + id + "/save");
+        } catch (Exception e) {
+            log.error("Error unsaving blog: ", e);
+            return ApiResponseUtil.buildResponse(false, e.getMessage(), null, "/api/v1/blogs/" + id + "/save");
+        }
+    }
+
+    @GetMapping("/saved")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<PageResponse<BlogResponse>>> getSavedBlogs(@PageableDefault Pageable pageable) {
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            Long userId = getUserIdFromAuthentication(auth);
+            PageResponse<BlogResponse> response = blogService.getSavedBlogs(userId, pageable);
+            return ApiResponseUtil.buildResponse(true, "Lấy lịch sử bài viết đã lưu thành công", response, "/api/v1/blogs/saved");
+        } catch (Exception e) {
+            log.error("Error getting saved blogs: ", e);
+            return ApiResponseUtil.buildResponse(false, e.getMessage(), null, "/api/v1/blogs/saved");
         }
     }
 }

@@ -9,9 +9,11 @@ import iuh.fit.airsky.mapper.BlogMapper;
 import iuh.fit.airsky.mapper.CategoryMapper;
 import iuh.fit.airsky.model.Blog;
 import iuh.fit.airsky.model.Category;
+import iuh.fit.airsky.model.SavedBlog;
 import iuh.fit.airsky.model.User;
 import iuh.fit.airsky.repository.BlogRepository;
 import iuh.fit.airsky.repository.CategoryRepository;
+import iuh.fit.airsky.repository.SavedBlogRepository;
 import iuh.fit.airsky.repository.UserRepository;
 import iuh.fit.airsky.service.BlogService;
 import iuh.fit.airsky.util.SlugUtils;
@@ -36,8 +38,8 @@ public class BlogServiceImpl implements BlogService {
     private final BlogMapper blogMapper;
     private final UserRepository userRepository;
     private final CategoryRepository categoryRepository;
-
     private final CategoryMapper categoryMapper;
+    private final SavedBlogRepository savedBlogRepository;
 
     @Override
     @Transactional
@@ -256,6 +258,56 @@ public class BlogServiceImpl implements BlogService {
     @Transactional(readOnly = true)
     public boolean existsBySlug(String slug) {
         return blogRepository.existsBySlug(slug);
+    }
+
+    @Override
+    @Transactional
+    public void saveBlog(Long blogId, Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại với ID: " + userId));
+        Blog blog = blogRepository.findById(blogId)
+                .orElseThrow(() -> new ResourceNotFoundException("Blog không tồn tại với ID: " + blogId));
+        if (savedBlogRepository.existsByUserAndBlog(user, blog)) {
+            throw new IllegalArgumentException("Blog đã được lưu trước đó");
+        }
+        SavedBlog savedBlog = SavedBlog.builder()
+                .user(user)
+                .blog(blog)
+                .build();
+        savedBlogRepository.save(savedBlog);
+    }
+
+    @Override
+    @Transactional
+    public void unsaveBlog(Long blogId, Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại với ID: " + userId));
+        Blog blog = blogRepository.findById(blogId)
+                .orElseThrow(() -> new ResourceNotFoundException("Blog không tồn tại với ID: " + blogId));
+        if (!savedBlogRepository.existsByUserAndBlog(user, blog)) {
+            throw new IllegalArgumentException("Blog chưa được lưu");
+        }
+        savedBlogRepository.deleteByUserAndBlog(user, blog);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<BlogResponse> getSavedBlogs(Long userId, Pageable pageable) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại với ID: " + userId));
+        var savedBlogPage = savedBlogRepository.findByUser(user, pageable);
+        var blogResponses = savedBlogPage.getContent().stream()
+                .map(SavedBlog::getBlog)
+                .map(this::mapToBlogResponse)
+                .toList();
+        return new PageResponse<>(
+                blogResponses,
+                savedBlogPage.getNumber(),
+                savedBlogPage.getSize(),
+                savedBlogPage.getTotalElements(),
+                savedBlogPage.getTotalPages(),
+                savedBlogPage.isLast()
+        );
     }
 
     private BlogResponse mapToBlogResponse(Blog blog) {

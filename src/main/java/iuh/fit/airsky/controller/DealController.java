@@ -189,7 +189,6 @@ public class DealController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<DealResponse>> getDealById(@PathVariable Long id) {
         return dealService.findById(id)
                 .map(deal -> ApiResponseUtil.buildResponse(true, "Lấy thông tin mã giảm giá thành công", deal, "/api/v1/deals/" + id))
@@ -216,15 +215,6 @@ public class DealController {
             @PageableDefault(size = 20) Pageable pageable) {
         PageResponse<DealResponse> response = dealService.findActiveDeals(pageable);
         return ApiResponseUtil.buildResponse(true, "Lấy danh sách mã giảm giá đang hoạt động thành công", response, "/api/v1/deals/active");
-    }
-
-    @GetMapping("/route")
-    public ResponseEntity<ApiResponse<PageResponse<DealResponse>>> getDealsByRoute(
-            @RequestParam(required = false) Long departureAirportId,
-            @RequestParam(required = false) Long arrivalAirportId,
-            @PageableDefault(size = 20) Pageable pageable) {
-        PageResponse<DealResponse> response = dealService.findActiveDealsByRoute(departureAirportId, arrivalAirportId, pageable);
-        return ApiResponseUtil.buildResponse(true, "Lấy danh sách mã giảm giá theo tuyến đường thành công", response, "/api/v1/deals/route");
     }
 
     @DeleteMapping("/{id}")
@@ -268,7 +258,7 @@ public class DealController {
     }
 
     @PostMapping("/apply")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CUSTOMER')")
     public ResponseEntity<ApiResponse<DealUsageResponse>> applyDeal(
             @RequestParam String dealCode,
             @RequestParam Long bookingId,
@@ -287,7 +277,7 @@ public class DealController {
     }
 
     @GetMapping("/can-use/{dealCode}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CUSTOMER')")
     public ResponseEntity<ApiResponse<Boolean>> canUserUseDeal(@PathVariable String dealCode) {
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -302,17 +292,10 @@ public class DealController {
         }
     }
 
-    @GetMapping("/{dealId}/usage-history")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<PageResponse<DealUsageResponse>>> getDealUsageHistory(
-            @PathVariable Long dealId,
-            @PageableDefault(size = 20) Pageable pageable) {
-        PageResponse<DealUsageResponse> response = dealService.getDealUsageHistory(dealId, pageable);
-        return ApiResponseUtil.buildResponse(true, "Lấy lịch sử sử dụng mã giảm giá thành công", response, "/api/v1/deals/" + dealId + "/usage-history");
-    }
+
 
     @GetMapping("/my-usage-history")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CUSTOMER')")
     public ResponseEntity<ApiResponse<PageResponse<DealUsageResponse>>> getMyDealUsageHistory(
             @PageableDefault(size = 20) Pageable pageable) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -322,5 +305,11 @@ public class DealController {
         
         PageResponse<DealUsageResponse> response = dealService.getUserDealUsageHistory(user.getId(), pageable);
         return ApiResponseUtil.buildResponse(true, "Lấy lịch sử sử dụng mã giảm giá của tôi thành công", response, "/api/v1/deals/my-usage-history");
+    }
+
+    @GetMapping("/refresh-status")
+    public ResponseEntity<ApiResponse<PageResponse<DealResponse>>> refreshDealStatuses(@PageableDefault(size = 20) Pageable pageable) {
+        PageResponse<DealResponse> response = dealService.refreshDealStatuses(pageable);
+        return ApiResponseUtil.buildResponse(true, "Lấy danh sách mã giảm giá với trạng thái mới nhất thành công", response, "/api/v1/deals/refresh-status");
     }
 }

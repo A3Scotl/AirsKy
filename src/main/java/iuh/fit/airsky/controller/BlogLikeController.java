@@ -23,7 +23,7 @@ public class BlogLikeController {
     private final UserService userService;
 
     @PostMapping("/blog/{blogId}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CUSTOMER')")
     public ResponseEntity<ApiResponse<Void>> likeBlog(@PathVariable Long blogId) {
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -39,7 +39,7 @@ public class BlogLikeController {
     }
 
     @DeleteMapping("/blog/{blogId}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CUSTOMER')")
     public ResponseEntity<ApiResponse<Void>> unlikeBlog(@PathVariable Long blogId) {
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -55,7 +55,7 @@ public class BlogLikeController {
     }
 
     @GetMapping("/blog/{blogId}/check")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CUSTOMER')")
     public ResponseEntity<ApiResponse<Boolean>> checkIfLiked(@PathVariable Long blogId) {
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();

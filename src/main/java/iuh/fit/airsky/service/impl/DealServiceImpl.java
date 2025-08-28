@@ -372,6 +372,23 @@ public class DealServiceImpl implements DealService {
         );
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<DealResponse> refreshDealStatuses(Pageable pageable) {
+        Page<Deal> dealPage = dealRepository.findAll(pageable);
+        var dealResponses = dealPage.getContent().stream()
+                .map(dealMapper::toResponseDTO)
+                .collect(Collectors.toList());
+        return new PageResponse<>(
+                dealResponses,
+                dealPage.getNumber(),
+                dealPage.getSize(),
+                dealPage.getTotalElements(),
+                dealPage.getTotalPages(),
+                dealPage.isLast()
+        );
+    }
+
     private PageResponse<DealResponse> createPageResponse(Page<Deal> dealPage) {
         return new PageResponse<>(
                 dealPage.getContent().stream()
