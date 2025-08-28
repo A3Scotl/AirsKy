@@ -33,7 +33,4 @@ public class BlogResponse {
     
     // Categories
     private Set<CategoryResponse> categories;
-    
-    // Comments count
-    private Long commentCount;
 }

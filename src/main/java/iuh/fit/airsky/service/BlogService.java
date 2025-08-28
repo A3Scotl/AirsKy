@@ -24,4 +24,7 @@ public interface BlogService {
     void unpublish(Long id);
     void incrementViewCount(Long id);
     boolean existsBySlug(String slug);
+    void saveBlog(Long blogId, Long userId);
+    void unsaveBlog(Long blogId, Long userId);
+    PageResponse<BlogResponse> getSavedBlogs(Long userId, Pageable pageable);
 }

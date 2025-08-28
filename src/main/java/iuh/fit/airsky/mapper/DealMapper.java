@@ -23,7 +23,7 @@ public interface DealMapper {
     @Mapping(target = "arrivalAirportName", source = "arrivalAirport.airportName")
     @Mapping(target = "arrivalAirportCode", source = "arrivalAirport.airportCode")
     @Mapping(target = "remainingUsage", expression = "java(entity.getTotalUsageLimit() != null && entity.getUsedCount() != null ? entity.getTotalUsageLimit() - entity.getUsedCount() : 0)")
-    @Mapping(target = "isExpired", expression = "java(entity.getValidTo().isBefore(java.time.LocalDateTime.now()))")
-    @Mapping(target = "isAvailable", expression = "java(entity.getIsActive() != null && entity.getIsActive() && entity.getValidFrom().isBefore(java.time.LocalDateTime.now()) && entity.getValidTo().isAfter(java.time.LocalDateTime.now()) && (entity.getTotalUsageLimit() == null || entity.getUsedCount() == null || entity.getUsedCount() < entity.getTotalUsageLimit()))")
+
+    @Mapping(target = "status", expression = "java(iuh.fit.airsky.mapper.DealMapperUtils.calculateStatus(entity))")
     DealResponse toResponseDTO(Deal entity);
 }

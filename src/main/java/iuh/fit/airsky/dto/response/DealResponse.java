@@ -41,6 +41,5 @@ public class DealResponse {
     
     // Thống kê
     private Integer remainingUsage;
-    private Boolean isExpired;
-    private Boolean isAvailable;
+    private String status;
 }
