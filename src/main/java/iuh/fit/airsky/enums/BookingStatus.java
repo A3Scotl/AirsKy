@@ -1,6 +1,6 @@
 package iuh.fit.airsky.enums;
 
-public enum ReservationStatus {
+public enum BookingStatus {
     PENDING,
     CONFIRMED,
     CANCELLED

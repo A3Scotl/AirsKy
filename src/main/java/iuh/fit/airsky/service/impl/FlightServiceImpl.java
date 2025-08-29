@@ -1,3 +1,4 @@
+
 package iuh.fit.airsky.service.impl;
 
 import iuh.fit.airsky.dto.request.FlightRequest;
@@ -9,7 +10,6 @@ import iuh.fit.airsky.mapper.FlightMapper;
 import iuh.fit.airsky.model.Aircraft;
 import iuh.fit.airsky.model.Flight;
 import iuh.fit.airsky.repository.*;
-import iuh.fit.airsky.service.AircraftService;
 import iuh.fit.airsky.service.FlightService;
 import iuh.fit.airsky.service.SeatService;
 import iuh.fit.airsky.util.GenerateCodeUtil;
@@ -18,6 +18,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -34,7 +36,7 @@ public class FlightServiceImpl implements FlightService {
     private final SeatService seatService;
     private final AircraftRepository aircraftRepository;
 
-    public FlightServiceImpl(FlightRepository flightRepository, FlightMapper flightMapper, AirlineRepository airlineRepository, AirportRepository airportRepository, GateRepository gateRepository, GenerateCodeUtil generateCodeUtil, SeatService seatService,  AircraftRepository aircraftRepository) {
+    public FlightServiceImpl(FlightRepository flightRepository, FlightMapper flightMapper, AirlineRepository airlineRepository, AirportRepository airportRepository, GateRepository gateRepository, GenerateCodeUtil generateCodeUtil, SeatService seatService, AircraftRepository aircraftRepository) {
         this.flightRepository = flightRepository;
         this.flightMapper = flightMapper;
         this.airlineRepository = airlineRepository;
@@ -43,14 +45,34 @@ public class FlightServiceImpl implements FlightService {
         this.generateCodeUtil = generateCodeUtil;
         this.seatService = seatService;
         this.aircraftRepository = aircraftRepository;
-
     }
 
     @Override
     public FlightResponse createFlight(FlightRequest request) {
         log.info("Creating new flight");
+
+        // Validate input
+        if (request.getDepartureTime().isAfter(request.getArrivalTime())) {
+            throw new IllegalArgumentException("Departure time must be before arrival time");
+        }
+        if (request.getAvailableSeats() <= 0) {
+            throw new IllegalArgumentException("Available seats must be greater than 0");
+        }
+
+        // Check for overlapping flights (aircraft)
+        if (flightRepository.existsByAircraftIdAndTimeOverlap(
+                request.getAircraftId(), request.getDepartureTime(), request.getArrivalTime())) {
+            throw new IllegalArgumentException("Aircraft is already scheduled for another flight in this time range");
+        }
+
+        // Check for overlapping flights (gate)
+        if (flightRepository.existsByGateIdAndTimeOverlap(
+                request.getGateId(), request.getDepartureTime(), request.getArrivalTime())) {
+            throw new IllegalArgumentException("Gate is already assigned to another flight in this time range");
+        }
+
         Flight flight = flightMapper.toEntity(request);
-        Aircraft aircraft = aircraftRepository.findById(flight.getAircraft().getAircraftId())
+        Aircraft aircraft = aircraftRepository.findById(request.getAircraftId())
                 .orElseThrow(() -> new ResourceNotFoundException("Aircraft not found"));
         flight.setAircraft(aircraft);
 
@@ -64,6 +86,13 @@ public class FlightServiceImpl implements FlightService {
                 .orElseThrow(() -> new ResourceNotFoundException("Arrival airport not found with id " + request.getArrivalAirportId())));
         flight.setGate(gateRepository.findById(request.getGateId())
                 .orElseThrow(() -> new ResourceNotFoundException("Gate not found with id " + request.getGateId())));
+
+        // Dynamic pricing: increase price if within 24h of departure
+        if (Duration.between(LocalDateTime.now(), request.getDepartureTime()).toHours() <= 24) {
+            BigDecimal increasedPrice = request.getBasePrice().multiply(BigDecimal.valueOf(1.2)); // 20% increase
+            flight.setBasePrice(increasedPrice);
+        }
+
         Flight saved = flightRepository.save(flight);
         seatService.createSeatsForFlight(saved);
         log.info("Flight created with ID: {}", saved.getFlightId());
@@ -75,12 +104,39 @@ public class FlightServiceImpl implements FlightService {
         log.info("Updating flight with ID: {}", id);
         Flight flight = flightRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Flight not found with id " + id));
+        if (flight.getStatus() == FlightStatus.DEPARTED || flight.getStatus() == FlightStatus.CANCELLED) {
+            throw new IllegalStateException("Cannot update a departed or cancelled flight");
+        }
+        if (request.getDepartureTime().isAfter(request.getArrivalTime())) {
+            throw new IllegalArgumentException("Departure time must be before arrival time");
+        }
+        if (request.getAvailableSeats() <= 0) {
+            throw new IllegalArgumentException("Available seats must be greater than 0");
+        }
+        // Check for overlapping flights (aircraft)
+        if (flightRepository.existsByAircraftIdAndTimeOverlap(
+                request.getAircraftId(), request.getDepartureTime(), request.getArrivalTime())) {
+            throw new IllegalArgumentException("Aircraft is already scheduled for another flight in this time range");
+        }
+        // Check for overlapping flights (gate)
+        if (flightRepository.existsByGateIdAndTimeOverlap(
+                request.getGateId(), request.getDepartureTime(), request.getArrivalTime())) {
+            throw new IllegalArgumentException("Gate is already assigned to another flight in this time range");
+        }
+
         flight.setDepartureTime(request.getDepartureTime());
         flight.setArrivalTime(request.getArrivalTime());
         flight.setDuration(request.getDuration());
         flight.setStops(request.getStops());
         flight.setAvailableSeats(request.getAvailableSeats());
-        flight.setBasePrice(request.getBasePrice());
+
+        // Dynamic pricing: increase price if within 24h of departure
+        BigDecimal basePrice = request.getBasePrice();
+        if (Duration.between(LocalDateTime.now(), request.getDepartureTime()).toHours() <= 24) {
+            basePrice = basePrice.multiply(BigDecimal.valueOf(1.2));
+        }
+        flight.setBasePrice(basePrice);
+
         flight.setStatus(request.getStatus());
         Flight updated = flightRepository.save(flight);
         log.info("Flight updated with ID: {}", updated.getFlightId());
@@ -101,18 +157,44 @@ public class FlightServiceImpl implements FlightService {
     }
 
     @Override
-    public PageResponse<FlightResponse> searchFlights(Long departureAirportId, Long arrivalAirportId, LocalDateTime startTime, LocalDateTime endTime, FlightStatus status, Pageable pageable) {
-        log.info("Searching flights with departureAirportId: {}, arrivalAirportId: {}, startTime: {}, endTime: {}, status: {}", departureAirportId, arrivalAirportId, startTime, endTime, status);
-        Page<Flight> page = flightRepository.searchFlights(departureAirportId, arrivalAirportId, startTime, endTime, status, pageable);
+    public PageResponse<FlightResponse> searchFlights(
+            Long departureAirportId,
+            Long arrivalAirportId,
+            LocalDateTime startTime,
+            LocalDateTime endTime,
+            FlightStatus status,
+            Pageable pageable) {
+
+        log.info("Searching flights with departureAirportId: {}, arrivalAirportId: {}, startTime: {}, endTime: {}, status: {}",
+                departureAirportId, arrivalAirportId, startTime, endTime, status);
+
+        // If no search parameters are provided, return all flights
+        if (departureAirportId == null &&
+                arrivalAirportId == null &&
+                startTime == null &&
+                endTime == null &&
+                status == null) {
+            return findAll(pageable);
+        }
+
+        // Otherwise, proceed with the filtered search
+        Page<Flight> page = flightRepository.searchFlights(
+                departureAirportId,
+                arrivalAirportId,
+                startTime,
+                endTime,
+                status,
+                pageable);
         return new PageResponse<>(page.map(flightMapper::toResponseDTO));
     }
 
     @Override
     public void delete(Long id) {
         log.info("Deleting flight with ID: {}", id);
-        if (!flightRepository.existsById(id)) {
-            log.warn("Flight not found for delete: {}", id);
-            throw new ResourceNotFoundException("Flight not found with id " + id);
+        Flight flight = flightRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Flight not found with id " + id));
+        if (flight.getStatus() == FlightStatus.DEPARTED || flight.getStatus() == FlightStatus.CANCELLED) {
+            throw new IllegalStateException("Cannot delete a departed or cancelled flight");
         }
         flightRepository.deleteById(id);
         log.info("Flight deleted: {}", id);

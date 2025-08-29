@@ -1,7 +1,7 @@
 package iuh.fit.airsky.model;
 
 import iuh.fit.airsky.base.BaseAuditOnlyEntity;
-import iuh.fit.airsky.enums.ReservationStatus;
+import iuh.fit.airsky.enums.BookingStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -39,15 +39,20 @@ public class Booking extends BaseAuditOnlyEntity {
     @JoinColumn(name = "class_id", nullable = false)
     private TravelClass travelClass;
 
+    private LocalDateTime holdTime;
     private LocalDateTime bookingDate;
 
     @Column(precision = 10, scale = 2)
     private BigDecimal totalAmount;
 
-    private ReservationStatus status;
+    private BookingStatus status;
 
 
-    // 🔹 Thêm danh sách hành khách
+    // Thêm danh sách hành khách
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Passenger> passengers;
+
+    // Thêm payment
+    @OneToOne(mappedBy = "booking", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private Payment payment;
 }
