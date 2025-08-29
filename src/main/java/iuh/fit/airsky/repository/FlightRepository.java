@@ -18,15 +18,6 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
     @EntityGraph(attributePaths = {"airline", "departureAirport", "arrivalAirport", "gate", "business"})
     Page<Flight> findAll(Pageable pageable);
 
-//    @Query("SELECT f FROM Flight f " +
-//            "JOIN FETCH f.airline " +
-//            "JOIN FETCH f.departureAirport " +
-//            "JOIN FETCH f.arrivalAirport " +
-//            "LEFT JOIN FETCH f.gate " +
-//            "JOIN FETCH f.business")
-//    Page<Flight> findAllWithBusiness(Pageable pageable);
-
-
     @Query("SELECT f FROM Flight f WHERE f.departureAirport.airportId = :departureAirportId " +
             "AND f.arrivalAirport.airportId = :arrivalAirportId " +
             "AND f.departureTime BETWEEN :startTime AND :endTime " +
@@ -38,5 +29,20 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
                                @Param("status") FlightStatus status,
                                Pageable pageable);
 
+    @Query("SELECT CASE WHEN COUNT(f) > 0 THEN true ELSE false END FROM Flight f " +
+            "WHERE f.aircraft.aircraftId = :aircraftId " +
+            "AND f.departureTime < :endTime " +
+            "AND f.arrivalTime > :startTime")
+    boolean existsByAircraftIdAndTimeOverlap(@Param("aircraftId") Long aircraftId,
+                                             @Param("startTime") LocalDateTime startTime,
+                                             @Param("endTime") LocalDateTime endTime);
+
+    @Query("SELECT CASE WHEN COUNT(f) > 0 THEN true ELSE false END FROM Flight f " +
+            "WHERE f.gate.gateId = :gateId " +
+            "AND f.departureTime < :endTime " +
+            "AND f.arrivalTime > :startTime")
+    boolean existsByGateIdAndTimeOverlap(@Param("gateId") Long gateId,
+                                         @Param("startTime") LocalDateTime startTime,
+                                         @Param("endTime") LocalDateTime endTime);
     Optional<Flight> findByFlightNumber(String flightNumber);
 }

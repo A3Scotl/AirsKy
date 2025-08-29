@@ -3,8 +3,13 @@ package iuh.fit.airsky.service.impl;
 import iuh.fit.airsky.dto.request.PaymentRequest;
 import iuh.fit.airsky.dto.response.PaymentResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
+import iuh.fit.airsky.enums.BookingStatus;
+import iuh.fit.airsky.enums.PaymentStatus;
+import iuh.fit.airsky.enums.SeatStatus;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.PaymentMapper;
+import iuh.fit.airsky.model.Booking;
+import iuh.fit.airsky.model.Passenger;
 import iuh.fit.airsky.model.Payment;
 import iuh.fit.airsky.repository.BookingRepository;
 import iuh.fit.airsky.repository.PaymentRepository;
@@ -14,6 +19,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Service
@@ -34,8 +41,23 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentResponse createPayment(PaymentRequest request) {
         log.info("Creating new payment for booking ID: {}", request.getBookingId());
         Payment payment = paymentMapper.toEntity(request);
-        payment.setBooking(bookingRepository.findById(request.getBookingId())
-                .orElseThrow(() -> new ResourceNotFoundException("Booking not found with id " + request.getBookingId())));
+        Booking booking = bookingRepository.findById(request.getBookingId())
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found with id " + request.getBookingId()));
+        payment.setBooking(booking);
+
+        // Confirm booking if payment is successful and within 15 minutes
+        if (booking.getStatus() == BookingStatus.PENDING &&
+                Duration.between(booking.getHoldTime(), LocalDateTime.now()).toMinutes() <= 15 &&
+                request.getStatus() == PaymentStatus.SUCCESS) {
+            booking.setStatus(BookingStatus.CONFIRMED);
+            for (Passenger passenger : booking.getPassengers()) {
+                if (passenger.getSeat() != null) {
+                    passenger.getSeat().setStatus(SeatStatus.BOOKED);
+                }
+            }
+            bookingRepository.save(booking);
+        }
+
         Payment saved = paymentRepository.save(payment);
         log.info("Payment created with ID: {}", saved.getPaymentId());
         return paymentMapper.toResponseDTO(saved);

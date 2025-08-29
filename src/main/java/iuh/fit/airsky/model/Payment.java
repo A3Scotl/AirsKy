@@ -25,10 +25,6 @@ public class Payment extends BaseAuditOnlyEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long paymentId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "booking_id", nullable = false)
-    private Booking booking;
-
     @Column(precision = 10, scale = 2)
     private BigDecimal amount;
 
@@ -38,4 +34,8 @@ public class Payment extends BaseAuditOnlyEntity {
 
     @Enumerated(EnumType.STRING)
     private PaymentStatus status;  //  PAID,PENDING,REFUNDED
+
+    @OneToOne
+    @JoinColumn(name = "booking_id", nullable = false)
+    private Booking booking;
 }

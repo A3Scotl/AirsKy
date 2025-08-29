@@ -1,6 +1,6 @@
 package iuh.fit.airsky.dto.response;
 
-import iuh.fit.airsky.enums.ReservationStatus;
+import iuh.fit.airsky.enums.BookingStatus;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -14,8 +14,10 @@ public class BookingResponse {
     private String travelClass;
     private LocalDateTime bookingDate;
     private BigDecimal totalAmount;
-    private ReservationStatus status;
+    private BookingStatus status;
     private List<PassengerSeatResponse> passengers;
+    private PaymentResponse payment;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+//    private LocalDateTime holdTime;
 }
