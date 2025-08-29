@@ -35,5 +35,5 @@ public class Airline extends BaseFullSoftDeleteEntity {
     private String contact;
 
 
-
+    
 }

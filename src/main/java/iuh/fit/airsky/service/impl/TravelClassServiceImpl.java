@@ -1,3 +1,4 @@
+// src/main/java/iuh/fit/airsky/service/impl/TravelClassServiceImpl.java
 package iuh.fit.airsky.service.impl;
 
 import iuh.fit.airsky.dto.request.TravelClassRequest;
@@ -13,6 +14,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Service
@@ -31,6 +33,7 @@ public class TravelClassServiceImpl implements TravelClassService {
     public TravelClassResponse createTravelClass(TravelClassRequest request) {
         log.info("Creating new travel class with name: {}", request.getClassName());
         TravelClass travelClass = travelClassMapper.toEntity(request);
+        travelClass.setCreatedAt(LocalDateTime.now());
         TravelClass saved = travelClassRepository.save(travelClass);
         log.info("Travel class created with ID: {}", saved.getClassId());
         return travelClassMapper.toResponseDTO(saved);
@@ -44,6 +47,9 @@ public class TravelClassServiceImpl implements TravelClassService {
         travelClass.setClassName(request.getClassName());
         travelClass.setBenefits(request.getBenefits());
         travelClass.setPriceMultiplier(request.getPriceMultiplier());
+        travelClass.setRefundable(request.isRefundable());
+        travelClass.setChangeable(request.isChangeable());
+        travelClass.setCancellationFee(request.getCancellationFee());
         TravelClass updated = travelClassRepository.save(travelClass);
         log.info("Travel class updated with ID: {}", updated.getClassId());
         return travelClassMapper.toResponseDTO(updated);
