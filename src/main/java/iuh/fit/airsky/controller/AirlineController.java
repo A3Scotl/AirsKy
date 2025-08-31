@@ -6,6 +6,7 @@ import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.service.AirlineService;
+import iuh.fit.airsky.service.CloudinaryService;
 import iuh.fit.airsky.util.ApiResponseUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
 @RestController
@@ -23,32 +25,7 @@ import org.springframework.web.bind.annotation.*;
 public class AirlineController {
 
     private final AirlineService airlineService;
-
-    @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<AirlineResponse>> createAirline(@Valid @RequestBody AirlineRequest request) {
-        try {
-            AirlineResponse response = airlineService.createAirline(request);
-            return ApiResponseUtil.buildResponse(true, "Airline created successfully", response, "/api/v1/airlines");
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Creation failed", ex.getMessage(), "/api/v1/airlines");
-        }
-    }
-
-    @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<AirlineResponse>> updateAirline(@PathVariable Long id, @Valid @RequestBody AirlineRequest request) {
-        try {
-            AirlineResponse response = airlineService.updateAirline(id, request);
-            return ApiResponseUtil.buildResponse(true, "Airline updated successfully", response, "/api/v1/airlines/" + id);
-        } catch (ResourceNotFoundException ex) {
-            return ApiResponseUtil.buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), "RESOURCE_NOT_FOUND", "/api/v1/airlines/" + id);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Update failed", ex.getMessage(), "/api/v1/airlines/" + id);
-        }
-    }
+    private final CloudinaryService cloudinaryService;
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<AirlineResponse>> getAirline(@PathVariable Long id) {
@@ -84,6 +61,94 @@ public class AirlineController {
         } catch (Exception ex) {
             ex.printStackTrace();
             return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Deletion failed", ex.getMessage(), "/api/v1/airlines/" + id);
+        }
+    }
+
+    @PostMapping( consumes = {"multipart/form-data"})
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<AirlineResponse>> createAirlineWithImage(
+            @RequestParam("airlineCode") String airlineCode,
+            @RequestParam("airlineName") String airlineName,
+            @RequestParam(value = "contact", required = false) String contact,
+            @RequestParam(value = "active", required = false, defaultValue = "true") Boolean active,
+            @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail) {
+
+        try {
+            // Create AirlineRequest object manually
+            AirlineRequest request = new AirlineRequest();
+            request.setAirlineCode(airlineCode);
+            request.setAirlineName(airlineName);
+            request.setContact(contact);
+            request.setActive(active);
+
+            // Upload image if provided
+            if (thumbnail != null && !thumbnail.isEmpty()) {
+                String imageUrl = cloudinaryService.uploadFile(thumbnail);
+                request.setThumbnail(imageUrl);
+                log.info("Thumbnail uploaded successfully: {}", imageUrl);
+            }
+
+            // Validate required fields
+            if (airlineCode == null || airlineCode.trim().isEmpty()) {
+                return ApiResponseUtil.buildResponse(false, "Mã hãng hàng không không được để trống", null, "/api/v1/airlines/upload");
+            }
+            if (airlineName == null || airlineName.trim().isEmpty()) {
+                return ApiResponseUtil.buildResponse(false, "Tên hãng hàng không không được để trống", null, "/api/v1/airlines/upload");
+            }
+
+            AirlineResponse response = airlineService.createAirline(request);
+            return ApiResponseUtil.buildResponse(true, "Tạo hãng hàng không thành công", response, "/api/v1/airlines/upload");
+
+        } catch (Exception e) {
+            log.error("Error creating airline with image", e);
+            return ApiResponseUtil.buildResponse(false, "Có lỗi xảy ra khi tạo hãng hàng không: " + e.getMessage(), null, "/api/v1/airlines/upload");
+        }
+    }
+
+    @PutMapping(value = "/{id}", consumes = {"multipart/form-data"})
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<AirlineResponse>> updateAirlineWithImage(
+            @PathVariable Long id,
+            @RequestParam("airlineCode") String airlineCode,
+            @RequestParam("airlineName") String airlineName,
+            @RequestParam(value = "contact", required = false) String contact,
+            @RequestParam(value = "active", required = false, defaultValue = "true") Boolean active,
+            @RequestParam(value = "existingThumbnail", required = false) String existingThumbnail,
+            @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail) {
+
+        try {
+            // Create AirlineRequest object manually
+            AirlineRequest request = new AirlineRequest();
+            request.setAirlineCode(airlineCode);
+            request.setAirlineName(airlineName);
+            request.setContact(contact);
+            request.setActive(active);
+
+            // Handle image upload
+            if (thumbnail != null && !thumbnail.isEmpty()) {
+                String imageUrl = cloudinaryService.uploadFile(thumbnail);
+                request.setThumbnail(imageUrl);
+                log.info("Thumbnail uploaded successfully: {}", imageUrl);
+            } else if (existingThumbnail != null && !existingThumbnail.trim().isEmpty()) {
+                request.setThumbnail(existingThumbnail);
+            }
+
+            // Validate required fields
+            if (airlineCode == null || airlineCode.trim().isEmpty()) {
+                return ApiResponseUtil.buildResponse(false, "Mã hãng hàng không không được để trống", null, "/api/v1/airlines/" + id + "/upload");
+            }
+            if (airlineName == null || airlineName.trim().isEmpty()) {
+                return ApiResponseUtil.buildResponse(false, "Tên hãng hàng không không được để trống", null, "/api/v1/airlines/" + id);
+            }
+
+            AirlineResponse response = airlineService.updateAirline(id, request);
+            return ApiResponseUtil.buildResponse(true, "Cập nhật hãng hàng không thành công", response, "/api/v1/airlines/" + id);
+
+        } catch (ResourceNotFoundException e) {
+            return ApiResponseUtil.buildResponse(false, e.getMessage(), null, "/api/v1/airlines/" + id);
+        } catch (Exception e) {
+            log.error("Error updating airline with image", e);
+            return ApiResponseUtil.buildResponse(false, "Có lỗi xảy ra khi cập nhật hãng hàng không: " + e.getMessage(), null, "/api/v1/airlines/" + id);
         }
     }
 }

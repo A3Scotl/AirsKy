@@ -14,10 +14,15 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface AirportMapper {
     @Mapping(target = "airportId", ignore = true)
+    @Mapping(target = "cityNames", ignore = true)
+    @Mapping(target = "country", ignore = true)
+    @Mapping(target = "gates", ignore = true)
+    @Mapping(target = "thumbnail", source = "thumbnail")
     Airport toEntity(AirportRequest dto);
 
     @Mapping(target = "country", expression = "java(airport.getCountry() != null ? airport.getCountry().getCountryName() : null)")
     @Mapping(target = "gates", expression = "java(mapGates(airport.getGates()))")
+    @Mapping(target = "thumbnail", source = "thumbnail")
     AirportResponse toResponseDTO(Airport airport);
 
     // Map List<Gate> -> List<GateResponse>

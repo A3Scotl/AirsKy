@@ -199,4 +199,20 @@ public class FlightServiceImpl implements FlightService {
         flightRepository.deleteById(id);
         log.info("Flight deleted: {}", id);
     }
+
+    @Override
+    public PageResponse<FlightResponse> findDomesticFlights(String country, Pageable pageable) {
+        log.info("Finding domestic flights in {} with pageable: {}", country, pageable);
+
+        Page<Flight> flightPage = flightRepository.findDomesticFlights(country, pageable);
+        return new PageResponse<>(flightPage.map(flightMapper::toResponseDTO));
+    }
+
+    @Override
+    public PageResponse<FlightResponse> findFlightsBetweenCountries(String departureCountry, String arrivalCountry, Pageable pageable) {
+        log.info("Finding flights from {} to {} with pageable: {}", departureCountry, arrivalCountry, pageable);
+
+        Page<Flight> flightPage = flightRepository.findFlightsBetweenCountries(departureCountry, arrivalCountry, pageable);
+        return new PageResponse<>(flightPage.map(flightMapper::toResponseDTO));
+    }
 }

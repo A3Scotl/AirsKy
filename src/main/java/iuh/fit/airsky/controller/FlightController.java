@@ -11,8 +11,8 @@ import iuh.fit.airsky.service.FlightService;
 import iuh.fit.airsky.service.SeatService;
 import iuh.fit.airsky.util.ApiResponseUtil;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -26,11 +26,16 @@ import java.util.List;
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/flights")
-@RequiredArgsConstructor
+//@RequiredArgsConstructor
 public class FlightController {
 
     private final FlightService flightService;
     private final SeatService seatService;
+
+    public FlightController(FlightService flightService, SeatService seatService) {
+        this.flightService = flightService;
+        this.seatService = seatService;
+    }
 
     @PostMapping
 //    @PreAuthorize("hasRole('ADMIN')")
@@ -112,6 +117,71 @@ public class FlightController {
         }
     }
 
+    
+    @GetMapping("/domestic")
+    public ResponseEntity<ApiResponse<PageResponse<FlightResponse>>> findDomesticFlights(
+            @RequestParam String country,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        try {
+            log.info("Finding domestic flights in {} - page: {}, size: {}", country, page, size);
+
+            // Validate input parameter
+            if (country == null || country.trim().isEmpty()) {
+                return ApiResponseUtil.buildErrorResponse(HttpStatus.BAD_REQUEST,
+                        "Country is required", "COUNTRY_REQUIRED", "/api/v1/flights/domestic");
+            }
+
+            Pageable pageable = PageRequest.of(page, size);
+            PageResponse<FlightResponse> response = flightService.findDomesticFlights(country.trim(), pageable);
+
+            return ApiResponseUtil.buildResponse(true,
+                    String.format("Domestic flights in %s retrieved successfully", country),
+                    response, "/api/v1/flights/domestic");
+
+        } catch (Exception ex) {
+            log.error("Error finding domestic flights: ", ex);
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to retrieve domestic flights", ex.getMessage(), "/api/v1/flights/domestic");
+        }
+    }
+
+    @GetMapping("/between-countries")
+    public ResponseEntity<ApiResponse<PageResponse<FlightResponse>>> findFlightsBetweenCountries(
+            @RequestParam String departureCountry,
+            @RequestParam String arrivalCountry,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        try {
+            log.info("Finding flights from {} to {} - page: {}, size: {}", departureCountry, arrivalCountry, page, size);
+
+            // Validate input parameters
+            if (departureCountry == null || departureCountry.trim().isEmpty()) {
+                return ApiResponseUtil.buildErrorResponse(HttpStatus.BAD_REQUEST,
+                        "Departure country is required", "DEPARTURE_COUNTRY_REQUIRED", "/api/v1/flights/between-countries");
+            }
+
+            if (arrivalCountry == null || arrivalCountry.trim().isEmpty()) {
+                return ApiResponseUtil.buildErrorResponse(HttpStatus.BAD_REQUEST,
+                        "Arrival country is required", "ARRIVAL_COUNTRY_REQUIRED", "/api/v1/flights/between-countries");
+            }
+
+            Pageable pageable = PageRequest.of(page, size);
+            PageResponse<FlightResponse> response = flightService.findFlightsBetweenCountries(
+                    departureCountry.trim(), arrivalCountry.trim(), pageable);
+
+            return ApiResponseUtil.buildResponse(true,
+                    String.format("Flights from %s to %s retrieved successfully", departureCountry, arrivalCountry),
+                    response, "/api/v1/flights/between-countries");
+
+        } catch (Exception ex) {
+            log.error("Error finding flights between countries: ", ex);
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to retrieve flights between countries", ex.getMessage(), "/api/v1/flights/between-countries");
+        }
+    }
 
     @GetMapping("/{id}/seats")
     public ResponseEntity<ApiResponse<List<SeatResponse>>> getSeatsByFlight(@PathVariable("id") Long flightId) {

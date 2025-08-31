@@ -9,7 +9,9 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface AirlineMapper {
     @Mapping(target = "airlineId", ignore = true)
+    @Mapping(target = "thumbnail", source = "thumbnail")
     Airline toEntity(AirlineRequest dto);
 
+    @Mapping(target = "thumbnail", source = "thumbnail")
     AirlineResponse toResponseDTO(Airline entity);
 }

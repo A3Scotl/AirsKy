@@ -9,6 +9,7 @@ public class AirlineResponse {
     private String airlineCode;
     private String airlineName;
     private String contact;
+    private String thumbnail;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private boolean isActive;
