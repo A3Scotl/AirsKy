@@ -15,7 +15,7 @@ import java.util.Optional;
 
 @Repository
 public interface FlightRepository extends JpaRepository<Flight, Long> {
-    @EntityGraph(attributePaths = {"airline", "departureAirport", "arrivalAirport", "gate", "business"})
+    @EntityGraph(attributePaths = {"airline", "departureAirport", "arrivalAirport", "gate", "business","stops"})
     Page<Flight> findAll(Pageable pageable);
 
     @Query("SELECT f FROM Flight f WHERE f.departureAirport.airportId = :departureAirportId " +

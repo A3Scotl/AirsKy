@@ -7,7 +7,7 @@ import iuh.fit.airsky.model.Flight;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", uses = {StopMapper.class})
 public interface FlightMapper {
 
     @Mapping(target = "business.id", source = "businessId")
@@ -27,7 +27,10 @@ public interface FlightMapper {
     @Mapping(target = "fromCode", expression = "java(entity.getDepartureAirport() != null ? entity.getDepartureAirport().getAirportCode() : null)")
     @Mapping(target = "toCode", expression = "java(entity.getArrivalAirport() != null ? entity.getArrivalAirport().getAirportCode() : null)")
     @Mapping(target = "gate", expression = "java(entity.getGate() != null ? entity.getGate().getGateName() : null)")
+    @Mapping(target = "terminal", expression = "java(entity.getGate() != null ? entity.getGate().getTerminal() : null)")
     @Mapping(target = "aircraft", expression = "java(entity.getAircraft() != null ? entity.getAircraft().getAircraftName() : null)")
+    @Mapping(target = "totalSeats", expression = "java(entity.getAircraft() != null ? entity.getAircraft().getTotalSeats() : null)")
+    @Mapping(target = "stops", source = "stops")
     FlightResponse toResponseDTO(Flight entity);
 
 }

@@ -9,6 +9,7 @@ import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.FlightMapper;
 import iuh.fit.airsky.model.Aircraft;
 import iuh.fit.airsky.model.Flight;
+import iuh.fit.airsky.model.Stop;
 import iuh.fit.airsky.repository.*;
 import iuh.fit.airsky.service.FlightService;
 import iuh.fit.airsky.service.SeatService;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -92,7 +94,19 @@ public class FlightServiceImpl implements FlightService {
             BigDecimal increasedPrice = request.getBasePrice().multiply(BigDecimal.valueOf(1.2)); // 20% increase
             flight.setBasePrice(increasedPrice);
         }
-
+        if (request.getStops() != null && !request.getStops().isEmpty()) {
+            List<Stop> stopEntities = request.getStops().stream()
+                    .map(req -> Stop.builder()
+                            .flight(flight)
+                            .airport(airportRepository.findById(req.getAirportId())
+                                    .orElseThrow(() -> new ResourceNotFoundException("Airport not found with id " + req.getAirportId())))
+                            .arrivalTime(req.getArrivalTime())
+                            .departureTime(req.getDepartureTime())
+                            .note(req.getNote())
+                            .build())
+                    .toList();
+            flight.setStops(stopEntities);
+        }
         Flight saved = flightRepository.save(flight);
         seatService.createSeatsForFlight(saved);
         log.info("Flight created with ID: {}", saved.getFlightId());
@@ -127,7 +141,19 @@ public class FlightServiceImpl implements FlightService {
         flight.setDepartureTime(request.getDepartureTime());
         flight.setArrivalTime(request.getArrivalTime());
         flight.setDuration(request.getDuration());
-        flight.setStops(request.getStops());
+        if (request.getStops() != null && !request.getStops().isEmpty()) {
+            List<Stop> stopEntities = request.getStops().stream()
+                    .map(req -> Stop.builder()
+                            .flight(flight)
+                            .airport(airportRepository.findById(req.getAirportId())
+                                    .orElseThrow(() -> new ResourceNotFoundException("Airport not found with id " + req.getAirportId())))
+                            .arrivalTime(req.getArrivalTime())
+                            .departureTime(req.getDepartureTime())
+                            .note(req.getNote())
+                            .build())
+                    .toList();
+            flight.setStops(stopEntities);
+        }
         flight.setAvailableSeats(request.getAvailableSeats());
 
         // Dynamic pricing: increase price if within 24h of departure

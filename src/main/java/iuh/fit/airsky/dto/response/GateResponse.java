@@ -8,6 +8,7 @@ public class GateResponse {
     private Long gateId;
 //    private Long airportId;
     private String gateName;
+    private Integer terminal;
 //    private LocalDateTime createdAt;
 //    private LocalDateTime updatedAt;
 //    private boolean isActive;

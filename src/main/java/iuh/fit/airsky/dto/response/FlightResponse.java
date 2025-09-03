@@ -6,6 +6,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class FlightResponse {
@@ -20,11 +21,13 @@ public class FlightResponse {
     private LocalDateTime departureTime;
     private LocalDateTime arrivalTime;
     private Integer duration;
-    private String stops;
+    private List<StopResponse> stops;
     private String gate;
+    private Integer terminal;
     private FlightType type;
     private String businessName;
     private Integer availableSeats;
+    private Integer totalSeats;
     private BigDecimal basePrice;
     private FlightStatus status;
     private LocalDateTime createdAt;
