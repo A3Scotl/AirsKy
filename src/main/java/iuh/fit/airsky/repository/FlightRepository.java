@@ -45,4 +45,19 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
                                          @Param("startTime") LocalDateTime startTime,
                                          @Param("endTime") LocalDateTime endTime);
     Optional<Flight> findByFlightNumber(String flightNumber);
+    // Tìm chuyến bay nội địa (trong cùng một quốc gia)
+    @Query("SELECT f FROM Flight f " +
+            "JOIN f.departureAirport da JOIN da.country dc " +
+            "JOIN f.arrivalAirport aa JOIN aa.country ac " +
+            "WHERE dc.countryName = ac.countryName AND dc.countryName = :country")
+    Page<Flight> findDomesticFlights(@Param("country") String country, Pageable pageable);
+
+    // Tìm chuyến bay từ quốc gia A đến quốc gia B
+    @Query("SELECT f FROM Flight f " +
+            "JOIN f.departureAirport da JOIN da.country dc " +
+            "JOIN f.arrivalAirport aa JOIN aa.country ac " +
+            "WHERE dc.countryName = :departureCountry AND ac.countryName = :arrivalCountry")
+    Page<Flight> findFlightsBetweenCountries(@Param("departureCountry") String departureCountry,
+                                             @Param("arrivalCountry") String arrivalCountry,
+                                             Pageable pageable);
 }

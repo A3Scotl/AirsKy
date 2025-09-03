@@ -16,4 +16,10 @@ public interface FlightService {
     PageResponse<FlightResponse> findAll(Pageable pageable);
     PageResponse<FlightResponse> searchFlights(Long departureAirportId, Long arrivalAirportId, LocalDateTime startTime, LocalDateTime endTime, FlightStatus status, Pageable pageable);
     void delete(Long id);
+
+    // Tìm chuyến bay nội địa (trong cùng một quốc gia)
+    PageResponse<FlightResponse> findDomesticFlights(String country, Pageable pageable);
+
+    // Tìm chuyến bay từ quốc gia A đến quốc gia B
+    PageResponse<FlightResponse> findFlightsBetweenCountries(String departureCountry, String arrivalCountry, Pageable pageable);
 }

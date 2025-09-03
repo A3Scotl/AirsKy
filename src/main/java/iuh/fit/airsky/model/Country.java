@@ -37,4 +37,6 @@ public class Country extends BaseFullSoftDeleteEntity {
     @Column(name = "country_name", length = 100)
     private String countryName;
 
+    private String thumbnail;
+
 }

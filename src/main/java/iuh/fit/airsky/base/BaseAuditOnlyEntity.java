@@ -24,7 +24,7 @@ import java.time.LocalDateTime;
 @MappedSuperclass
 public class BaseAuditOnlyEntity {
     @CreationTimestamp
-    @Column(name = "created_at", updatable = false, nullable = false)
+    @Column(name = "created_at", updatable = false, nullable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
     private LocalDateTime createdAt;
 
     @UpdateTimestamp

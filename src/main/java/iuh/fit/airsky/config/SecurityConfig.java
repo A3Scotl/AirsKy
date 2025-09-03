@@ -52,9 +52,14 @@ public class SecurityConfig {
             "/api/v1/auth/google-login",
             "/api/v1/airports/**",
             "/api/v1/flights/**",
+            "/api/v1/countries/**",
             "/api/v1/airlines/**",
             "/api/v1/bookings/**",
             "/api/v1/aircrafts/**",
+            "/api/v1/deals/**",
+            "/api/v1/blogs/**",
+            "/api/v1/categories/**",
+            "/api/v1/blog-likes/**"
 
     };
     private static final String[] PERMISION_ROUTES = {
@@ -76,6 +81,7 @@ public class SecurityConfig {
                         .requestMatchers(PUBLIC_ROUTES).permitAll()
                         .requestMatchers(PERMISION_ROUTES)
                         .hasAnyRole("BUSINESS", "CUSTOMER", "ADMIN")
+                        .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
