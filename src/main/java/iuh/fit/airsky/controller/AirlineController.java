@@ -64,28 +64,30 @@ public class AirlineController {
         }
     }
 
-    @PostMapping( consumes = {"multipart/form-data"})
+    @PostMapping(consumes = {"multipart/form-data"})
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<AirlineResponse>> createAirlineWithImage(
             @RequestParam("airlineCode") String airlineCode,
             @RequestParam("airlineName") String airlineName,
             @RequestParam(value = "contact", required = false) String contact,
             @RequestParam(value = "active", required = false, defaultValue = "true") Boolean active,
-            @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail) {
+            @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail,
+            @RequestParam(value = "thumbnailUrl", required = false) String thumbnailUrl) {
 
         try {
-            // Create AirlineRequest object manually
             AirlineRequest request = new AirlineRequest();
             request.setAirlineCode(airlineCode);
             request.setAirlineName(airlineName);
             request.setContact(contact);
             request.setActive(active);
 
-            // Upload image if provided
+            // Handle image upload or URL
             if (thumbnail != null && !thumbnail.isEmpty()) {
                 String imageUrl = cloudinaryService.uploadFile(thumbnail);
                 request.setThumbnail(imageUrl);
                 log.info("Thumbnail uploaded successfully: {}", imageUrl);
+            } else if (thumbnailUrl != null && !thumbnailUrl.trim().isEmpty()) {
+                request.setThumbnail(thumbnailUrl);
             }
 
             // Validate required fields
@@ -98,7 +100,6 @@ public class AirlineController {
 
             AirlineResponse response = airlineService.createAirline(request);
             return ApiResponseUtil.buildResponse(true, "Tạo hãng hàng không thành công", response, "/api/v1/airlines/upload");
-
         } catch (Exception e) {
             log.error("Error creating airline with image", e);
             return ApiResponseUtil.buildResponse(false, "Có lỗi xảy ra khi tạo hãng hàng không: " + e.getMessage(), null, "/api/v1/airlines/upload");
@@ -114,21 +115,23 @@ public class AirlineController {
             @RequestParam(value = "contact", required = false) String contact,
             @RequestParam(value = "active", required = false, defaultValue = "true") Boolean active,
             @RequestParam(value = "existingThumbnail", required = false) String existingThumbnail,
-            @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail) {
+            @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail,
+            @RequestParam(value = "thumbnailUrl", required = false) String thumbnailUrl) {
 
         try {
-            // Create AirlineRequest object manually
             AirlineRequest request = new AirlineRequest();
             request.setAirlineCode(airlineCode);
             request.setAirlineName(airlineName);
             request.setContact(contact);
             request.setActive(active);
 
-            // Handle image upload
+            // Handle image upload or URL
             if (thumbnail != null && !thumbnail.isEmpty()) {
                 String imageUrl = cloudinaryService.uploadFile(thumbnail);
                 request.setThumbnail(imageUrl);
                 log.info("Thumbnail uploaded successfully: {}", imageUrl);
+            } else if (thumbnailUrl != null && !thumbnailUrl.trim().isEmpty()) {
+                request.setThumbnail(thumbnailUrl);
             } else if (existingThumbnail != null && !existingThumbnail.trim().isEmpty()) {
                 request.setThumbnail(existingThumbnail);
             }

@@ -18,6 +18,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/airports")
@@ -69,41 +71,37 @@ public class AirportController {
     public ResponseEntity<ApiResponse<AirportResponse>> createAirportWithImage(
             @RequestParam("airportCode") String airportCode,
             @RequestParam("airportName") String airportName,
-            @RequestParam("countryId") Long countryId,
-            @RequestParam(value = "cityName", required = false) String cityName,
+            @RequestParam(value = "cityNames", required = false) List<String> cityNames,
+            @RequestParam(value = "countryId", required = false) Long countryId,
             @RequestParam(value = "active", required = false, defaultValue = "true") Boolean active,
-            @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail) {
-
+            @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail,
+            @RequestParam(value = "thumbnailUrl", required = false) String thumbnailUrl) {
         try {
-            // Create AirportRequest object manually
             AirportRequest request = new AirportRequest();
             request.setAirportCode(airportCode);
             request.setAirportName(airportName);
+            request.setCityNames(cityNames);
             request.setCountryId(countryId);
-            request.setCityName(cityName);
             request.setActive(active);
 
-            // Upload image if provided
+            // Handle image upload or URL
             if (thumbnail != null && !thumbnail.isEmpty()) {
                 String imageUrl = cloudinaryService.uploadFile(thumbnail);
                 request.setThumbnail(imageUrl);
                 log.info("Thumbnail uploaded successfully: {}", imageUrl);
+            } else if (thumbnailUrl != null && !thumbnailUrl.trim().isEmpty()) {
+                request.setThumbnail(thumbnailUrl);
             }
 
-            // Validate required fields
             if (airportCode == null || airportCode.trim().isEmpty()) {
                 return ApiResponseUtil.buildResponse(false, "Mã sân bay không được để trống", null, "/api/v1/airports/upload");
             }
             if (airportName == null || airportName.trim().isEmpty()) {
                 return ApiResponseUtil.buildResponse(false, "Tên sân bay không được để trống", null, "/api/v1/airports/upload");
             }
-            if (countryId == null) {
-                return ApiResponseUtil.buildResponse(false, "ID quốc gia không được để trống", null, "/api/v1/airports/upload");
-            }
 
             AirportResponse response = airportService.createAirport(request);
             return ApiResponseUtil.buildResponse(true, "Tạo sân bay thành công", response, "/api/v1/airports/upload");
-
         } catch (Exception e) {
             log.error("Error creating airport with image", e);
             return ApiResponseUtil.buildResponse(false, "Có lỗi xảy ra khi tạo sân bay: " + e.getMessage(), null, "/api/v1/airports/upload");
@@ -116,44 +114,40 @@ public class AirportController {
             @PathVariable Long id,
             @RequestParam("airportCode") String airportCode,
             @RequestParam("airportName") String airportName,
-            @RequestParam("countryId") Long countryId,
-            @RequestParam(value = "cityName", required = false) String cityName,
+            @RequestParam(value = "cityNames", required = false) List<String> cityNames,
+            @RequestParam(value = "countryId", required = false) Long countryId,
             @RequestParam(value = "active", required = false, defaultValue = "true") Boolean active,
             @RequestParam(value = "existingThumbnail", required = false) String existingThumbnail,
-            @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail) {
-
+            @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail,
+            @RequestParam(value = "thumbnailUrl", required = false) String thumbnailUrl) {
         try {
-            // Create AirportRequest object manually
             AirportRequest request = new AirportRequest();
             request.setAirportCode(airportCode);
             request.setAirportName(airportName);
+            request.setCityNames(cityNames);
             request.setCountryId(countryId);
-            request.setCityName(cityName);
             request.setActive(active);
 
-            // Handle image upload
+            // Handle image upload or URL
             if (thumbnail != null && !thumbnail.isEmpty()) {
                 String imageUrl = cloudinaryService.uploadFile(thumbnail);
                 request.setThumbnail(imageUrl);
                 log.info("Thumbnail uploaded successfully: {}", imageUrl);
+            } else if (thumbnailUrl != null && !thumbnailUrl.trim().isEmpty()) {
+                request.setThumbnail(thumbnailUrl);
             } else if (existingThumbnail != null && !existingThumbnail.trim().isEmpty()) {
                 request.setThumbnail(existingThumbnail);
             }
 
-            // Validate required fields
             if (airportCode == null || airportCode.trim().isEmpty()) {
                 return ApiResponseUtil.buildResponse(false, "Mã sân bay không được để trống", null, "/api/v1/airports/" + id + "/upload");
             }
             if (airportName == null || airportName.trim().isEmpty()) {
                 return ApiResponseUtil.buildResponse(false, "Tên sân bay không được để trống", null, "/api/v1/airports/" + id + "/upload");
             }
-            if (countryId == null) {
-                return ApiResponseUtil.buildResponse(false, "ID quốc gia không được để trống", null, "/api/v1/airports/" + id + "/upload");
-            }
 
             AirportResponse response = airportService.updateAirport(id, request);
             return ApiResponseUtil.buildResponse(true, "Cập nhật sân bay thành công", response, "/api/v1/airports/" + id + "/upload");
-
         } catch (ResourceNotFoundException e) {
             return ApiResponseUtil.buildResponse(false, e.getMessage(), null, "/api/v1/airports/" + id + "/upload");
         } catch (Exception e) {

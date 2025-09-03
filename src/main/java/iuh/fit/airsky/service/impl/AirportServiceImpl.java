@@ -40,21 +40,21 @@ public class AirportServiceImpl implements AirportService {
         log.info("Creating new airport with name: {}", request.getAirportName());
         Airport airport = airportMapper.toEntity(request);
         airport.setAirportCode(request.getAirportCode());
-        airport.setCityName(request.getCityName()); // Set cityName explicitly
-        airport.setThumbnail(request.getThumbnail()); // Set thumbnail
-
+        airport.setThumbnail(request.getThumbnail());
         // Set active status if provided, otherwise default to true
         if (request.getActive() != null) {
             airport.setActive(request.getActive());
         }
-
+        // Set cityNames (List<String>) and let entity handle cityName string
+        if (request.getCityNames() != null) {
+            airport.setCityNames(request.getCityNames());
+        }
         // Set country if countryId is provided
         if (request.getCountryId() != null) {
             Country country = countryRepository.findById(request.getCountryId())
                     .orElseThrow(() -> new ResourceNotFoundException("Country not found with id " + request.getCountryId()));
             airport.setCountry(country);
         }
-
         Airport saved = airportRepository.save(airport);
         log.info("Airport created with ID: {}", saved.getAirportId());
         return airportMapper.toResponseDTO(saved);
@@ -63,37 +63,29 @@ public class AirportServiceImpl implements AirportService {
     @Override
     public AirportResponse updateAirport(Long id, AirportRequest request) {
         log.info("Updating airport with ID: {}", id);
-
         Airport airport = airportRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Airport not found with id " + id));
-
         // Update all fields from request
         if (request.getAirportCode() != null && !request.getAirportCode().trim().isEmpty()) {
             airport.setAirportCode(request.getAirportCode());
         }
-
         if (request.getAirportName() != null && !request.getAirportName().trim().isEmpty()) {
             airport.setAirportName(request.getAirportName());
         }
-
-        if (request.getCityName() != null) {
-            airport.setCityName(request.getCityName());
+        if (request.getCityNames() != null) {
+            airport.setCityNames(request.getCityNames());
         }
-
         if (request.getThumbnail() != null) {
             airport.setThumbnail(request.getThumbnail());
         }
-
         if (request.getActive() != null) {
             airport.setActive(request.getActive());
         }
-
         if (request.getCountryId() != null) {
             Country country = countryRepository.findById(request.getCountryId())
                     .orElseThrow(() -> new ResourceNotFoundException("Country not found with id " + request.getCountryId()));
             airport.setCountry(country);
         }
-
         Airport updated = airportRepository.save(airport);
         log.info("Airport updated with ID: {}", updated.getAirportId());
 
