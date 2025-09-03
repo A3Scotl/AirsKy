@@ -1,6 +1,7 @@
 package iuh.fit.airsky.dto.request;
 
-import iuh.fit.airsky.enums.ReservationStatus;
+import iuh.fit.airsky.enums.PaymentMethod;
+import iuh.fit.airsky.enums.BookingStatus;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -13,7 +14,10 @@ public class BookingRequest {
     private Long flightId;
     private Long classId;
     private LocalDateTime bookingDate;
+    private LocalDateTime holdTime;
     private BigDecimal totalAmount;
-    private ReservationStatus status = ReservationStatus.PENDING;
+    private BookingStatus status = BookingStatus.PENDING;
     private List<PassengerSeatRequest> passengers;
+    private PaymentMethod paymentMethod;
+
 }

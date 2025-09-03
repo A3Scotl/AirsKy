@@ -1,5 +1,7 @@
+// src/main/java/iuh/fit/airsky/model/TravelClass.java
 package iuh.fit.airsky.model;
 
+import iuh.fit.airsky.base.BaseAuditOnlyEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -12,7 +14,7 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class TravelClass {
+public class TravelClass extends BaseAuditOnlyEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -26,4 +28,13 @@ public class TravelClass {
 
     @Column(name = "price_multiplier", precision = 5, scale = 2)
     private BigDecimal priceMultiplier;
+
+    @Column(name = "refundable")
+    private boolean refundable;
+
+    @Column(name = "changeable")
+    private boolean changeable;
+
+    @Column(name = "cancellation_fee", precision = 10, scale = 2)
+    private BigDecimal cancellationFee;
 }

@@ -83,21 +83,21 @@ public class FlightController {
 
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<PageResponse<FlightResponse>>> searchFlights(
-            @RequestParam Long departureAirportId,
-            @RequestParam Long arrivalAirportId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
-            @RequestParam(required = false) FlightStatus status,
+            @RequestParam(value = "departureAirportId", required = false) Long departureAirportId,
+            @RequestParam(value = "arrivalAirportId", required = false) Long arrivalAirportId,
+            @RequestParam(value = "startTime", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
+            @RequestParam(value = "endTime", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
+            @RequestParam(value = "status", required = false) FlightStatus status,
             Pageable pageable) {
         try {
-            PageResponse<FlightResponse> response = flightService.searchFlights(departureAirportId, arrivalAirportId, startTime, endTime, status, pageable);
+            PageResponse<FlightResponse> response = flightService.searchFlights(
+                    departureAirportId, arrivalAirportId, startTime, endTime, status, pageable);
             return ApiResponseUtil.buildResponse(true, "Flights searched successfully", response, "/api/v1/flights/search");
         } catch (Exception ex) {
             ex.printStackTrace();
             return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Search failed", ex.getMessage(), "/api/v1/flights/search");
         }
     }
-
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteFlight(@PathVariable Long id) {

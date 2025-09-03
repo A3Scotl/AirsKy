@@ -2,10 +2,10 @@ spring:
   application:
     name: AirsKy
   datasource:
-    url: jdbc:mysql://mysql-a5364d8-nkha3561.j.aivencloud.com:17244/defaultdb?ssl-mode=REQUIRED
-    username: avnadmin
-    password: ${DB_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mariadb://localhost:3306/test
+    username: root
+    password: root
+    driver-class-name: org.mariadb.jdbc.Driver
   jackson:
     serialization:
       write-dates-as-timestamps: false
@@ -29,7 +29,7 @@ spring:
     show-sql: true
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.MySQL8Dialect
+        dialect: org.hibernate.dialect.MariaDBDialect
         ssl: true
   sql:
     init:
