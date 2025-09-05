@@ -1,4 +1,3 @@
-// src/main/java/iuh/fit/airsky/model/TravelClass.java
 package iuh.fit.airsky.model;
 
 import iuh.fit.airsky.base.BaseAuditOnlyEntity;
@@ -30,10 +29,10 @@ public class TravelClass extends BaseAuditOnlyEntity {
     private BigDecimal priceMultiplier;
 
     @Column(name = "refundable")
-    private boolean refundable;
+    private Boolean refundable;
 
     @Column(name = "changeable")
-    private boolean changeable;
+    private Boolean changeable;
 
     @Column(name = "cancellation_fee", precision = 10, scale = 2)
     private BigDecimal cancellationFee;
