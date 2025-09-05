@@ -6,6 +6,7 @@ import iuh.fit.airsky.model.Aircraft;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class FlightRequest {
@@ -18,6 +19,7 @@ public class FlightRequest {
     private LocalDateTime arrivalTime;
     private Integer duration;
     private String stops;
+    private List<StopRequest> stopsList;
     private Long gateId;
     private Integer availableSeats;
     private BigDecimal basePrice;

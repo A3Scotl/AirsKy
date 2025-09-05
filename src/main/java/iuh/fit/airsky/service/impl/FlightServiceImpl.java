@@ -1,14 +1,17 @@
-
 package iuh.fit.airsky.service.impl;
 
 import iuh.fit.airsky.dto.request.FlightRequest;
+import iuh.fit.airsky.dto.request.StopRequest;
 import iuh.fit.airsky.dto.response.FlightResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.FlightMapper;
+import iuh.fit.airsky.mapper.StopMapper;
 import iuh.fit.airsky.model.Aircraft;
+import iuh.fit.airsky.model.Airport;
 import iuh.fit.airsky.model.Flight;
+import iuh.fit.airsky.model.Stop;
 import iuh.fit.airsky.repository.*;
 import iuh.fit.airsky.service.FlightService;
 import iuh.fit.airsky.service.SeatService;
@@ -21,7 +24,9 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -35,8 +40,14 @@ public class FlightServiceImpl implements FlightService {
     private final GenerateCodeUtil generateCodeUtil;
     private final SeatService seatService;
     private final AircraftRepository aircraftRepository;
+    private final StopRepository stopRepository;
+    private final StopMapper stopMapper;
 
-    public FlightServiceImpl(FlightRepository flightRepository, FlightMapper flightMapper, AirlineRepository airlineRepository, AirportRepository airportRepository, GateRepository gateRepository, GenerateCodeUtil generateCodeUtil, SeatService seatService, AircraftRepository aircraftRepository) {
+    public FlightServiceImpl(FlightRepository flightRepository, FlightMapper flightMapper,
+                             AirlineRepository airlineRepository, AirportRepository airportRepository,
+                             GateRepository gateRepository, GenerateCodeUtil generateCodeUtil,
+                             SeatService seatService, AircraftRepository aircraftRepository,
+                             StopRepository stopRepository, StopMapper stopMapper) {
         this.flightRepository = flightRepository;
         this.flightMapper = flightMapper;
         this.airlineRepository = airlineRepository;
@@ -45,6 +56,8 @@ public class FlightServiceImpl implements FlightService {
         this.generateCodeUtil = generateCodeUtil;
         this.seatService = seatService;
         this.aircraftRepository = aircraftRepository;
+        this.stopRepository = stopRepository;
+        this.stopMapper = stopMapper;
     }
 
     @Override
@@ -71,6 +84,7 @@ public class FlightServiceImpl implements FlightService {
             throw new IllegalArgumentException("Gate is already assigned to another flight in this time range");
         }
 
+        // Map DTO to entity
         Flight flight = flightMapper.toEntity(request);
         Aircraft aircraft = aircraftRepository.findById(request.getAircraftId())
                 .orElseThrow(() -> new ResourceNotFoundException("Aircraft not found"));
@@ -86,6 +100,23 @@ public class FlightServiceImpl implements FlightService {
                 .orElseThrow(() -> new ResourceNotFoundException("Arrival airport not found with id " + request.getArrivalAirportId())));
         flight.setGate(gateRepository.findById(request.getGateId())
                 .orElseThrow(() -> new ResourceNotFoundException("Gate not found with id " + request.getGateId())));
+
+        // Handle stops
+        if (request.getStopsList() != null && !request.getStopsList().isEmpty()) {
+            List<Stop> stops = request.getStopsList().stream().map(stopRequest -> {
+                Stop stop = stopMapper.toEntity(stopRequest);
+                Airport airport = airportRepository.findById(stopRequest.getAirportId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Stop airport not found with id " + stopRequest.getAirportId()));
+                stop.setAirport(airport);
+                stop.setFlight(flight); // Set the flight reference
+                // Calculate stop duration if arrival and departure times are provided
+                if (stopRequest.getArrivalTime() != null && stopRequest.getDepartureTime() != null) {
+                    stop.setStopDuration((int) Duration.between(stopRequest.getArrivalTime(), stopRequest.getDepartureTime()).toMinutes());
+                }
+                return stop;
+            }).collect(Collectors.toList());
+            flight.setStopsList(stops);
+        }
 
         // Dynamic pricing: increase price if within 24h of departure
         if (Duration.between(LocalDateTime.now(), request.getDepartureTime()).toHours() <= 24) {
@@ -124,11 +155,43 @@ public class FlightServiceImpl implements FlightService {
             throw new IllegalArgumentException("Gate is already assigned to another flight in this time range");
         }
 
+        // Update basic flight fields
         flight.setDepartureTime(request.getDepartureTime());
         flight.setArrivalTime(request.getArrivalTime());
         flight.setDuration(request.getDuration());
-        flight.setStops(request.getStops());
+        flight.setStops(request.getStops()); // Kept for backward compatibility
         flight.setAvailableSeats(request.getAvailableSeats());
+        flight.setAirline(airlineRepository.findById(request.getAirlineId())
+                .orElseThrow(() -> new ResourceNotFoundException("Airline not found with id " + request.getAirlineId())));
+        flight.setDepartureAirport(airportRepository.findById(request.getDepartureAirportId())
+                .orElseThrow(() -> new ResourceNotFoundException("Departure airport not found with id " + request.getDepartureAirportId())));
+        flight.setArrivalAirport(airportRepository.findById(request.getArrivalAirportId())
+                .orElseThrow(() -> new ResourceNotFoundException("Arrival airport not found with id " + request.getArrivalAirportId())));
+        flight.setGate(gateRepository.findById(request.getGateId())
+                .orElseThrow(() -> new ResourceNotFoundException("Gate not found with id " + request.getGateId())));
+        flight.setAircraft(aircraftRepository.findById(request.getAircraftId())
+                .orElseThrow(() -> new ResourceNotFoundException("Aircraft not found with id " + request.getAircraftId())));
+
+        // Update stops
+        // First, remove existing stops
+        stopRepository.deleteAll(flight.getStopsList());
+        flight.getStopsList().clear();
+        // Add new stops
+        if (request.getStopsList() != null && !request.getStopsList().isEmpty()) {
+            List<Stop> stops = request.getStopsList().stream().map(stopRequest -> {
+                Stop stop = stopMapper.toEntity(stopRequest);
+                Airport airport = airportRepository.findById(stopRequest.getAirportId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Stop airport not found with id " + stopRequest.getAirportId()));
+                stop.setAirport(airport);
+                stop.setFlight(flight); // Set the flight reference
+                // Calculate stop duration if arrival and departure times are provided
+                if (stopRequest.getArrivalTime() != null && stopRequest.getDepartureTime() != null) {
+                    stop.setStopDuration((int) Duration.between(stopRequest.getArrivalTime(), stopRequest.getDepartureTime()).toMinutes());
+                }
+                return stop;
+            }).collect(Collectors.toList());
+            flight.setStopsList(stops);
+        }
 
         // Dynamic pricing: increase price if within 24h of departure
         BigDecimal basePrice = request.getBasePrice();

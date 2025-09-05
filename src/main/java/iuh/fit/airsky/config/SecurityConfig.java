@@ -59,7 +59,8 @@ public class SecurityConfig {
             "/api/v1/deals/**",
             "/api/v1/blogs/**",
             "/api/v1/categories/**",
-            "/api/v1/blog-likes/**"
+            "/api/v1/blog-likes/**",
+            "/api/v1/travel-classes/**"
 
     };
     private static final String[] PERMISION_ROUTES = {

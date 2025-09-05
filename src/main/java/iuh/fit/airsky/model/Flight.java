@@ -8,6 +8,8 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "flights",
@@ -18,15 +20,15 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_arrival_airport", columnList = "arrival_airport_id"),
                 @Index(name = "idx_flight_status", columnList = "status"),
                 @Index(name = "idx_departure_arrival", columnList = "departure_airport_id,arrival_airport_id")
-
         })
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Flight  extends BaseAuditOnlyEntity {
+public class Flight extends BaseAuditOnlyEntity {
 
+    // Other existing fields remain unchanged
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long flightId;
@@ -50,13 +52,16 @@ public class Flight  extends BaseAuditOnlyEntity {
     private LocalDateTime arrivalTime;
 
     private Integer duration;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "business_id", nullable = false)
     private User business;
 
-
     @Column(length = 20)
     private String stops;
+
+    @OneToMany(mappedBy = "flight", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<Stop> stopsList;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "gate_id")
@@ -69,14 +74,24 @@ public class Flight  extends BaseAuditOnlyEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(length = 50)
-    private FlightStatus status;//    ON_TIME,DELAYED,CANCELLED
+    private FlightStatus status;
 
     @Enumerated(EnumType.STRING)
     @Column(length = 50)
-    private FlightType type;//    DOMESTIC , INTERNATIONAL
+    private FlightType type;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "aircraft_id")
     private Aircraft aircraft;
 
+    @PostLoad
+    private void loadStopsString() {
+        if (stopsList == null || stopsList.isEmpty()) {
+            stops = "NON_STOP";
+        } else {
+            stops = stopsList.stream()
+                    .map(stop -> stop.getAirport().getAirportCode())
+                    .collect(Collectors.joining(","));
+        }
+    }
 }
