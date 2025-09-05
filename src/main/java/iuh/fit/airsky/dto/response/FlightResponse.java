@@ -24,6 +24,7 @@ public class FlightResponse {
     private String stops;
     private List<StopResponse> stopsList;
     private String gate;
+    private String terminal;
     private FlightType type;
     private String businessName;
     private Integer availableSeats;
