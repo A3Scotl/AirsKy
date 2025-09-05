@@ -34,6 +34,9 @@ public class Airline extends BaseFullSoftDeleteEntity {
     @Column(length = 100)
     private String contact;
 
+    @Column(name = "thumbnail", length = 500)
+    private String thumbnail;
+
 
     
 }

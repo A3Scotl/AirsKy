@@ -10,6 +10,14 @@ import org.mapstruct.Mapping;
 public interface UserMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "password", ignore = true) // Xử lý mã hóa riêng
+    @Mapping(target = "active", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "deleted", ignore = true)
+    @Mapping(target = "deletedAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "businessName", ignore = true)
+    @Mapping(target = "isVerified", ignore = true)
+    @Mapping(target = "lastLogin", ignore = true)
     User toEntity(UserRequest dto);
 
     UserResponse toResponseDTO(User entity);

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import jakarta.transaction.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -30,5 +31,7 @@ public interface AirportRepository extends JpaRepository<Airport, Long> {
 
     Optional<Airport> findByAirportCode(String airportCode);
 
+    @Query("SELECT a FROM Airport a WHERE LOWER(a.cityName) LIKE LOWER(CONCAT('%', :cityName, '%')) AND a.deleted = false")
+    List<Airport> findByCityNameContaining(String cityName);
 
 }

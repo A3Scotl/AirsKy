@@ -33,13 +33,13 @@ public abstract class BaseFullSoftDeleteEntity {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
     @Builder.Default
-    @Column(name = "is_active")
-    private boolean active=true;
+    @Column(name = "is_active", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 1")
+    private boolean active = true;
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
     @Builder.Default
-    @Column(name = "is_deleted", nullable = false)
+    @Column(name = "is_deleted", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
     private boolean deleted = false;
 
     /**

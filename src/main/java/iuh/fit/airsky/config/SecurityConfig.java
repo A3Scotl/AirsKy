@@ -52,6 +52,7 @@ public class SecurityConfig {
             "/api/v1/auth/google-login",
             "/api/v1/airports/**",
             "/api/v1/flights/**",
+            "/api/v1/countries/**",
             "/api/v1/airlines/**",
             "/api/v1/bookings/**",
             "/api/v1/aircrafts/**",
