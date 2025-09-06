@@ -2,6 +2,7 @@ package iuh.fit.airsky.dto.request;
 
 import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.enums.FlightType;
+import iuh.fit.airsky.enums.TripType;
 import iuh.fit.airsky.model.Aircraft;
 import lombok.Data;
 import java.math.BigDecimal;
@@ -25,6 +26,8 @@ public class FlightRequest {
     private FlightStatus status;
     private FlightType type;
     private Long businessId;
+    private TripType tripType; // ONE_WAY, ROUND_TRIP, MULTI_CITY
+    private String roundTripGroupId; // dùng để liên kết các chuyến bay khứ hồi
 
 
 

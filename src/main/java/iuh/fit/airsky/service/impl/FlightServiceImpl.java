@@ -1,9 +1,9 @@
-
 package iuh.fit.airsky.service.impl;
 
 import iuh.fit.airsky.dto.request.FlightRequest;
 import iuh.fit.airsky.dto.response.FlightResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
+import iuh.fit.airsky.dto.response.RoundTripFlightResponse;
 import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.FlightMapper;
@@ -240,5 +240,56 @@ public class FlightServiceImpl implements FlightService {
 
         Page<Flight> flightPage = flightRepository.findFlightsBetweenCountries(departureCountry, arrivalCountry, pageable);
         return new PageResponse<>(flightPage.map(flightMapper::toResponseDTO));
+    }
+
+    @Override
+    public RoundTripFlightResponse searchRoundTripFlights(
+            Long departureAirportId,
+            Long arrivalAirportId,
+            LocalDateTime outboundDate,
+            LocalDateTime returnDate,
+            FlightStatus status,
+            Pageable pageable) {
+        LocalDateTime outboundStart = outboundDate.withHour(0).withMinute(0).withSecond(0);
+        LocalDateTime outboundEnd = outboundDate.withHour(23).withMinute(59).withSecond(59);
+        LocalDateTime returnStart = returnDate.withHour(0).withMinute(0).withSecond(0);
+        LocalDateTime returnEnd = returnDate.withHour(23).withMinute(59).withSecond(59);
+
+        Page<Flight> allRoundTripFlights = flightRepository.findAllRoundTripFlights(pageable);
+        // Lọc outbound: đúng chiều, đúng ngày đi
+        List<Flight> outboundFlights = allRoundTripFlights.getContent().stream()
+            .filter(f -> f.getDepartureAirport().getAirportId().equals(departureAirportId)
+                && f.getArrivalAirport().getAirportId().equals(arrivalAirportId)
+                && !f.getDepartureTime().isBefore(outboundStart)
+                && !f.getDepartureTime().isAfter(outboundEnd))
+            .toList();
+        // Lọc return: đúng chiều, đúng ngày về
+        List<Flight> returnFlights = allRoundTripFlights.getContent().stream()
+            .filter(f -> f.getDepartureAirport().getAirportId().equals(arrivalAirportId)
+                && f.getArrivalAirport().getAirportId().equals(departureAirportId)
+                && !f.getDepartureTime().isBefore(returnStart)
+                && !f.getDepartureTime().isAfter(returnEnd))
+            .toList();
+
+        // Ghép cặp khứ hồi hợp lệ dựa trên roundTripGroupId
+        List<RoundTripFlightResponse.RoundTripPair> pairs = outboundFlights.stream()
+            .flatMap(outbound -> returnFlights.stream()
+                .filter(inbound -> outbound.getRoundTripGroupId() != null
+                        && outbound.getRoundTripGroupId().equals(inbound.getRoundTripGroupId()))
+                .map(inbound -> new RoundTripFlightResponse.RoundTripPair(
+                        flightMapper.toResponseDTO(outbound),
+                        flightMapper.toResponseDTO(inbound)
+                )))
+            .toList();
+
+        RoundTripFlightResponse response = new RoundTripFlightResponse();
+        response.setRoundTripPairs(pairs);
+        return response;
+    }
+
+    @Override
+    public PageResponse<FlightResponse> findRoundTripFlightsByGroupId(String groupId, Pageable pageable) {
+        Page<Flight> page = flightRepository.findRoundTripFlightsByGroupId(groupId, pageable);
+        return new PageResponse<>(page.map(flightMapper::toResponseDTO));
     }
 }

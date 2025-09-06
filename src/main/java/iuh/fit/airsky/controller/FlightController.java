@@ -5,6 +5,7 @@ import iuh.fit.airsky.dto.response.FlightResponse;
 import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.dto.response.SeatResponse;
+import iuh.fit.airsky.dto.response.RoundTripFlightResponse;
 import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.service.FlightService;
@@ -90,11 +91,27 @@ public class FlightController {
     public ResponseEntity<ApiResponse<PageResponse<FlightResponse>>> searchFlights(
             @RequestParam(value = "departureAirportId", required = false) Long departureAirportId,
             @RequestParam(value = "arrivalAirportId", required = false) Long arrivalAirportId,
-            @RequestParam(value = "startTime", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
-            @RequestParam(value = "endTime", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
+            @RequestParam(value = "startTime", required = false) String startTimeStr,
+            @RequestParam(value = "endTime", required = false) String endTimeStr,
             @RequestParam(value = "status", required = false) FlightStatus status,
             Pageable pageable) {
         try {
+            LocalDateTime startTime = null;
+            LocalDateTime endTime = null;
+            if (startTimeStr != null && !startTimeStr.isEmpty()) {
+                if (startTimeStr.length() == 10) { // yyyy-MM-dd
+                    startTime = LocalDateTime.parse(startTimeStr + "T00:00:00");
+                } else {
+                    startTime = LocalDateTime.parse(startTimeStr);
+                }
+            }
+            if (endTimeStr != null && !endTimeStr.isEmpty()) {
+                if (endTimeStr.length() == 10) { // yyyy-MM-dd
+                    endTime = LocalDateTime.parse(endTimeStr + "T23:59:59");
+                } else {
+                    endTime = LocalDateTime.parse(endTimeStr);
+                }
+            }
             PageResponse<FlightResponse> response = flightService.searchFlights(
                     departureAirportId, arrivalAirportId, startTime, endTime, status, pageable);
             return ApiResponseUtil.buildResponse(true, "Flights searched successfully", response, "/api/v1/flights/search");
@@ -189,4 +206,66 @@ public class FlightController {
         return ApiResponseUtil.buildResponse(true, "Seats retrieved successfully", seats, "/api/v1/flights/" + flightId + "/seats");
     }
 
+    @GetMapping("/search-oneway")
+    public ResponseEntity<ApiResponse<PageResponse<FlightResponse>>> searchOneWayFlights(
+            @RequestParam(value = "departureAirportId", required = false) Long departureAirportId,
+            @RequestParam(value = "arrivalAirportId", required = false) Long arrivalAirportId,
+            @RequestParam(value = "date", required = true) String dateStr,
+            @RequestParam(value = "status", required = false) FlightStatus status,
+            Pageable pageable) {
+        try {
+            LocalDateTime startTime = null;
+            LocalDateTime endTime = null;
+            if (dateStr != null && !dateStr.isEmpty()) {
+                // Chỉ nhận ngày, tự động set giờ từ 00:00:00 đến 23:59:59
+                startTime = LocalDateTime.parse(dateStr + "T00:00:00");
+                endTime = LocalDateTime.parse(dateStr + "T23:59:59");
+            }
+            PageResponse<FlightResponse> response = flightService.searchFlights(
+                    departureAirportId, arrivalAirportId, startTime, endTime, status, pageable);
+            return ApiResponseUtil.buildResponse(true, "One-way flights searched successfully", response, "/api/v1/flights/search-oneway");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Search failed", ex.getMessage(), "/api/v1/flights/search-oneway");
+        }
+    }
+
+    @GetMapping("/search-roundtrip")
+    public ResponseEntity<ApiResponse<RoundTripFlightResponse>> searchRoundTripFlights(
+            @RequestParam(value = "departureAirportId") Long departureAirportId,
+            @RequestParam(value = "arrivalAirportId") Long arrivalAirportId,
+            @RequestParam(value = "outboundDate") String outboundDateStr,
+            @RequestParam(value = "returnDate") String returnDateStr,
+            @RequestParam(value = "status", required = false) FlightStatus status,
+            Pageable pageable) {
+        try {
+            LocalDateTime outboundDate = null;
+            LocalDateTime returnDate = null;
+            if (outboundDateStr != null && !outboundDateStr.isEmpty()) {
+                outboundDate = LocalDateTime.parse(outboundDateStr + "T00:00:00");
+            }
+            if (returnDateStr != null && !returnDateStr.isEmpty()) {
+                returnDate = LocalDateTime.parse(returnDateStr + "T00:00:00");
+            }
+            RoundTripFlightResponse response = flightService.searchRoundTripFlights(
+                    departureAirportId, arrivalAirportId, outboundDate, returnDate, status, pageable);
+            return ApiResponseUtil.buildResponse(true, "Round-trip flights searched successfully", response, "/api/v1/flights/search-roundtrip");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Search failed", ex.getMessage(), "/api/v1/flights/search-roundtrip");
+        }
+    }
+
+    @GetMapping("/roundtrip-group")
+    public ResponseEntity<ApiResponse<PageResponse<FlightResponse>>> findRoundTripFlightsByGroupId(
+            @RequestParam("groupId") String groupId,
+            Pageable pageable) {
+        try {
+            PageResponse<FlightResponse> response = flightService.findRoundTripFlightsByGroupId(groupId, pageable);
+            return ApiResponseUtil.buildResponse(true, "Round-trip flights by groupId retrieved successfully", response, "/api/v1/flights/roundtrip-group");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Search failed", ex.getMessage(), "/api/v1/flights/roundtrip-group");
+        }
+    }
 }

@@ -3,6 +3,7 @@ package iuh.fit.airsky.model;
 import iuh.fit.airsky.base.BaseAuditOnlyEntity;
 import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.enums.FlightType;
+import iuh.fit.airsky.enums.TripType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -56,7 +57,6 @@ public class Flight  extends BaseAuditOnlyEntity {
     @JoinColumn(name = "business_id", nullable = false)
     private User business;
 
-
     @OneToMany(mappedBy = "flight", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Stop> stops = new ArrayList<>();
 
@@ -81,4 +81,10 @@ public class Flight  extends BaseAuditOnlyEntity {
     @JoinColumn(name = "aircraft_id")
     private Aircraft aircraft;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private TripType tripType; // ONE_WAY, ROUND_TRIP, MULTI_CITY
+
+    @Column(name = "round_trip_group_id")
+    private String roundTripGroupId; // dùng để liên kết các chuyến bay khứ hồi
 }

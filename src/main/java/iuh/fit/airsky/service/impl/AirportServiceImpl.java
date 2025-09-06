@@ -115,4 +115,11 @@ public class AirportServiceImpl implements AirportService {
         airportRepository.softDeleteById(id, LocalDateTime.now());
         log.info("Airport soft deleted: {}", id);
     }
+
+    @Override
+    public Optional<AirportResponse> findByAirportCode(String airportCode) {
+        return airportRepository.findByAirportCode(airportCode)
+                .filter(a -> !a.isDeleted())
+                .map(airportMapper::toResponseDTO);
+    }
 }

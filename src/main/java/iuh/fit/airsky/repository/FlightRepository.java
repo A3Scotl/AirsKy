@@ -18,8 +18,9 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
     @EntityGraph(attributePaths = {"airline", "departureAirport", "arrivalAirport", "gate", "business","stops"})
     Page<Flight> findAll(Pageable pageable);
 
-    @Query("SELECT f FROM Flight f WHERE f.departureAirport.airportId = :departureAirportId " +
-            "AND f.arrivalAirport.airportId = :arrivalAirportId " +
+    @Query("SELECT f FROM Flight f WHERE " +
+            "(:departureAirportId IS NULL OR f.departureAirport.airportId = :departureAirportId) " +
+            "AND (:arrivalAirportId IS NULL OR f.arrivalAirport.airportId = :arrivalAirportId) " +
             "AND f.departureTime BETWEEN :startTime AND :endTime " +
             "AND (:status IS NULL OR f.status = :status)")
     Page<Flight> searchFlights(@Param("departureAirportId") Long departureAirportId,
@@ -28,6 +29,7 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
                                @Param("endTime") LocalDateTime endTime,
                                @Param("status") FlightStatus status,
                                Pageable pageable);
+
     // src/main/java/iuh/fit/airsky/repository/FlightRepository.java
     @Query("SELECT CASE WHEN COUNT(f) > 0 THEN true ELSE false END FROM Flight f " +
             "WHERE f.aircraft.aircraftId = :aircraftId " +
@@ -45,6 +47,7 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
                                          @Param("startTime") LocalDateTime startTime,
                                          @Param("endTime") LocalDateTime endTime);
     Optional<Flight> findByFlightNumber(String flightNumber);
+
     // Tìm chuyến bay nội địa (trong cùng một quốc gia)
     @Query("SELECT f FROM Flight f " +
             "JOIN f.departureAirport da JOIN da.country dc " +
@@ -60,4 +63,10 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
     Page<Flight> findFlightsBetweenCountries(@Param("departureCountry") String departureCountry,
                                              @Param("arrivalCountry") String arrivalCountry,
                                              Pageable pageable);
+
+    @Query("SELECT f FROM Flight f WHERE f.roundTripGroupId = :groupId AND f.tripType = 'ROUND_TRIP'")
+    Page<Flight> findRoundTripFlightsByGroupId(@Param("groupId") String groupId, Pageable pageable);
+
+    @Query("SELECT f FROM Flight f WHERE f.roundTripGroupId IS NOT NULL AND f.tripType = 'ROUND_TRIP'")
+    Page<Flight> findAllRoundTripFlights(Pageable pageable);
 }

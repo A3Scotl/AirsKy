@@ -1,6 +1,7 @@
 package iuh.fit.airsky.dto.response;
 
 import lombok.Data;
+
 import java.time.LocalDateTime;
 
 @Data
@@ -16,3 +17,4 @@ public class AirlineResponse {
     private LocalDateTime deletedAt;
     private boolean deleted;
 }
+

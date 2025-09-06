@@ -13,4 +13,5 @@ public interface AirportService {
     Optional<AirportResponse> findById(Long id);
     PageResponse<AirportResponse> findAll(Pageable pageable);
     void softDelete(Long id);
+    Optional<AirportResponse> findByAirportCode(String airportCode);
 }

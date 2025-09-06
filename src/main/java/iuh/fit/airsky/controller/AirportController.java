@@ -155,4 +155,16 @@ public class AirportController {
             return ApiResponseUtil.buildResponse(false, "Có lỗi xảy ra khi cập nhật sân bay: " + e.getMessage(), null, "/api/v1/airports/" + id + "/upload");
         }
     }
+
+    @GetMapping("/code/{airportCode}")
+    public ResponseEntity<ApiResponse<AirportResponse>> getAirportByCode(@PathVariable String airportCode) {
+        try {
+            return airportService.findByAirportCode(airportCode)
+                    .map(response -> ApiResponseUtil.buildResponse(true, "Airport retrieved successfully", response, "/api/v1/airports/code/" + airportCode))
+                    .orElseGet(() -> ApiResponseUtil.buildErrorResponse(HttpStatus.NOT_FOUND, "Airport not found", "RESOURCE_NOT_FOUND", "/api/v1/airports/code/" + airportCode));
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Retrieval failed", ex.getMessage(), "/api/v1/airports/code/" + airportCode);
+        }
+    }
 }
