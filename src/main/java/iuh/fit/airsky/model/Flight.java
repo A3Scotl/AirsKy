@@ -9,8 +9,8 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "flights",
@@ -53,12 +53,16 @@ public class Flight  extends BaseAuditOnlyEntity {
     private LocalDateTime arrivalTime;
 
     private Integer duration;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "business_id", nullable = false)
     private User business;
 
-    @OneToMany(mappedBy = "flight", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Stop> stops = new ArrayList<>();
+    @Column(length = 20)
+    private String stops;
+
+    @OneToMany(mappedBy = "flight", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<Stop> stopsList;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "gate_id")
@@ -87,4 +91,15 @@ public class Flight  extends BaseAuditOnlyEntity {
 
     @Column(name = "round_trip_group_id")
     private String roundTripGroupId; // dùng để liên kết các chuyến bay khứ hồi
+
+    @PostLoad
+    private void loadStopsString() {
+        if (stopsList == null || stopsList.isEmpty()) {
+            stops = "NON_STOP";
+        } else {
+            stops = stopsList.stream()
+                    .map(stop -> stop.getAirport().getAirportCode())
+                    .collect(Collectors.joining(","));
+        }
+    }
 }

@@ -1,20 +1,15 @@
 package iuh.fit.airsky.dto.response;
 
-import lombok.*;
-
+import lombok.Data;
 import java.time.LocalDateTime;
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Data
 public class StopResponse {
     private Long stopId;
-    private Long flightId;
-    private Long airportId;
     private String airportName;
+    private String airportCode;
     private LocalDateTime arrivalTime;
     private LocalDateTime departureTime;
-    private String note;
+    private Integer stopDuration;
+    private Integer stopOrder;
 }

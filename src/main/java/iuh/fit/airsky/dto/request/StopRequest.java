@@ -1,18 +1,12 @@
 package iuh.fit.airsky.dto.request;
 
-import lombok.*;
-
+import lombok.Data;
 import java.time.LocalDateTime;
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Data
 public class StopRequest {
     private Long airportId;
-    private Long flightId;
     private LocalDateTime arrivalTime;
     private LocalDateTime departureTime;
-    private String note;
+    private Integer stopOrder;
 }

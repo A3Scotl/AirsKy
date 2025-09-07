@@ -19,9 +19,10 @@ public class FlightResponse {
     private LocalDateTime departureTime;
     private LocalDateTime arrivalTime;
     private Integer duration;
-    private List<StopResponse> stops;
+    private String stops;
+    private List<StopResponse> stopsList;
     private String gate;
-    private Integer terminal;
+    private String terminal;
     private FlightType type;
     private String businessName;
     private Integer availableSeats;

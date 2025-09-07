@@ -6,7 +6,10 @@
 package iuh.fit.airsky.repository;
 
 import iuh.fit.airsky.model.Aircraft;
+import iuh.fit.airsky.model.Flight;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
@@ -18,4 +21,7 @@ import java.util.Optional;
  */
 public interface AircraftRepository extends JpaRepository<Aircraft, Long> {
     Optional<Aircraft> findByAircraftCode(String code);
+    
+    @Query("SELECT f FROM Flight f LEFT JOIN FETCH f.aircraft WHERE f.flightId = :flightId")
+    Optional<Flight> findFlightWithAircraftById(@Param("flightId") Long flightId);
 }

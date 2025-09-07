@@ -19,7 +19,8 @@ public class FlightRequest {
     private LocalDateTime departureTime;
     private LocalDateTime arrivalTime;
     private Integer duration;
-    private List<StopRequest> stops;
+    private String stops;
+    private List<StopRequest> stopsList;
     private Long gateId;
     private Integer availableSeats;
     private BigDecimal basePrice;

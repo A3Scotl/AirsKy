@@ -4,6 +4,7 @@ import iuh.fit.airsky.dto.response.SeatResponse;
 import iuh.fit.airsky.enums.SeatStatus;
 import iuh.fit.airsky.mapper.SeatMapper;
 import iuh.fit.airsky.model.*;
+import iuh.fit.airsky.repository.AircraftRepository;
 import iuh.fit.airsky.repository.PassengerRepository;
 import iuh.fit.airsky.repository.SeatRepository;
 import iuh.fit.airsky.repository.TravelClassRepository;
@@ -26,15 +27,16 @@ public class SeatServiceImpl implements SeatService {
     private final SeatMapper seatMapper;
     private final TravelClassRepository travelClassRepository;
     private final PassengerRepository passengerRepository;
+    private final AircraftRepository aircraftRepository;
     // Lock map theo flightId
     private final ConcurrentHashMap<Long, Object> flightLocks = new ConcurrentHashMap<>();
 
     @Override
     @Transactional
     public List<SeatResponse> getSeatsByFlight(Long flightId) {
+        // First, check if seats already exist for this flight
         Flight flight = new Flight();
         flight.setFlightId(flightId);
-
         List<Seat> seats = seatRepository.findByFlight(flight);
 
         // Lazy seat generation
@@ -46,21 +48,25 @@ public class SeatServiceImpl implements SeatService {
                 if (seats.isEmpty()) {
                     log.info("No seats found for flight {}, generating now...", flightId);
 
-                    // Lấy travel classes
-                    List<TravelClass> travelClasses = travelClassRepository.findAll();
+                    // Get the full flight with aircraft relationship
+                    Flight fullFlight = aircraftRepository.findFlightWithAircraftById(flightId)
+                            .orElseThrow(() -> new RuntimeException("Flight not found with id: " + flightId));
 
-                    // Lấy aircraft từ flight (assume flight được load với aircraft)
-                    Aircraft aircraft = flight.getAircraft();
-                    if (aircraft == null) {
-                        throw new RuntimeException("Aircraft not set for flight " + flightId);
+                    // Verify aircraft exists
+                    if (fullFlight.getAircraft() == null) {
+                        throw new IllegalStateException("No aircraft assigned to flight " + flightId);
                     }
 
-                    seats = SeatGeneratorUtil.generateSeats(flight, aircraft, travelClasses);
+                    // Get travel classes
+                    List<TravelClass> travelClasses = travelClassRepository.findAll();
+
+                    // Generate seats
+                    seats = SeatGeneratorUtil.generateSeats(fullFlight, fullFlight.getAircraft(), travelClasses);
                     seatRepository.saveAll(seats);
                     log.info("Generated {} seats for flight {}", seats.size(), flightId);
                 }
             }
-            flightLocks.remove(flightId); // giải phóng lock
+            flightLocks.remove(flightId); // Release lock
         }
 
         return seats.stream()

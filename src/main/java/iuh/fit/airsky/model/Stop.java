@@ -8,10 +8,10 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "stops",
-       indexes = {
-           @Index(name = "idx_flight_stop", columnList = "flight_id"),
-           @Index(name = "idx_airport_stop", columnList = "airport_id")
-       })
+        indexes = {
+                @Index(name = "idx_flight_id", columnList = "flight_id"),
+                @Index(name = "idx_airport_id", columnList = "airport_id")
+        })
 @Getter
 @Setter
 @NoArgsConstructor
@@ -25,15 +25,21 @@ public class Stop extends BaseAuditOnlyEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "flight_id", nullable = false)
-    private Flight flight; // chuyến bay cha
+    private Flight flight;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "airport_id", nullable = false)
-    private Airport airport; // sân bay dừng
+    private Airport airport;
 
-    private LocalDateTime arrivalTime;   // thời gian đến điểm dừng
-    private LocalDateTime departureTime; // thời gian rời điểm dừng
+    @Column(name = "arrival_time")
+    private LocalDateTime arrivalTime;
 
-    @Column(length = 255)
-    private String note; // ghi chú (nếu cần, ví dụ "tiếp nhiên liệu", "quá cảnh")
+    @Column(name = "departure_time")
+    private LocalDateTime departureTime;
+
+    @Column(name = "stop_duration")
+    private Integer stopDuration; // Duration in minutes
+
+    @Column(name = "stop_order")
+    private Integer stopOrder; // To indicate the sequence of stops
 }

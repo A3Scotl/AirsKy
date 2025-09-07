@@ -37,7 +37,7 @@ public class Gate extends BaseFullSoftDeleteEntity {
     @Column(length = 10)
     private String gateName;
     @Column(length = 10)
-    private Integer terminal;
+    private String terminal;
 
     @OneToMany(mappedBy = "gate", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Flight> flights;
