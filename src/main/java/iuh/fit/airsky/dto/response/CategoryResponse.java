@@ -19,4 +19,5 @@ public class CategoryResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long blogCount;
+    private boolean isActive;
 }

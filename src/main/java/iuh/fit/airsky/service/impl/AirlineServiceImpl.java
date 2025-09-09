@@ -49,6 +49,7 @@ public class AirlineServiceImpl implements AirlineService {
         log.info("Updating airline with ID: {}", id);
         Airline airline = airlineRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Airline not found with id " + id));
+        airline.setAirlineCode(request.getAirlineCode());
         airline.setAirlineName(request.getAirlineName());
         airline.setContact(request.getContact());
         airline.setThumbnail(request.getThumbnail()); // Set thumbnail

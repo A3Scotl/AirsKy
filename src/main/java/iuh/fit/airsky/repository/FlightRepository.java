@@ -69,4 +69,34 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
 
     @Query("SELECT f FROM Flight f WHERE f.roundTripGroupId IS NOT NULL AND f.tripType = 'ROUND_TRIP'")
     Page<Flight> findAllRoundTripFlights(Pageable pageable);
+
+    // Kiểm tra overlap tại sân bay khởi hành
+    @Query("SELECT CASE WHEN COUNT(f) > 0 THEN true ELSE false END FROM Flight f " +
+            "WHERE f.departureAirport.airportId = :airportId " +
+            "AND ((f.departureTime < :arrivalTime AND f.arrivalTime > :departureTime) OR " +
+            "(f.departureTime < :arrivalTime AND f.arrivalTime > :departureTime)) " +
+            "AND (:excludeId IS NULL OR f.flightId != :excludeId)")
+    boolean existsByDepartureAirportIdAndTimeOverlap(@Param("airportId") Long airportId,
+                                                     @Param("departureTime") LocalDateTime departureTime,
+                                                     @Param("arrivalTime") LocalDateTime arrivalTime,
+                                                     @Param("excludeId") Long excludeId);
+
+    // Kiểm tra overlap tại sân bay hạ cánh
+    @Query("SELECT CASE WHEN COUNT(f) > 0 THEN true ELSE false END FROM Flight f " +
+            "WHERE f.arrivalAirport.airportId = :airportId " +
+            "AND ((f.departureTime < :arrivalTime AND f.arrivalTime > :departureTime) OR " +
+            "(f.departureTime < :arrivalTime AND f.arrivalTime > :departureTime)) " +
+            "AND (:excludeId IS NULL OR f.flightId != :excludeId)")
+    boolean existsByArrivalAirportIdAndTimeOverlap(@Param("airportId") Long airportId,
+                                                   @Param("departureTime") LocalDateTime departureTime,
+                                                   @Param("arrivalTime") LocalDateTime arrivalTime,
+                                                   @Param("excludeId") Long excludeId);
+
+    // Đếm số chuyến bay tại sân bay trong khoảng thời gian (cho buffer time)
+    @Query("SELECT COUNT(f) FROM Flight f WHERE " +
+            "(f.departureAirport.airportId = :airportId OR f.arrivalAirport.airportId = :airportId) " +
+            "AND ((f.departureTime BETWEEN :start AND :end) OR (f.arrivalTime BETWEEN :start AND :end))")
+    long countFlightsAtAirportInTimeRange(@Param("airportId") Long airportId,
+                                          @Param("start") LocalDateTime start,
+                                          @Param("end") LocalDateTime end);
 }

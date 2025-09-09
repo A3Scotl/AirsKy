@@ -17,4 +17,6 @@ public class CategoryRequest {
     
     @Size(max = 500, message = "Mô tả không được vượt quá 500 ký tự")
     private String description;
+
+    private Boolean active;
 }

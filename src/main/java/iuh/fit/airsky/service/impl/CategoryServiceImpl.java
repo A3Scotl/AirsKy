@@ -41,10 +41,11 @@ public class CategoryServiceImpl implements CategoryService {
         String slug = SlugUtils.generateUniqueSlug(request.getName(), 
             (candidateSlug) -> categoryRepository.existsBySlug(candidateSlug));
         
-        Category category = new Category();
+        Category category = categoryMapper.toEntity(request);
         category.setName(request.getName());
         category.setSlug(slug);
         category.setDescription(request.getDescription());
+        category.setActive(request.getActive() != null ? request.getActive() : true);
         
         Category savedCategory = categoryRepository.save(category);
         
@@ -76,6 +77,10 @@ public class CategoryServiceImpl implements CategoryService {
         existingCategory.setName(request.getName());
         existingCategory.setSlug(newSlug);
         existingCategory.setDescription(request.getDescription());
+
+        if (request.getActive() != null) {
+            existingCategory.setActive(request.getActive());
+        }
         
         Category updatedCategory = categoryRepository.save(existingCategory);
         

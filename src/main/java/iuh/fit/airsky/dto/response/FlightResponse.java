@@ -15,7 +15,7 @@ import java.util.List;
 public class FlightResponse {
     private Long flightId;
     private String flightNumber;
-    private String aircraft;
+    private AircraftResponse aircraft;
     private LocalDateTime departureTime;
     private LocalDateTime arrivalTime;
     private Integer duration;
@@ -26,15 +26,16 @@ public class FlightResponse {
     private FlightType type;
     private String businessName;
     private Integer availableSeats;
-    private Integer totalSeats;
+    // Xóa totalSeats vì sẽ nằm trong aircraftResponse
     private BigDecimal basePrice;
     private FlightStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private TripType tripType; // ONE_WAY, ROUND_TRIP, MULTI_CITY
-    private String roundTripGroupId; // dùng để liên kết các chuyến bay khứ hồi
+    private TripType tripType;
+    private String roundTripGroupId; 
     private AirportResponse departureAirport;
     private AirportResponse arrivalAirport;
     private AirlineResponse airline;
+    private List<FlightTravelClassResponse> flightTravelClasses;
 
 }

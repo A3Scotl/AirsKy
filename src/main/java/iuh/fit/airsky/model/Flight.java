@@ -9,6 +9,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -91,6 +92,10 @@ public class Flight  extends BaseAuditOnlyEntity {
 
     @Column(name = "round_trip_group_id")
     private String roundTripGroupId; // dùng để liên kết các chuyến bay khứ hồi
+
+    @OneToMany(mappedBy = "flight", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<FlightTravelClass> flightTravelClasses = new ArrayList<>();
 
     @PostLoad
     private void loadStopsString() {

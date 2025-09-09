@@ -19,7 +19,14 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -50,8 +57,21 @@ public class FlightController {
         }
     }
 
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Void>> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getAllErrors().forEach((error) -> {
+            String fieldName = ((FieldError) error).getField();
+            String errorMessage = error.getDefaultMessage();
+            errors.put(fieldName, errorMessage);
+        });
+
+        String errorMessage = "Validation failed: " + errors.toString();
+        return ApiResponseUtil.buildErrorResponse(HttpStatus.BAD_REQUEST, "Validation Error", errorMessage, "/api/v1/flights");
+    }
+
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    // @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<FlightResponse>> updateFlight(@PathVariable Long id, @Valid @RequestBody FlightRequest request) {
         try {
             FlightResponse response = flightService.updateFlight(id, request);
