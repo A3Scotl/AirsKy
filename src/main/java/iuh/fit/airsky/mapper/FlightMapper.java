@@ -31,6 +31,7 @@ public interface FlightMapper {
     @Mapping(target = "terminal", expression = "java(entity.getGate() != null ? entity.getGate().getTerminal() : null)")
     @Mapping(target = "aircraft", expression = "java(entity.getAircraft() != null ? entity.getAircraft().getAircraftName() : null)")
     @Mapping(target = "stopsList", source = "stopsList")
+    @Mapping(target = "totalSeats", expression = "java(entity.getAircraft() != null ? entity.getAircraft().getTotalSeats() : null)")
     FlightResponse toResponseDTO(Flight entity);
 
 }

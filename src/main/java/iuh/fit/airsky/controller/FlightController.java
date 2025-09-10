@@ -188,5 +188,10 @@ public class FlightController {
         List<SeatResponse> seats = seatService.getSeatsByFlight(flightId);
         return ApiResponseUtil.buildResponse(true, "Seats retrieved successfully", seats, "/api/v1/flights/" + flightId + "/seats");
     }
+    @GetMapping("/{id}/seats/{travelClassId}")
+    public ResponseEntity<ApiResponse<List<SeatResponse>>> getSeatsByFlightAndTravelClass(@PathVariable("id") Long flightId,@PathVariable("travelClassId") Long travelClassId) {
+        List<SeatResponse> seats = seatService.getSeatsByFlightAndTravelClass(flightId,travelClassId);
+        return ApiResponseUtil.buildResponse(true, "Seats retrieved successfully", seats, "/api/v1/flights/" + flightId + "/seats/" + travelClassId);
+    }
 
 }

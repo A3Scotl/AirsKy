@@ -28,6 +28,7 @@ public class FlightResponse {
     private FlightType type;
     private String businessName;
     private Integer availableSeats;
+    private Integer totalSeats;
     private BigDecimal basePrice;
     private FlightStatus status;
     private LocalDateTime createdAt;
