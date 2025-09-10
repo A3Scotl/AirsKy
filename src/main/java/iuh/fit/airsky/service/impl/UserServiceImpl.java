@@ -42,6 +42,7 @@ public class UserServiceImpl implements UserService {
         user.setPhone(request.getPhone());
         user.setVerified(request.isVerified());
         user.setRole(request.getRole());
+        user.setActive(request.isActive());
         if (request.getPassword() != null && !request.getPassword().isEmpty()) {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
         }
@@ -86,4 +87,13 @@ public class UserServiceImpl implements UserService {
         return userRepository.save(user);
     }
 
+    @Override
+    public void toggleActive(Long id) {
+        log.info("Toggling active status for user with ID: {}", id);
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id " + id));
+        boolean newActive = !user.isActive();
+        userRepository.updateActiveById(id, newActive);
+        log.info("User active status toggled to {} for ID: {}", newActive, id);
+    }
 }

@@ -17,4 +17,7 @@ public interface UserService {
     // Methods for Google Auth
     Optional<User> findByEmail(String email);
     User save(User user);
+
+    // New method for locking/unlocking account
+    void toggleActive(Long id);
 }

@@ -36,7 +36,4 @@ public class Airline extends BaseFullSoftDeleteEntity {
 
     @Column(name = "thumbnail", length = 500)
     private String thumbnail;
-
-
-    
 }

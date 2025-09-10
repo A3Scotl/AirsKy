@@ -1,6 +1,7 @@
 package iuh.fit.airsky.model;
 
 import iuh.fit.airsky.base.BaseAuditOnlyEntity;
+import iuh.fit.airsky.base.BaseFullSoftDeleteEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -18,7 +19,7 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Category extends BaseAuditOnlyEntity {
+public class Category extends BaseFullSoftDeleteEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

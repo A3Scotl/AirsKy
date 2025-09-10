@@ -3,11 +3,13 @@ package iuh.fit.airsky.model;
 import iuh.fit.airsky.base.BaseAuditOnlyEntity;
 import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.enums.FlightType;
+import iuh.fit.airsky.enums.TripType;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -20,15 +22,15 @@ import java.util.stream.Collectors;
                 @Index(name = "idx_arrival_airport", columnList = "arrival_airport_id"),
                 @Index(name = "idx_flight_status", columnList = "status"),
                 @Index(name = "idx_departure_arrival", columnList = "departure_airport_id,arrival_airport_id")
+
         })
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Flight extends BaseAuditOnlyEntity {
+public class Flight  extends BaseAuditOnlyEntity {
 
-    // Other existing fields remain unchanged
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long flightId;
@@ -74,15 +76,26 @@ public class Flight extends BaseAuditOnlyEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(length = 50)
-    private FlightStatus status;
+    private FlightStatus status;//    ON_TIME,DELAYED,CANCELLED
 
     @Enumerated(EnumType.STRING)
     @Column(length = 50)
-    private FlightType type;
+    private FlightType type;//    DOMESTIC , INTERNATIONAL
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "aircraft_id")
     private Aircraft aircraft;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private TripType tripType; // ONE_WAY, ROUND_TRIP, MULTI_CITY
+
+    @Column(name = "round_trip_group_id")
+    private String roundTripGroupId; // dùng để liên kết các chuyến bay khứ hồi
+
+    @OneToMany(mappedBy = "flight", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<FlightTravelClass> flightTravelClasses = new ArrayList<>();
 
     @PostLoad
     private void loadStopsString() {

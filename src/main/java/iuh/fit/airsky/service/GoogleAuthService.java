@@ -43,6 +43,11 @@ public class GoogleAuthService {
             // Find or create user
             User user = findOrCreateGoogleUser(email, firstName, lastName, emailVerified);
 
+            // Check if user is active
+            if (!user.isActive()) {
+                throw new GoogleAuthException("Account is deactivated");
+            }
+
             // Generate JWT token (same as normal login)
             AuthResponse authResponse = buildAuthResponse(user);
 

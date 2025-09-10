@@ -1,6 +1,7 @@
 package iuh.fit.airsky.dto.response;
 
 import lombok.Data;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -19,3 +20,4 @@ public class AirportResponse {
     private boolean deleted;
     private List<GateResponse> gates;
 }
+

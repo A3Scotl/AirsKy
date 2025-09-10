@@ -11,8 +11,25 @@ public interface CategoryMapper {
     
     @Mapping(target = "categoryId", ignore = true)
     @Mapping(target = "blogs", ignore = true)
-    Category toEntity(CategoryRequest dto);
+    default Category toEntity(CategoryRequest dto){
+        Category category = new Category();
+        category.setName(dto.getName());
+        category.setDescription(dto.getDescription());
+        category.setActive(dto.getActive() != null ? dto.getActive() : true);
+        return category;
+    }
 
-    @Mapping(target = "blogCount", ignore = true)
-    CategoryResponse toResponseDTO(Category entity);
+    default CategoryResponse toResponseDTO(Category entity) {
+        if (entity == null) return null;
+        CategoryResponse response = new CategoryResponse();
+        response.setCategoryId(entity.getCategoryId());
+        response.setName(entity.getName());
+        response.setSlug(entity.getSlug());
+        response.setDescription(entity.getDescription());
+        response.setCreatedAt(entity.getCreatedAt());
+        response.setUpdatedAt(entity.getUpdatedAt());
+        response.setActive(entity.isActive());
+        response.setBlogCount(entity.getBlogs() != null ? (long) entity.getBlogs().size() : 0L);
+        return response;
+    }
 }

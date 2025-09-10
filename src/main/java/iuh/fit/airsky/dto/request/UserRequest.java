@@ -12,4 +12,5 @@ public class UserRequest {
     private String phone;
     private boolean isVerified = true;
     private Role role;
+    private boolean active = true;
 }
