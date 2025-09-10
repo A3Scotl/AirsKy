@@ -1,4 +1,3 @@
-
 package iuh.fit.airsky.service.impl;
 
 import iuh.fit.airsky.dto.request.FlightRequest;
@@ -37,7 +36,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class FlightServiceImpl implements FlightService {
 
-    private static final int MIN_BUFFER_TIME_MINUTES = 30; // Thời gian đệm tối thiểu giữa các chuyến tại cùng sân bay
+    private static final int MIN_BUFFER_TIME_MINUTES = 30;
 
     private final FlightRepository flightRepository;
     private final FlightMapper flightMapper;
@@ -106,10 +105,44 @@ public class FlightServiceImpl implements FlightService {
         if (request.getDepartureTime().isAfter(request.getArrivalTime())) {
             throw new IllegalArgumentException("Departure time must be before arrival time");
         }
-        // Xóa validation availableSeats vì sẽ tính tự động
-        // if (request.getAvailableSeats() <= 0) {
-        //     throw new IllegalArgumentException("Available seats must be greater than 0");
-        // }
+
+        // Validate round-trip: phải có đủ thông tin và hợp lệ
+        if (request.getTripType() == iuh.fit.airsky.enums.TripType.ROUND_TRIP) {
+            if (request.getRoundTripGroupId() == null || request.getRoundTripGroupId().isEmpty()) {
+                throw new IllegalArgumentException("Round-trip flight must have a roundTripGroupId");
+            }
+            if (request.getDepartureAirportId().equals(request.getArrivalAirportId())) {
+                throw new IllegalArgumentException("Departure and arrival airports must be different for round-trip");
+            }
+            // Có thể kiểm tra thêm: ngày đi và ngày về phải hợp lý nếu có thông tin chuyến về
+        }
+
+        // Validate multi-city: stopsList phải hợp lệ
+        if (request.getTripType() == iuh.fit.airsky.enums.TripType.MULTI_CITY) {
+            if (request.getStopsList() == null || request.getStopsList().isEmpty()) {
+                throw new IllegalArgumentException("Multi-city flight must have at least one stop");
+            }
+            for (int i = 0; i < request.getStopsList().size(); i++) {
+                var stop = request.getStopsList().get(i);
+                if (stop.getStopOrder() == null || stop.getStopOrder() != i + 1) {
+                    throw new IllegalArgumentException("Stop order must be consecutive starting from 1");
+                }
+                if (i > 0) {
+                    var prev = request.getStopsList().get(i - 1);
+                    if (stop.getAirportId().equals(prev.getAirportId())) {
+                        throw new IllegalArgumentException("Consecutive stops cannot be at the same airport");
+                    }
+                    if (prev.getDepartureTime() != null && stop.getArrivalTime() != null &&
+                        !stop.getArrivalTime().isAfter(prev.getDepartureTime())) {
+                        throw new IllegalArgumentException("Each stop's arrival time must be after previous stop's departure time");
+                    }
+                }
+                if (stop.getArrivalTime() != null && stop.getDepartureTime() != null &&
+                    !stop.getDepartureTime().isAfter(stop.getArrivalTime())) {
+                    throw new IllegalArgumentException("Stop departure time must be after arrival time");
+                }
+            }
+        }
 
         // check airline id
         if (!airlineRepository.existsById(request.getAirlineId())) {

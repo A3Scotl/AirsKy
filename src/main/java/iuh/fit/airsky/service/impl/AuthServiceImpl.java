@@ -1,8 +1,5 @@
 package iuh.fit.airsky.service.impl;
 
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
-import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import iuh.fit.airsky.dto.request.auth.*;
 import iuh.fit.airsky.dto.response.AuthResponse;
 import iuh.fit.airsky.dto.response.UserResponse;
@@ -94,6 +91,9 @@ public class AuthServiceImpl implements AuthService {
         if (!user.isVerified()) {
             throw new AuthException("Email not verified");
         }
+        if (!user.isActive()) {
+            throw new AuthException("Account is deactivated");
+        }
 
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
@@ -103,12 +103,14 @@ public class AuthServiceImpl implements AuthService {
         );
 
         return buildAuthResponse(user);
-    }
-
-    @Override
+    }    @Override
     public AuthResponse forgotPassword(ForgotPasswordRequest request) {
         User user = userRepository.findByEmail(request.getEmail().toLowerCase())
                 .orElseThrow(() -> new AuthException("Email not found"));
+
+        if (!user.isActive()) {
+            throw new AuthException("Account is deactivated");
+        }
 
         otpService.createAndSendOtp(user.getEmail());
         return new AuthResponse("OTP has been sent to your email", null);
@@ -141,6 +143,10 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(request.getEmail().toLowerCase())
                 .orElseThrow(() -> new AuthException("Email not found"));
 
+        if (!user.isActive()) {
+            throw new AuthException("Account is deactivated");
+        }
+
         otpService.resendOtp(user.getEmail());
         return new AuthResponse("OTP has been resent to your email", null);
     }
@@ -149,6 +155,10 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse resetPassword(ResetPasswordRequest request) {
         User user = userRepository.findByEmail(request.getEmail().toLowerCase())
                 .orElseThrow(() -> new AuthException("User not found"));
+
+        if (!user.isActive()) {
+            throw new AuthException("Account is deactivated");
+        }
 
         otpService.validateOtp(request.getEmail(), request.getOtpCode());
         validatePasswordStrength(request.getNewPassword());
@@ -163,6 +173,10 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse changePassword(ChangePasswordRequest request) {
         User user = userRepository.findByEmail(request.getEmail().toLowerCase())
                 .orElseThrow(() -> new AuthException("User not found"));
+
+        if (!user.isActive()) {
+            throw new AuthException("Account is deactivated");
+        }
 
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
             throw new AuthException("Incorrect old password");

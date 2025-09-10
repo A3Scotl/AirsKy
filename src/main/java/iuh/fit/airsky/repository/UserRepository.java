@@ -25,7 +25,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Repository
-public interface UserRepository extends JpaRepository<User, Integer> {
+public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
     boolean existsByEmail(String email);
     @Query("SELECT u FROM User u WHERE u.deleted = false")
@@ -38,4 +38,9 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     @Transactional
     @Query("UPDATE User u SET u.deleted = true, u.deletedAt = :now, u.active = false WHERE u.id = :id")
     void softDeleteById(Long id, LocalDateTime now);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE User u SET u.active = :active WHERE u.id = :id")
+    void updateActiveById(Long id, boolean active);
 }
