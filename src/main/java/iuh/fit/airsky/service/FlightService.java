@@ -1,9 +1,11 @@
 package iuh.fit.airsky.service;
 
 import iuh.fit.airsky.dto.request.FlightRequest;
+import iuh.fit.airsky.dto.request.FlightSearchRequest;
 import iuh.fit.airsky.dto.response.FlightResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.dto.response.RoundTripFlightResponse;
+import iuh.fit.airsky.dto.response.UnifiedFlightSearchResponse;
 import iuh.fit.airsky.enums.FlightStatus;
 import org.springframework.data.domain.Pageable;
 
@@ -15,7 +17,7 @@ public interface FlightService {
     FlightResponse updateFlight(Long id, FlightRequest request);
     Optional<FlightResponse> findById(Long id);
     PageResponse<FlightResponse> findAll(Pageable pageable);
-    PageResponse<FlightResponse> searchFlights(Long departureAirportId, Long arrivalAirportId, LocalDateTime startTime, LocalDateTime endTime, FlightStatus status, Pageable pageable);
+    PageResponse<FlightResponse> searchFlights(Long departureAirportId, Long arrivalAirportId, LocalDateTime startTime, LocalDateTime endTime, FlightStatus status, String tripType, Pageable pageable);
     void delete(Long id);
 
     // Tìm chuyến bay nội địa (trong cùng một quốc gia)
@@ -36,4 +38,7 @@ public interface FlightService {
 
     // Tìm chuyến bay khứ hồi theo groupId
     PageResponse<FlightResponse> findRoundTripFlightsByGroupId(String groupId, Pageable pageable);
+
+    // Tìm chuyến bay thống nhất dựa trên TripType
+    UnifiedFlightSearchResponse searchUnifiedFlights(FlightSearchRequest request, Pageable pageable);
 }

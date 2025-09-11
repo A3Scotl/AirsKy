@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 @Data
 public class StopResponse {
     private Long stopId;
+    private Long airportId;
     private String airportName;
     private String airportCode;
     private LocalDateTime arrivalTime;

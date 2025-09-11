@@ -1,6 +1,7 @@
 package iuh.fit.airsky.repository;
 
 import iuh.fit.airsky.enums.FlightStatus;
+import iuh.fit.airsky.enums.TripType;
 import iuh.fit.airsky.model.Flight;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,15 +23,17 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
             "(:departureAirportId IS NULL OR f.departureAirport.airportId = :departureAirportId) " +
             "AND (:arrivalAirportId IS NULL OR f.arrivalAirport.airportId = :arrivalAirportId) " +
             "AND f.departureTime BETWEEN :startTime AND :endTime " +
-            "AND (:status IS NULL OR f.status = :status)")
+            "AND (:status IS NULL OR f.status = :status) " +
+            "AND (:tripType IS NULL OR f.tripType = :tripType)")
     Page<Flight> searchFlights(@Param("departureAirportId") Long departureAirportId,
                                @Param("arrivalAirportId") Long arrivalAirportId,
                                @Param("startTime") LocalDateTime startTime,
                                @Param("endTime") LocalDateTime endTime,
                                @Param("status") FlightStatus status,
+                               @Param("tripType") TripType tripType,
                                Pageable pageable);
 
-    // src/main/java/iuh/fit/airsky/repository/FlightRepository.java
+    // Kiểm tra overlap tại sân bay khởi hành
     @Query("SELECT CASE WHEN COUNT(f) > 0 THEN true ELSE false END FROM Flight f " +
             "WHERE f.aircraft.aircraftId = :aircraftId " +
             "AND f.departureTime < :endTime " +
@@ -46,6 +49,7 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
     boolean existsByGateIdAndTimeOverlap(@Param("gateId") Long gateId,
                                          @Param("startTime") LocalDateTime startTime,
                                          @Param("endTime") LocalDateTime endTime);
+
     Optional<Flight> findByFlightNumber(String flightNumber);
 
     // Tìm chuyến bay nội địa (trong cùng một quốc gia)

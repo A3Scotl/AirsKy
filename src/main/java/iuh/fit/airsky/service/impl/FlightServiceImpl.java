@@ -1,11 +1,15 @@
 package iuh.fit.airsky.service.impl;
 
 import iuh.fit.airsky.dto.request.FlightRequest;
+import iuh.fit.airsky.dto.request.FlightSearchRequest;
+import iuh.fit.airsky.dto.request.SearchSegment;
 import iuh.fit.airsky.dto.request.StopRequest;
 import iuh.fit.airsky.dto.response.FlightResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.dto.response.RoundTripFlightResponse;
+import iuh.fit.airsky.dto.response.UnifiedFlightSearchResponse;
 import iuh.fit.airsky.enums.FlightStatus;
+import iuh.fit.airsky.enums.TripType;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.FlightMapper;
 import iuh.fit.airsky.mapper.StopMapper;
@@ -28,6 +32,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -281,10 +286,7 @@ public class FlightServiceImpl implements FlightService {
         if (request.getDepartureTime().isAfter(request.getArrivalTime())) {
             throw new IllegalArgumentException("Departure time must be before arrival time");
         }
-        // Xóa validation availableSeats vì sẽ tính tự động
-        // if (request.getAvailableSeats() <= 0) {
-        //     throw new IllegalArgumentException("Available seats must be greater than 0");
-        // }
+     
         // Check for overlapping flights (aircraft)
         if (flightRepository.existsByAircraftIdAndTimeOverlap(
                 request.getAircraftId(), request.getDepartureTime(), request.getArrivalTime())) {
@@ -426,18 +428,30 @@ public class FlightServiceImpl implements FlightService {
             LocalDateTime startTime,
             LocalDateTime endTime,
             FlightStatus status,
+            String tripType,
             Pageable pageable) {
 
-        log.info("Searching flights with departureAirportId: {}, arrivalAirportId: {}, startTime: {}, endTime: {}, status: {}",
-                departureAirportId, arrivalAirportId, startTime, endTime, status);
+        log.info("Searching flights with departureAirportId: {}, arrivalAirportId: {}, startTime: {}, endTime: {}, status: {}, tripType: {}",
+                departureAirportId, arrivalAirportId, startTime, endTime, status, tripType);
 
         // If no search parameters are provided, return all flights
         if (departureAirportId == null &&
                 arrivalAirportId == null &&
                 startTime == null &&
                 endTime == null &&
-                status == null) {
+                status == null &&
+                tripType == null) {
             return findAll(pageable);
+        }
+
+        // Convert tripType String to TripType enum
+        TripType tripTypeEnum = null;
+        if (tripType != null && !tripType.isEmpty()) {
+            try {
+                tripTypeEnum = TripType.valueOf(tripType.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid trip type: " + tripType);
+            }
         }
 
         // Otherwise, proceed with the filtered search
@@ -447,7 +461,11 @@ public class FlightServiceImpl implements FlightService {
                 startTime,
                 endTime,
                 status,
+                tripTypeEnum,
                 pageable);
+
+        // Filter by travel class and available seats if travel class is specified
+        // Note: This would be enhanced when travel class filtering is implemented
         return new PageResponse<>(page.map(flightMapper::toResponseDTO));
     }
 
@@ -492,32 +510,23 @@ public class FlightServiceImpl implements FlightService {
         LocalDateTime returnStart = returnDate.withHour(0).withMinute(0).withSecond(0);
         LocalDateTime returnEnd = returnDate.withHour(23).withMinute(59).withSecond(59);
 
-        Page<Flight> allRoundTripFlights = flightRepository.findAllRoundTripFlights(pageable);
-        // Lọc outbound: đúng chiều, đúng ngày đi
-        List<Flight> outboundFlights = allRoundTripFlights.getContent().stream()
-            .filter(f -> f.getDepartureAirport().getAirportId().equals(departureAirportId)
-                && f.getArrivalAirport().getAirportId().equals(arrivalAirportId)
-                && !f.getDepartureTime().isBefore(outboundStart)
-                && !f.getDepartureTime().isAfter(outboundEnd))
-            .toList();
-        // Lọc return: đúng chiều, đúng ngày về
-        List<Flight> returnFlights = allRoundTripFlights.getContent().stream()
-            .filter(f -> f.getDepartureAirport().getAirportId().equals(arrivalAirportId)
-                && f.getArrivalAirport().getAirportId().equals(departureAirportId)
-                && !f.getDepartureTime().isBefore(returnStart)
-                && !f.getDepartureTime().isAfter(returnEnd))
-            .toList();
+        // Search outbound flights using searchFlights with tripType filter
+        PageResponse<FlightResponse> outboundFlightsPage = searchFlights(
+                departureAirportId, arrivalAirportId, outboundStart, outboundEnd, status, "ROUND_TRIP", pageable);
+        List<FlightResponse> outboundFlights = outboundFlightsPage.getContent();
+
+        // Search return flights using searchFlights with tripType filter
+        PageResponse<FlightResponse> returnFlightsPage = searchFlights(
+                arrivalAirportId, departureAirportId, returnStart, returnEnd, status, "ROUND_TRIP", pageable);
+        List<FlightResponse> returnFlights = returnFlightsPage.getContent();
 
         // Ghép cặp khứ hồi hợp lệ dựa trên roundTripGroupId
         List<RoundTripFlightResponse.RoundTripPair> pairs = outboundFlights.stream()
             .flatMap(outbound -> returnFlights.stream()
-                .filter(inbound -> outbound.getRoundTripGroupId() != null
-                        && outbound.getRoundTripGroupId().equals(inbound.getRoundTripGroupId()))
-                .map(inbound -> new RoundTripFlightResponse.RoundTripPair(
-                        flightMapper.toResponseDTO(outbound),
-                        flightMapper.toResponseDTO(inbound)
-                )))
-            .toList();
+                .filter(returnFlight -> outbound.getRoundTripGroupId() != null
+                        && outbound.getRoundTripGroupId().equals(returnFlight.getRoundTripGroupId()))
+                .map(returnFlight -> new RoundTripFlightResponse.RoundTripPair(outbound, returnFlight)))
+            .collect(Collectors.toList());
 
         RoundTripFlightResponse response = new RoundTripFlightResponse();
         response.setRoundTripPairs(pairs);
@@ -528,5 +537,150 @@ public class FlightServiceImpl implements FlightService {
     public PageResponse<FlightResponse> findRoundTripFlightsByGroupId(String groupId, Pageable pageable) {
         Page<Flight> page = flightRepository.findRoundTripFlightsByGroupId(groupId, pageable);
         return new PageResponse<>(page.map(flightMapper::toResponseDTO));
+    }
+
+    @Override
+    public UnifiedFlightSearchResponse searchUnifiedFlights(FlightSearchRequest request, Pageable pageable) {
+        log.info("Searching unified flights for trip type: {}", request.getTripType());
+
+        UnifiedFlightSearchResponse response = new UnifiedFlightSearchResponse();
+        response.setTripType(request.getTripType());
+
+        // Calculate total passengers for filtering
+        int totalPassengers = (request.getAdultCount() != null ? request.getAdultCount() : 0) +
+                             (request.getChildCount() != null ? request.getChildCount() : 0);
+
+        // Validate segments (populated by DTO validation)
+        if (request.getSegments() == null || request.getSegments().isEmpty()) {
+            throw new IllegalArgumentException("No valid segments provided for search");
+        }
+
+        // Process each segment uniformly
+        List<PageResponse<FlightResponse>> segmentResults = new ArrayList<>();
+        if (request.getTripType() == TripType.MULTI_CITY) {
+            // For MULTI_CITY, find flights that cover the entire journey with matching stops
+            SearchSegment firstSegment = request.getSegments().get(0);
+            SearchSegment lastSegment = request.getSegments().get(request.getSegments().size() - 1);
+            
+            LocalDateTime startTime = firstSegment.getDepartureDate().atStartOfDay();
+            LocalDateTime endTime = firstSegment.getDepartureDate().atTime(23, 59, 59);
+            
+            // Search flights from first departure to last arrival
+            PageResponse<FlightResponse> multiCityResult = searchFlights(
+                firstSegment.getDepartureAirportId(),
+                lastSegment.getArrivalAirportId(),
+                startTime,
+                endTime,
+                null, // Status filter
+                request.getTripType().toString(),
+                pageable
+            );
+            
+            // Filter flights that have stops matching the intermediate legs
+            List<FlightResponse> filteredFlights = filterFlightsByStops(multiCityResult.getContent(), request.getSegments());
+            filteredFlights = filterFlightsByTravelClass(filteredFlights, request.getTravelClass(), totalPassengers);
+            multiCityResult.setContent(filteredFlights);
+            segmentResults.add(multiCityResult);
+        } else {
+            for (SearchSegment segment : request.getSegments()) {
+                LocalDateTime startTime = segment.getDepartureDate().atStartOfDay();
+                LocalDateTime endTime = segment.getDepartureDate().atTime(23, 59, 59);
+
+                // Search flights for this segment
+                PageResponse<FlightResponse> legResult = searchFlights(
+                    segment.getDepartureAirportId(),
+                    segment.getArrivalAirportId(),
+                    startTime,
+                    endTime,
+                    null, // Status filter (optional)
+                    request.getTripType().toString(),
+                    pageable
+                );
+
+                // Filter by travel class and available seats
+                List<FlightResponse> filteredFlights = filterFlightsByTravelClass(
+                    legResult.getContent(), request.getTravelClass(), totalPassengers
+                );
+                legResult.setContent(filteredFlights);
+                segmentResults.add(legResult);
+            }
+        }
+
+        // Handle response based on trip type
+        switch (request.getTripType()) {
+            case ONE_WAY:
+                response.setOneWayFlights(segmentResults.get(0));
+                break;
+            case ROUND_TRIP:
+                RoundTripFlightResponse roundTripResult = new RoundTripFlightResponse();
+                if (segmentResults.size() >= 2) {
+                    List<RoundTripFlightResponse.RoundTripPair> pairs = new ArrayList<>();
+                    List<FlightResponse> outboundFlights = segmentResults.get(0).getContent();
+                    List<FlightResponse> returnFlights = segmentResults.get(1).getContent();
+
+                    // Pair flights (optimize by checking groupId or simple combination)
+                    for (FlightResponse outbound : outboundFlights) {
+                        for (FlightResponse returnFlight : returnFlights) {
+                            // Optionally check roundTripGroupId if your DB supports it
+                            if (outbound.getRoundTripGroupId() != null &&
+                                outbound.getRoundTripGroupId().equals(returnFlight.getRoundTripGroupId())) {
+                                pairs.add(new RoundTripFlightResponse.RoundTripPair(outbound, returnFlight));
+                            } else {
+                                // Simple pairing if no groupId (all valid combinations)
+                                pairs.add(new RoundTripFlightResponse.RoundTripPair(outbound, returnFlight));
+                            }
+                        }
+                    }
+                    roundTripResult.setRoundTripPairs(pairs);
+                }
+                response.setRoundTripPairs(roundTripResult.getRoundTripPairs());
+                break;
+            case MULTI_CITY:
+                response.setMultiCityFlights(segmentResults);
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported trip type: " + request.getTripType());
+        }
+
+        return response;
+    }
+
+    // Optimized filter method to avoid redundant DB queries
+    private List<FlightResponse> filterFlightsByTravelClass(List<FlightResponse> flights, String travelClass, int totalPassengers) {
+        if (travelClass == null || travelClass.isEmpty() || totalPassengers <= 0) {
+            return flights;
+        }
+
+        return flights.stream()
+            .filter(flight -> flight.getFlightTravelClasses() != null && flight.getFlightTravelClasses().stream()
+                .anyMatch(ftc ->
+                    ftc.getTravelClass().getClassName().equalsIgnoreCase(travelClass) &&
+                    ftc.getAvailableSeats() >= totalPassengers
+                ))
+            .collect(Collectors.toList());
+    }
+
+    private List<FlightResponse> filterFlightsByStops(List<FlightResponse> flights, List<SearchSegment> segments) {
+        if (segments.size() < 2) {
+            return flights; // No intermediate stops to check
+        }
+        
+        // Get intermediate airports from segments (exclude first departure and last arrival)
+        List<Long> intermediateAirports = segments.subList(1, segments.size() - 1).stream()
+            .map(SearchSegment::getDepartureAirportId)
+            .collect(Collectors.toList());
+        
+        return flights.stream()
+            .filter(flight -> {
+                if (flight.getStopsList() == null || flight.getStopsList().isEmpty()) {
+                    return false;
+                }
+                // Check if all intermediate airports are in the stops list
+                List<Long> stopAirportIds = flight.getStopsList().stream()
+                    .map(stop -> stop.getAirportId())
+                    .collect(Collectors.toList());
+                return stopAirportIds.containsAll(intermediateAirports);
+            })
+            .collect(Collectors.toList());
     }
 }
