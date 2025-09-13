@@ -3,6 +3,9 @@ package iuh.fit.airsky.mapper;
 import iuh.fit.airsky.dto.request.DealRequest;
 import iuh.fit.airsky.dto.response.DealResponse;
 import iuh.fit.airsky.model.Deal;
+
+import java.util.List;
+
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -26,4 +29,6 @@ public interface DealMapper {
 
     @Mapping(target = "status", expression = "java(iuh.fit.airsky.mapper.DealMapperUtils.calculateStatus(entity))")
     DealResponse toResponseDTO(Deal entity);
+
+    List<DealResponse> toResponseDTOList(List<Deal> deals);
 }

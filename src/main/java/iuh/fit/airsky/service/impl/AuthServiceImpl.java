@@ -102,6 +102,10 @@ public class AuthServiceImpl implements AuthService {
                 )
         );
 
+        // Update lastLogin
+        user.setLastLogin(java.time.LocalDateTime.now());
+        userRepository.save(user);
+
         return buildAuthResponse(user);
     }    @Override
     public AuthResponse forgotPassword(ForgotPasswordRequest request) {

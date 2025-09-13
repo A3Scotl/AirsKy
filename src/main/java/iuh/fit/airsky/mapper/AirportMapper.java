@@ -48,6 +48,11 @@ public interface AirportMapper {
         return response;
     }
 
+    default List<AirportResponse> toResponseDTOList(List<Airport> airports) {
+        if (airports == null) return null;
+        return airports.stream().map(this::toResponseDTO).toList();
+    }
+
     // Map List<Gate> -> List<GateResponse>
     default List<GateResponse> mapGates(List<Gate> gates) {
         if (gates == null) return null;

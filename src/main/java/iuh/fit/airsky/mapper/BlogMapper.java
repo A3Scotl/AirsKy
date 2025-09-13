@@ -3,6 +3,9 @@ package iuh.fit.airsky.mapper;
 import iuh.fit.airsky.dto.request.BlogRequest;
 import iuh.fit.airsky.dto.response.BlogResponse;
 import iuh.fit.airsky.model.Blog;
+
+import java.util.List;
+
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -19,4 +22,6 @@ public interface BlogMapper {
     Blog toEntity(BlogRequest dto);
 
     BlogResponse toResponseDTO(Blog entity);
+
+    List<BlogResponse> toResponseDTOList(List<Blog> blogs);
 }
