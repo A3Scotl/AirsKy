@@ -29,7 +29,12 @@ public interface BookingMapper {
     @Mapping(target = "passengers", source = "passengers")
     BookingResponse toResponseDTO(Booking entity);
 
+    List<BookingResponse> toResponseDTOList(List<Booking> bookings);
+
     @IterableMapping(qualifiedByName = "toPassengerSeatResponse")
     List<PassengerSeatResponse> mapPassengers(List<Passenger> passengers);
 }
+
+
+
 

@@ -3,6 +3,9 @@ package iuh.fit.airsky.mapper;
 import iuh.fit.airsky.dto.request.UserRequest;
 import iuh.fit.airsky.dto.response.UserResponse;
 import iuh.fit.airsky.model.User;
+
+import java.util.List;
+
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -20,4 +23,6 @@ public interface UserMapper {
     User toEntity(UserRequest dto);
 
     UserResponse toResponseDTO(User entity);
+
+    List<UserResponse> toResponseDTOList(List<User> users);
 }

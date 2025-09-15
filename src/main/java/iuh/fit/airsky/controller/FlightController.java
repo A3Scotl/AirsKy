@@ -1,11 +1,13 @@
 package iuh.fit.airsky.controller;
 
 import iuh.fit.airsky.dto.request.FlightRequest;
+import iuh.fit.airsky.dto.request.FlightSearchRequest;
 import iuh.fit.airsky.dto.response.FlightResponse;
 import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.dto.response.SeatResponse;
 import iuh.fit.airsky.dto.response.RoundTripFlightResponse;
+import iuh.fit.airsky.dto.response.UnifiedFlightSearchResponse;
 import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.service.FlightService;
@@ -133,7 +135,7 @@ public class FlightController {
                 }
             }
             PageResponse<FlightResponse> response = flightService.searchFlights(
-                    departureAirportId, arrivalAirportId, startTime, endTime, status, pageable);
+                    departureAirportId, arrivalAirportId, startTime, endTime, status, null, pageable);
             return ApiResponseUtil.buildResponse(true, "Flights searched successfully", response, "/api/v1/flights/search");
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -247,7 +249,7 @@ public class FlightController {
                 endTime = LocalDateTime.parse(dateStr + "T23:59:59");
             }
             PageResponse<FlightResponse> response = flightService.searchFlights(
-                    departureAirportId, arrivalAirportId, startTime, endTime, status, pageable);
+                    departureAirportId, arrivalAirportId, startTime, endTime, status, "ONE_WAY", pageable);
             return ApiResponseUtil.buildResponse(true, "One-way flights searched successfully", response, "/api/v1/flights/search-oneway");
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -291,6 +293,20 @@ public class FlightController {
         } catch (Exception ex) {
             ex.printStackTrace();
             return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Search failed", ex.getMessage(), "/api/v1/flights/roundtrip-group");
+        }
+    }
+
+    @PostMapping("/search-unified")
+    public ResponseEntity<ApiResponse<UnifiedFlightSearchResponse>> searchUnifiedFlights(
+            @Valid @RequestBody FlightSearchRequest request,
+            Pageable pageable) {
+        try {
+            UnifiedFlightSearchResponse response = flightService.searchUnifiedFlights(request, pageable);
+            return ApiResponseUtil.buildResponse(true, "Flights searched successfully", response, "/api/v1/flights/search-unified");
+        } catch (Exception ex) {
+            log.error("Error in unified flight search: ", ex);
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Search failed", ex.getMessage(), "/api/v1/flights/search-unified");
         }
     }
 }

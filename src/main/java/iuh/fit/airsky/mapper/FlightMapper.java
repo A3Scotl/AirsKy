@@ -3,8 +3,13 @@ package iuh.fit.airsky.mapper;
 import iuh.fit.airsky.dto.request.FlightRequest;
 import iuh.fit.airsky.dto.response.FlightResponse;
 import iuh.fit.airsky.model.Flight;
+
+
 import org.mapstruct.*;
 import org.springframework.beans.factory.annotation.Autowired;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Mapper(componentModel = "spring", uses = {StopMapper.class, AirportMapper.class, AirlineMapper.class, AircraftMapper.class})
 public abstract class FlightMapper {
@@ -36,4 +41,13 @@ public abstract class FlightMapper {
     @Mapping(target = "roundTripGroupId", source = "roundTripGroupId")
     @Mapping(target = "stopsList", source = "stopsList")
     public abstract Flight toEntity(FlightRequest dto);
+
+    public List<FlightResponse> toResponseDTOList(List<Flight> entities) {
+        if (entities == null) {
+            return null;
+        }
+        return entities.stream()
+                .map(this::toResponseDTO)
+                .collect(Collectors.toList());
+    }
 }
