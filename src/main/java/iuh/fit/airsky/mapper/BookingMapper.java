@@ -20,7 +20,7 @@ public interface BookingMapper {
     @Mapping(target = "userId", ignore = true)
     @Mapping(target = "flight", ignore = true)
     @Mapping(target = "travelClass", ignore = true)
-    @Mapping(target = "passengers", ignore = true)
+    @Mapping(target = "passengers", expression = "java(new ArrayList<>())")
     Booking toEntity(BookingRequest dto);
 
     @Mapping(target = "userEmail", expression = "java(entity.getUserId() != null ? entity.getUserId().getEmail() : null)")

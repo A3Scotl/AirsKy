@@ -34,7 +34,7 @@ public class BaggageServiceImpl implements BaggageService {
     public BaggageResponse createBaggage(BaggageRequest request) {
         log.info("Creating new baggage for ticket ID: {}", request.getTicketId());
         Baggage baggage = baggageMapper.toEntity(request);
-        baggage.setTicket(ticketRepository.findById(request.getTicketId())
+        baggage.setCheckIn(ticketRepository.findById(request.getTicketId())
                 .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with id " + request.getTicketId())));
         Baggage saved = baggageRepository.save(baggage);
         log.info("Baggage created with ID: {}", saved.getBaggageId());

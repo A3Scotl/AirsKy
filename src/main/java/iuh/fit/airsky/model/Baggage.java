@@ -23,8 +23,8 @@ public class Baggage {
     private Long baggageId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ticket_id", nullable = false)
-    private Ticket ticket;
+    @JoinColumn(name = "ticket_id")
+    private CheckIn checkIn;
 
     @Column(precision = 5, scale = 2)
     private BigDecimal weight;
@@ -32,4 +32,6 @@ public class Baggage {
     private BaggageType type; // CABIN,CHECK_IN
 
     private Integer allowance;
+
+
 }

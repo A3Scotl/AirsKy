@@ -1,6 +1,8 @@
 package iuh.fit.airsky.model;
 
 import iuh.fit.airsky.base.BaseFullSoftDeleteEntity;
+import iuh.fit.airsky.enums.CheckInType;
+import iuh.fit.airsky.enums.SeatStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -18,7 +20,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Ticket extends BaseFullSoftDeleteEntity {
+public class CheckIn extends BaseFullSoftDeleteEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -38,5 +40,16 @@ public class Ticket extends BaseFullSoftDeleteEntity {
     @Column(precision = 10, scale = 2)
     private BigDecimal ticketPrice;
 
-    private LocalDateTime issueDate;
+    private LocalDateTime checkedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "check_in_type", length = 10)
+    private CheckInType checkInType;
+
+    private String boardingPassUrl;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "baggage_id", nullable = false)
+    private Baggage baggage;
+
 }

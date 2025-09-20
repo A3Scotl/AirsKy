@@ -2,6 +2,8 @@ package iuh.fit.airsky.dto.request;
 
 import iuh.fit.airsky.enums.PaymentMethod;
 import iuh.fit.airsky.enums.BookingStatus;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -19,5 +21,8 @@ public class BookingRequest {
     private BookingStatus status = BookingStatus.PENDING;
     private List<PassengerSeatRequest> passengers;
     private PaymentMethod paymentMethod;
+    @Min(value = 0, message = "Baggage weight must be at least 0 kg")
+    @Max(value = 50, message = "Baggage weight must not exceed 50 kg")
+    private Double baggageWeight;
 
 }

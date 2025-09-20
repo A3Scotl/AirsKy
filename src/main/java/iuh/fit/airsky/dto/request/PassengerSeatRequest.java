@@ -7,6 +7,7 @@ import java.time.LocalDate;
 
 @Data
 public class PassengerSeatRequest {
+    private Long bookingId;
     private String firstName;
     private String lastName;
     private LocalDate dateOfBirth;

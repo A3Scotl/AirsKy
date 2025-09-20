@@ -2,7 +2,7 @@ package iuh.fit.airsky.mapper;
 
 import iuh.fit.airsky.dto.request.TicketRequest;
 import iuh.fit.airsky.dto.response.TicketResponse;
-import iuh.fit.airsky.model.Ticket;
+import iuh.fit.airsky.model.CheckIn;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -11,7 +11,7 @@ public interface TicketMapper {
     @Mapping(target = "ticketId", ignore = true)
     @Mapping(target = "booking", ignore = true)
     @Mapping(target = "passenger", ignore = true)
-    Ticket toEntity(TicketRequest dto);
+    CheckIn toEntity(TicketRequest dto);
 
-    TicketResponse toResponseDTO(Ticket entity);
+    TicketResponse toResponseDTO(CheckIn entity);
 }

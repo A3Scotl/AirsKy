@@ -64,6 +64,7 @@ public class SecurityConfig {
             "/api/v1/users/**",
             "/api/v1/export/**",
             "/api/v1/reviews/**",
+            "/api/v1/payments/**",
 
 
     };

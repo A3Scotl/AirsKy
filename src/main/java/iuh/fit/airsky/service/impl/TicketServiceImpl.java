@@ -5,7 +5,7 @@ import iuh.fit.airsky.dto.response.TicketResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.TicketMapper;
-import iuh.fit.airsky.model.Ticket;
+import iuh.fit.airsky.model.CheckIn;
 import iuh.fit.airsky.repository.BookingRepository;
 import iuh.fit.airsky.repository.PassengerRepository;
 import iuh.fit.airsky.repository.TicketRepository;
@@ -37,12 +37,12 @@ public class TicketServiceImpl implements TicketService {
     @Override
     public TicketResponse createTicket(TicketRequest request) {
         log.info("Creating new ticket for booking ID: {}", request.getBookingId());
-        Ticket ticket = ticketMapper.toEntity(request);
-        ticket.setBooking(bookingRepository.findById(request.getBookingId())
+        CheckIn checkIn = ticketMapper.toEntity(request);
+        checkIn.setBooking(bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found with id " + request.getBookingId())));
-        ticket.setPassenger(passengerRepository.findById(request.getPassengerId())
+        checkIn.setPassenger(passengerRepository.findById(request.getPassengerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Passenger not found with id " + request.getPassengerId())));
-        Ticket saved = ticketRepository.save(ticket);
+        CheckIn saved = ticketRepository.save(checkIn);
         log.info("Ticket created with ID: {}", saved.getTicketId());
         return ticketMapper.toResponseDTO(saved);
     }
@@ -50,12 +50,12 @@ public class TicketServiceImpl implements TicketService {
     @Override
     public TicketResponse updateTicket(Long id, TicketRequest request) {
         log.info("Updating ticket with ID: {}", id);
-        Ticket ticket = ticketRepository.findById(id)
+        CheckIn checkIn = ticketRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with id " + id));
-        ticket.setSeatNumber(request.getSeatNumber());
-        ticket.setTicketPrice(request.getTicketPrice());
-        ticket.setIssueDate(request.getIssueDate());
-        Ticket updated = ticketRepository.save(ticket);
+        checkIn.setSeatNumber(request.getSeatNumber());
+        checkIn.setTicketPrice(request.getTicketPrice());
+        checkIn.setCheckedAt(request.getIssueDate());
+        CheckIn updated = ticketRepository.save(checkIn);
         log.info("Ticket updated with ID: {}", updated.getTicketId());
         return ticketMapper.toResponseDTO(updated);
     }
@@ -69,7 +69,7 @@ public class TicketServiceImpl implements TicketService {
     @Override
     public PageResponse<TicketResponse> findAll(Pageable pageable) {
         log.info("Finding all tickets with pagination: {}", pageable);
-        Page<Ticket> page = ticketRepository.findAll(pageable);
+        Page<CheckIn> page = ticketRepository.findAll(pageable);
         return new PageResponse<>(page.map(ticketMapper::toResponseDTO));
     }
 

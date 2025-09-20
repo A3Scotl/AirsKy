@@ -9,7 +9,7 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface BaggageMapper {
     @Mapping(target = "baggageId", ignore = true)
-    @Mapping(target = "ticket", ignore = true) // Map riêng trong service
+    @Mapping(target = "checkIn", ignore = true) // Map riêng trong service
     Baggage toEntity(BaggageRequest dto);
 
     BaggageResponse toResponseDTO(Baggage entity);
