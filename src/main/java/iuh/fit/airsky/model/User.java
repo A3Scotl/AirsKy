@@ -1,6 +1,7 @@
 package iuh.fit.airsky.model;
 
 import iuh.fit.airsky.base.BaseFullSoftDeleteEntity;
+import iuh.fit.airsky.enums.LoyaltyTier;
 import iuh.fit.airsky.enums.Role;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -12,6 +13,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -39,6 +41,14 @@ public class User  extends BaseFullSoftDeleteEntity implements UserDetails {
     private String phone;
     private boolean isVerified = false;
     private String businessName;
+
+    private LocalDate dateOfBirth;
+    private String avatar;
+    private String passportNumber;
+    private LocalDate passportExpiry;
+    private Integer loyaltyPoints;
+    @Enumerated(EnumType.STRING)
+    private LoyaltyTier loyaltyTier;
 
     @Enumerated(EnumType.STRING)
     private Role role;

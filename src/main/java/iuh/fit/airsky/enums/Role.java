@@ -1,5 +1,5 @@
 package iuh.fit.airsky.enums;
 
 public enum Role {
-    ADMIN, CUSTOMER, BUSINESS
+    CUSTOMER, BUSINESS, FLIGHT_MANAGER, ADMIN, STAFF
 }

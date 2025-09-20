@@ -1,7 +1,9 @@
 package iuh.fit.airsky.dto.response;
 
+import iuh.fit.airsky.enums.LoyaltyTier;
 import iuh.fit.airsky.enums.Role;
 import lombok.Data;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -19,4 +21,10 @@ public class UserResponse {
     private boolean isActive;
     private LocalDateTime deletedAt;
     private boolean deleted;
+    private LocalDate dateOfBirth;
+    private String avatar;
+    private String passportNumber;
+    private LocalDate passportExpiry;
+    private Integer loyaltyPoints;
+    private LoyaltyTier loyaltyTier;
 }

@@ -63,6 +63,8 @@ public class SecurityConfig {
             "/api/v1/travel-classes/**",
             "/api/v1/users/**",
             "/api/v1/export/**",
+            "/api/v1/reviews/**",
+
 
     };
     private static final String[] PERMISION_ROUTES = {

@@ -32,19 +32,21 @@ public class AircraftController {
     private final AircraftService aircraftService;
 
     @PostMapping
-
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
     public ResponseEntity<ApiResponse<AircraftResponse>> createAircraft(@RequestBody AircraftRequest request) {
         AircraftResponse response = aircraftService.createAircraft(request);
         return ApiResponseUtil.buildResponse(true, "Aircraft created successfully", response, "/api/v1/aircrafts");
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<List<AircraftResponse>>> getAllAircrafts() {
         List<AircraftResponse> response = aircraftService.getAllAircrafts();
         return ApiResponseUtil.buildResponse(true, "Aircrafts retrieved successfully", response, "/api/v1/aircrafts");
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<AircraftResponse>> getAircraftById(@PathVariable Long id) {
         AircraftResponse response = aircraftService.getAircraftById(id);
         return ApiResponseUtil.buildResponse(true, "Aircraft retrieved successfully", response, "/api/v1/aircrafts/" + id);

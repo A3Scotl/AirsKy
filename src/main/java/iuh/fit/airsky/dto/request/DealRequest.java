@@ -56,4 +56,7 @@ public class DealRequest {
     private Integer usagePerUser = 1;
     
     private Boolean isActive = true;
+
+    private Integer earnLoyaltyPoints;
+    private Integer redeemLoyaltyPoints;
 }

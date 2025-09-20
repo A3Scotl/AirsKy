@@ -48,7 +48,7 @@ public class FlightController {
     }
 
     @PostMapping
-//    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
     public ResponseEntity<ApiResponse<FlightResponse>> createFlight(@Valid @RequestBody FlightRequest request) {
         try {
             FlightResponse response = flightService.createFlight(request);
@@ -73,7 +73,7 @@ public class FlightController {
     }
 
     @PutMapping("/{id}")
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
     public ResponseEntity<ApiResponse<FlightResponse>> updateFlight(@PathVariable Long id, @Valid @RequestBody FlightRequest request) {
         try {
             FlightResponse response = flightService.updateFlight(id, request);
@@ -99,6 +99,7 @@ public class FlightController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<PageResponse<FlightResponse>>> getAllFlights(Pageable pageable) {
         try {
             PageResponse<FlightResponse> response = flightService.findAll(pageable);

@@ -50,6 +50,25 @@ public class UserServiceImpl implements UserService {
             user.setRole(request.getRole());
         }
 
+        if (request.getDateOfBirth() != null) {
+            user.setDateOfBirth(request.getDateOfBirth());
+        }
+        if (request.getAvatar() != null) {
+            user.setAvatar(request.getAvatar());
+        }
+        if (request.getPassportNumber() != null) {
+            user.setPassportNumber(request.getPassportNumber());
+        }
+        if (request.getPassportExpiry() != null) {
+            user.setPassportExpiry(request.getPassportExpiry());
+        }
+        if (request.getLoyaltyPoints() != null) {
+            user.setLoyaltyPoints(request.getLoyaltyPoints());
+        }
+        if (request.getLoyaltyTier() != null) {
+            user.setLoyaltyTier(request.getLoyaltyTier());
+        }
+
         if (request.getPassword() != null && !request.getPassword().isEmpty()) {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
         }
