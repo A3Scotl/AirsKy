@@ -16,12 +16,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -104,15 +106,16 @@ public class BookingServiceImpl implements BookingService {
             if (p.getSeatId() != null) {
                 Seat seat = seatRepository.findById(p.getSeatId())
                         .orElseThrow(() -> new ResourceNotFoundException("Seat not found"));
-                seat.setStatus(SeatStatus.PENDING_PAYMENT); // Hold seat
+                seat.setStatus(SeatStatus.PENDING_PAYMENT);
                 seat.setBookedBy(passenger);
                 passenger.setSeat(seat);
             }
 
             passenger.setBooking(booking);
             return passenger;
-        }).toList();
+        }).collect(Collectors.toList());
     }
+
 
     private void updateAvailableSeats(Flight flight, int bookedSeats) {
         int newAvailableSeats = flight.getAvailableSeats() - bookedSeats;
@@ -131,6 +134,7 @@ public class BookingServiceImpl implements BookingService {
 
     // Scheduled task to cancel expired bookings
     @Scheduled(fixedRate = 60000)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void checkPendingBookings() {
         List<Booking> pendingBookings = bookingRepository.findByStatus(BookingStatus.PENDING);
         for (Booking booking : pendingBookings) {

@@ -1,6 +1,7 @@
 package iuh.fit.airsky.controller;
 
 import iuh.fit.airsky.dto.request.PassengerRequest;
+import iuh.fit.airsky.dto.request.PassengerSeatRequest;
 import iuh.fit.airsky.dto.response.PassengerResponse;
 import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
@@ -26,7 +27,7 @@ public class PassengerController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
-    public ResponseEntity<ApiResponse<PassengerResponse>> createPassenger(@Valid @RequestBody PassengerRequest request) {
+    public ResponseEntity<ApiResponse<PassengerResponse>> createPassenger(@Valid @RequestBody PassengerSeatRequest request) {
         try {
             PassengerResponse response = passengerService.createPassenger(request);
             return ApiResponseUtil.buildResponse(true, "Passenger created successfully", response, "/api/v1/passengers");
@@ -38,7 +39,7 @@ public class PassengerController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
-    public ResponseEntity<ApiResponse<PassengerResponse>> updatePassenger(@PathVariable Long id, @Valid @RequestBody PassengerRequest request) {
+    public ResponseEntity<ApiResponse<PassengerResponse>> updatePassenger(@PathVariable Long id, @Valid @RequestBody PassengerSeatRequest request) {
         try {
             PassengerResponse response = passengerService.updatePassenger(id, request);
             return ApiResponseUtil.buildResponse(true, "Passenger updated successfully", response, "/api/v1/passengers/" + id);

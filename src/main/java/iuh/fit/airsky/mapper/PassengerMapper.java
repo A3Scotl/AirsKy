@@ -1,6 +1,6 @@
 package iuh.fit.airsky.mapper;
 
-import iuh.fit.airsky.dto.request.PassengerRequest;
+import iuh.fit.airsky.dto.request.PassengerSeatRequest;
 import iuh.fit.airsky.dto.response.PassengerResponse;
 import iuh.fit.airsky.dto.response.PassengerSeatResponse;
 import iuh.fit.airsky.model.Passenger;
@@ -13,7 +13,7 @@ public interface PassengerMapper {
 
     @Mapping(target = "passengerId", ignore = true)
     @Mapping(target = "booking", ignore = true)
-    Passenger toEntity(PassengerRequest dto);
+    Passenger toEntity(PassengerSeatRequest dto);
 
     PassengerResponse toResponseDTO(Passenger entity);
 
