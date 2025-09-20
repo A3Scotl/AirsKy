@@ -169,7 +169,6 @@ public class AuthController {
         response.addCookie(cookie);
     }
 
-
     @PostMapping("/google-login")
     public ResponseEntity<ApiResponse<AuthResponse>> googleLogin(
             @Valid @RequestBody GoogleLoginRequest request) {

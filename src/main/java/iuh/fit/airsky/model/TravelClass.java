@@ -19,10 +19,10 @@ public class TravelClass extends BaseAuditOnlyEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long classId;
 
-    @Column(name = "class_name", length = 20)
+    @Column(name = "class_name", length = 50)
     private String className;
 
-    @Column(length = 200)
+    @Column(length = 1000)
     private String benefits;
 
     @Column(name = "price_multiplier", precision = 5, scale = 2)

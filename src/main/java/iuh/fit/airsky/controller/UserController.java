@@ -44,14 +44,14 @@ public class UserController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','CUSTOMER')")
     public ResponseEntity<ApiResponse<UserResponse>> updateUser(@PathVariable Long id, @RequestBody UserRequest request) {
         UserResponse updatedUser = userService.updateUser(id, request);
         return ApiResponseUtil.buildResponse(true, "User updated successfully", updatedUser, "/api/users/" + id);
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','CUSTOMER')")
     public ResponseEntity<ApiResponse<Void>> softDeleteUser(@PathVariable Long id) {
         userService.softDelete(id);
         return ApiResponseUtil.buildResponse(true, "User deleted successfully", null, "/api/users/" + id);

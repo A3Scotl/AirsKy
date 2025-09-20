@@ -10,6 +10,8 @@ import iuh.fit.airsky.enums.FlightStatus;
 import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public interface FlightService {
@@ -41,4 +43,18 @@ public interface FlightService {
 
     // Tìm chuyến bay thống nhất dựa trên TripType
     UnifiedFlightSearchResponse searchUnifiedFlights(FlightSearchRequest request, Pageable pageable);
+
+    // Kiểm tra xung đột lịch trình chuyến bay
+    Map<String, List<FlightResponse>> checkScheduleConflicts(
+            LocalDateTime departureTime,
+            LocalDateTime arrivalTime,
+            Long departureAirportId,
+            Long arrivalAirportId,
+            Long aircraftId,
+            Long gateId,
+            Long excludeFlightId
+    );
+
+    // So sánh giá vé các chuyến bay (one-way, roundtrip, multicity)
+    Map<String, Object> compareFlightPrices(Map<String, Object> params);
 }

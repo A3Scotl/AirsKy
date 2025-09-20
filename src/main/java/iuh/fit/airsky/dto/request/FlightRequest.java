@@ -39,8 +39,6 @@ public class FlightRequest {
     @NotNull(message = "Gate ID is required")
     private Long gateId; 
 
-    @NotNull(message = "Base price is required")
-    @DecimalMin(value = "0.0", inclusive = false, message = "Base price must be greater than 0")
     private BigDecimal basePrice;
 
     @NotNull(message = "Flight status is required")
