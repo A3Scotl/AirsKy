@@ -19,4 +19,5 @@ public class BookingRequest {
     private BookingStatus status = BookingStatus.PENDING;
     private List<PassengerSeatRequest> passengers;
     private PaymentMethod paymentMethod;
+
 }

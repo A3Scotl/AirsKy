@@ -18,7 +18,7 @@ public abstract class FlightMapper {
     protected AircraftMapper aircraftMapper;
 
     @Mapping(target = "businessName",
-            expression = "java(entity.getBusiness() != null ? (entity.getBusiness().getBusinessName() != null ? entity.getBusiness().getBusinessName() : entity.getBusiness().getFirstName() + \" \" + entity.getBusiness().getLastName()) : null)")
+            expression = "java(entity.getBusiness() != null ? (entity.getBusiness().getBusinessName() != null ? entity.getBusiness().getBusinessName() : entity.getBusiness().getFirstName() + ' ' + entity.getBusiness().getLastName()) : null)")
     @Mapping(target = "gate", expression = "java(entity.getGate() != null ? entity.getGate().getGateName() : null)")
     @Mapping(target = "terminal", expression = "java(entity.getGate() != null ? entity.getGate().getTerminal() : null)")
     @Mapping(target = "aircraft", expression = "java(entity.getAircraft() != null ? aircraftMapper.toResponseDTO(entity.getAircraft()) : null)")

@@ -34,6 +34,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -108,16 +109,16 @@ public class FlightServiceImpl implements FlightService {
 
         // Validate input
         if (request.getDepartureTime().isAfter(request.getArrivalTime())) {
-            throw new IllegalArgumentException("Departure time must be before arrival time");
+            throw new IllegalArgumentException("Thời gian khởi hành phải trước thời gian hạ cánh");
         }
 
         // Validate round-trip: phải có đủ thông tin và hợp lệ
         if (request.getTripType() == iuh.fit.airsky.enums.TripType.ROUND_TRIP) {
             if (request.getRoundTripGroupId() == null || request.getRoundTripGroupId().isEmpty()) {
-                throw new IllegalArgumentException("Round-trip flight must have a roundTripGroupId");
+                throw new IllegalArgumentException("Chuyến bay khứ hồi phải có roundTripGroupId");
             }
             if (request.getDepartureAirportId().equals(request.getArrivalAirportId())) {
-                throw new IllegalArgumentException("Departure and arrival airports must be different for round-trip");
+                throw new IllegalArgumentException("Sân bay đi và đến phải khác nhau cho chuyến bay khứ hồi");
             }
             // Có thể kiểm tra thêm: ngày đi và ngày về phải hợp lý nếu có thông tin chuyến về
         }
@@ -125,70 +126,70 @@ public class FlightServiceImpl implements FlightService {
         // Validate multi-city: stopsList phải hợp lệ
         if (request.getTripType() == iuh.fit.airsky.enums.TripType.MULTI_CITY) {
             if (request.getStopsList() == null || request.getStopsList().isEmpty()) {
-                throw new IllegalArgumentException("Multi-city flight must have at least one stop");
+                throw new IllegalArgumentException("Chuyến bay nhiều chặng phải có ít nhất một điểm dừng");
             }
             for (int i = 0; i < request.getStopsList().size(); i++) {
                 var stop = request.getStopsList().get(i);
                 if (stop.getStopOrder() == null || stop.getStopOrder() != i + 1) {
-                    throw new IllegalArgumentException("Stop order must be consecutive starting from 1");
+                    throw new IllegalArgumentException("Thứ tự điểm dừng phải liên tiếp bắt đầu từ 1");
                 }
                 if (i > 0) {
                     var prev = request.getStopsList().get(i - 1);
                     if (stop.getAirportId().equals(prev.getAirportId())) {
-                        throw new IllegalArgumentException("Consecutive stops cannot be at the same airport");
+                        throw new IllegalArgumentException("Hai điểm dừng liên tiếp không được cùng một sân bay");
                     }
                     if (prev.getDepartureTime() != null && stop.getArrivalTime() != null &&
                         !stop.getArrivalTime().isAfter(prev.getDepartureTime())) {
-                        throw new IllegalArgumentException("Each stop's arrival time must be after previous stop's departure time");
+                        throw new IllegalArgumentException("Thời gian đến của mỗi điểm dừng phải sau thời gian rời điểm dừng trước đó");
                     }
                 }
                 if (stop.getArrivalTime() != null && stop.getDepartureTime() != null &&
                     !stop.getDepartureTime().isAfter(stop.getArrivalTime())) {
-                    throw new IllegalArgumentException("Stop departure time must be after arrival time");
+                    throw new IllegalArgumentException("Thời gian rời điểm dừng phải sau thời gian đến");
                 }
             }
         }
 
         // check airline id
         if (!airlineRepository.existsById(request.getAirlineId())) {
-            throw new ResourceNotFoundException("Airline not found with id " + request.getAirlineId());
+            throw new ResourceNotFoundException("Không tìm thấy hãng hàng không với id " + request.getAirlineId());
         }
 
         // Check for overlapping flights (aircraft)
         if (flightRepository.existsByAircraftIdAndTimeOverlap(
                 request.getAircraftId(), request.getDepartureTime(), request.getArrivalTime())) {
-            throw new IllegalArgumentException("Aircraft is already scheduled for another flight in this time range");
+            throw new IllegalArgumentException("Máy bay đã được lên lịch cho chuyến bay khác trong khoảng thời gian này");
         }
 
         // Check for overlapping flights (gate)
         if (flightRepository.existsByGateIdAndTimeOverlap(
                 request.getGateId(), request.getDepartureTime(), request.getArrivalTime())) {
-            throw new IllegalArgumentException("Gate is already assigned to another flight in this time range");
+            throw new IllegalArgumentException("Cổng đã được gán cho chuyến bay khác trong khoảng thời gian này");
         }
 
         // Check for overlapping flights at departure airport
         if (isAirportDepartureOverlap(request.getDepartureAirportId(), request.getDepartureTime(), request.getArrivalTime(), null)) {
-            throw new IllegalArgumentException("Departure airport is busy with another flight in this time range");
+            throw new IllegalArgumentException("Sân bay khởi hành đang bận với chuyến bay khác trong khoảng thời gian này");
         }
 
         // Check for overlapping flights at arrival airport
         if (isAirportArrivalOverlap(request.getArrivalAirportId(), request.getDepartureTime(), request.getArrivalTime(), null)) {
-            throw new IllegalArgumentException("Arrival airport is busy with another flight in this time range");
+            throw new IllegalArgumentException("Sân bay đến đang bận với chuyến bay khác trong khoảng thời gian này");
         }
 
         // Check buffer time at airports
         if (hasSufficientBufferTime(request.getDepartureAirportId(), request.getDepartureTime(), MIN_BUFFER_TIME_MINUTES)) {
-            throw new IllegalArgumentException("Insufficient buffer time at departure airport");
+            throw new IllegalArgumentException("Không đủ thời gian chờ tại sân bay khởi hành");
         }
         if (hasSufficientBufferTime(request.getArrivalAirportId(), request.getArrivalTime(), MIN_BUFFER_TIME_MINUTES)) {
-            throw new IllegalArgumentException("Insufficient buffer time at arrival airport");
+            throw new IllegalArgumentException("Không đủ thời gian chờ tại sân bay đến");
         }
 
         // Validate gate belongs to departure airport
         Gate gate = gateRepository.findById(request.getGateId())
-                .orElseThrow(() -> new ResourceNotFoundException("Gate not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy cổng"));
         if (!gate.getAirport().getAirportId().equals(request.getDepartureAirportId())) {
-            throw new IllegalArgumentException("Gate must belong to the departure airport");
+            throw new IllegalArgumentException("Cổng phải thuộc về sân bay khởi hành");
         }
 
         // Map DTO to entity
@@ -199,7 +200,7 @@ public class FlightServiceImpl implements FlightService {
 
         // Set airline
         flight.setAirline(airlineRepository.findById(request.getAirlineId())
-                .orElseThrow(() -> new ResourceNotFoundException("Airline not found with id " + request.getAirlineId())));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hãng hàng không với id " + request.getAirlineId())));
 
         // Tự động tính duration từ departureTime và arrivalTime
         if (request.getDepartureTime() != null && request.getArrivalTime() != null) {
@@ -209,9 +210,9 @@ public class FlightServiceImpl implements FlightService {
         String airlineCode = flight.getAirline().getAirlineCode();
         flight.setFlightNumber(generateCodeUtil.generateFlightNumber(flightRepository, airlineCode));
         flight.setDepartureAirport(airportRepository.findById(request.getDepartureAirportId())
-                .orElseThrow(() -> new ResourceNotFoundException("Departure airport not found with id " + request.getDepartureAirportId())));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân bay khởi hành với id " + request.getDepartureAirportId())));
         flight.setArrivalAirport(airportRepository.findById(request.getArrivalAirportId())
-                .orElseThrow(() -> new ResourceNotFoundException("Arrival airport not found with id " + request.getArrivalAirportId())));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân bay đến với id " + request.getArrivalAirportId())));
         flight.setGate(gateRepository.findById(request.getGateId())
                 .orElseThrow(() -> new ResourceNotFoundException("Gate not found with id " + request.getGateId())));
 
@@ -230,6 +231,15 @@ public class FlightServiceImpl implements FlightService {
                 })
                 .collect(Collectors.toList());
             flight.setFlightTravelClasses(flightTravelClasses);
+            // Tự động lấy giá thấp nhất trong các customPrice của hạng vé để set basePrice
+            flight.setBasePrice(flightTravelClasses.stream()
+                .map(FlightTravelClass::getCustomPrice)
+                .filter(price -> price != null)
+                .min(BigDecimal::compareTo)
+                .orElse(BigDecimal.ZERO));
+        } else {
+            // Nếu không có hạng vé nào thì basePrice là 0
+            flight.setBasePrice(BigDecimal.ZERO);
         }
 
         // Handle stops
@@ -239,7 +249,7 @@ public class FlightServiceImpl implements FlightService {
                 if (stop.getArrivalTime() != null && stop.getDepartureTime() != null) {
                     long stopDuration = java.time.Duration.between(stop.getArrivalTime(), stop.getDepartureTime()).toMinutes();
                     if (stopDuration < 20) {
-                        throw new IllegalArgumentException("Stop duration must be at least 20 minutes");
+                        throw new IllegalArgumentException("Thời gian dừng phải ít nhất 20 phút");
                     }
                 }
             }
@@ -247,7 +257,7 @@ public class FlightServiceImpl implements FlightService {
             List<Stop> stops = request.getStopsList().stream().map(stopRequest -> {
                 Stop stop = stopMapper.toEntity(stopRequest);
                 Airport airport = airportRepository.findById(stopRequest.getAirportId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Stop airport not found with id " + stopRequest.getAirportId()));
+                        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân bay dừng với id " + stopRequest.getAirportId()));
                 stop.setAirport(airport);
                 stop.setFlight(flight); // Set the flight reference
                 // Calculate stop duration if arrival and departure times are provided
@@ -260,8 +270,9 @@ public class FlightServiceImpl implements FlightService {
         }
 
         // Dynamic pricing: increase price if within 24h of departure
+        // Đã set basePrice ở trên, chỉ tăng giá nếu gần giờ bay
         if (Duration.between(LocalDateTime.now(), request.getDepartureTime()).toHours() <= 24) {
-            BigDecimal increasedPrice = request.getBasePrice().multiply(BigDecimal.valueOf(1.2)); // 20% increase
+            BigDecimal increasedPrice = flight.getBasePrice().multiply(BigDecimal.valueOf(1.2)); // 20% increase
             flight.setBasePrice(increasedPrice);
         }
 
@@ -279,41 +290,41 @@ public class FlightServiceImpl implements FlightService {
     public FlightResponse updateFlight(Long id, FlightRequest request) {
         log.info("Updating flight with ID: {}", id);
         Flight flight = flightRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Flight not found with id " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chuyến bay với id " + id));
         if (flight.getStatus() == FlightStatus.DEPARTED || flight.getStatus() == FlightStatus.CANCELLED) {
-            throw new IllegalStateException("Cannot update a departed or cancelled flight");
+            throw new IllegalStateException("Không thể cập nhật chuyến bay đã khởi hành hoặc đã hủy");
         }
         if (request.getDepartureTime().isAfter(request.getArrivalTime())) {
-            throw new IllegalArgumentException("Departure time must be before arrival time");
+            throw new IllegalArgumentException("Thời gian khởi hành phải trước thời gian hạ cánh");
         }
      
         // Check for overlapping flights (aircraft)
         if (flightRepository.existsByAircraftIdAndTimeOverlap(
                 request.getAircraftId(), request.getDepartureTime(), request.getArrivalTime())) {
-            throw new IllegalArgumentException("Aircraft is already scheduled for another flight in this time range");
+            throw new IllegalArgumentException("Máy bay đã được lên lịch cho chuyến bay khác trong khoảng thời gian này");
         }
         // Check for overlapping flights (gate)
         if (flightRepository.existsByGateIdAndTimeOverlap(
                 request.getGateId(), request.getDepartureTime(), request.getArrivalTime())) {
-            throw new IllegalArgumentException("Gate is already assigned to another flight in this time range");
+            throw new IllegalArgumentException("Cổng đã được gán cho chuyến bay khác trong khoảng thời gian này");
         }
 
         // Check for overlapping flights at departure airport
         if (isAirportDepartureOverlap(request.getDepartureAirportId(), request.getDepartureTime(), request.getArrivalTime(), id)) {
-            throw new IllegalArgumentException("Departure airport is busy with another flight in this time range");
+            throw new IllegalArgumentException("Sân bay khởi hành đang bận với chuyến bay khác trong khoảng thời gian này");
         }
 
         // Check for overlapping flights at arrival airport
         if (isAirportArrivalOverlap(request.getArrivalAirportId(), request.getDepartureTime(), request.getArrivalTime(), id)) {
-            throw new IllegalArgumentException("Arrival airport is busy with another flight in this time range");
+            throw new IllegalArgumentException("Sân bay đến đang bận với chuyến bay khác trong khoảng thời gian này");
         }
 
         // Check buffer time at airports
         if (hasSufficientBufferTime(request.getDepartureAirportId(), request.getDepartureTime(), MIN_BUFFER_TIME_MINUTES)) {
-            throw new IllegalArgumentException("Insufficient buffer time at departure airport");
+            throw new IllegalArgumentException("Không đủ thời gian chờ tại sân bay khởi hành");
         }
         if (hasSufficientBufferTime(request.getArrivalAirportId(), request.getArrivalTime(), MIN_BUFFER_TIME_MINUTES)) {
-            throw new IllegalArgumentException("Insufficient buffer time at arrival airport");
+            throw new IllegalArgumentException("Không đủ thời gian chờ tại sân bay đến");
         }
 
         // Update basic flight fields
@@ -329,9 +340,9 @@ public class FlightServiceImpl implements FlightService {
         flight.setAirline(airlineRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Airline not found with id " + id)));
         flight.setDepartureAirport(airportRepository.findById(request.getDepartureAirportId())
-                .orElseThrow(() -> new ResourceNotFoundException("Departure airport not found with id " + request.getDepartureAirportId())));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân bay khởi hành với id " + request.getDepartureAirportId())));
         flight.setArrivalAirport(airportRepository.findById(request.getArrivalAirportId())
-                .orElseThrow(() -> new ResourceNotFoundException("Arrival airport not found with id " + request.getArrivalAirportId())));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân bay đến với id " + request.getArrivalAirportId())));
         flight.setGate(gateRepository.findById(request.getGateId())
                 .orElseThrow(() -> new ResourceNotFoundException("Gate not found with id " + request.getGateId())));
         flight.setAircraft(aircraftRepository.findById(request.getAircraftId())
@@ -341,6 +352,8 @@ public class FlightServiceImpl implements FlightService {
         if (request.getFlightTravelClasses() != null) {
             if (request.getFlightTravelClasses().isEmpty()) {
                 flight.getFlightTravelClasses().clear();
+                // Nếu không còn hạng vé nào thì basePrice là 0
+                flight.setBasePrice(BigDecimal.ZERO);
             } else {
                 // Clear existing and add new ones
                 flight.getFlightTravelClasses().clear();
@@ -357,6 +370,12 @@ public class FlightServiceImpl implements FlightService {
                     })
                     .collect(Collectors.toList());
                 flight.setFlightTravelClasses(flightTravelClasses);
+                // Tự động lấy giá thấp nhất trong các customPrice của hạng vé để set basePrice
+                flight.setBasePrice(flightTravelClasses.stream()
+                    .map(FlightTravelClass::getCustomPrice)
+                    .filter(price -> price != null)
+                    .min(BigDecimal::compareTo)
+                    .orElse(BigDecimal.ZERO));
             }
         }
 
@@ -371,7 +390,7 @@ public class FlightServiceImpl implements FlightService {
                 if (stop.getArrivalTime() != null && stop.getDepartureTime() != null) {
                     long stopDuration = java.time.Duration.between(stop.getArrivalTime(), stop.getDepartureTime()).toMinutes();
                     if (stopDuration < 20) {
-                        throw new IllegalArgumentException("Stop duration must be at least 20 minutes");
+                        throw new IllegalArgumentException("Thời gian dừng phải ít nhất 20 phút");
                     }
                 }
             }
@@ -379,7 +398,7 @@ public class FlightServiceImpl implements FlightService {
             List<Stop> stops = request.getStopsList().stream().map(stopRequest -> {
                 Stop stop = stopMapper.toEntity(stopRequest);
                 Airport airport = airportRepository.findById(stopRequest.getAirportId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Stop airport not found with id " + stopRequest.getAirportId()));
+                        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân bay dừng với id " + stopRequest.getAirportId()));
                 stop.setAirport(airport);
                 stop.setFlight(flight); // Set the flight reference
                 // Calculate stop duration if arrival and departure times are provided
@@ -682,5 +701,83 @@ public class FlightServiceImpl implements FlightService {
                 return stopAirportIds.containsAll(intermediateAirports);
             })
             .collect(Collectors.toList());
+    }
+
+    @Override
+    public Map<String, List<FlightResponse>> checkScheduleConflicts(
+            LocalDateTime departureTime,
+            LocalDateTime arrivalTime,
+            Long departureAirportId,
+            Long arrivalAirportId,
+            Long aircraftId,
+            Long gateId,
+            Long excludeFlightId
+    ) {
+        Map<String, List<FlightResponse>> result = new java.util.HashMap<>();
+        if (aircraftId != null && departureTime != null && arrivalTime != null) {
+            List<Flight> aircraftConflicts = flightRepository.findAircraftConflicts(aircraftId, departureTime, arrivalTime, excludeFlightId == null ? -1L : excludeFlightId);
+            result.put("aircraft", aircraftConflicts.stream().map(flightMapper::toResponseDTO).toList());
+        }
+        if (gateId != null && departureTime != null && arrivalTime != null) {
+            List<Flight> gateConflicts = flightRepository.findGateConflicts(gateId, departureTime, arrivalTime, excludeFlightId == null ? -1L : excludeFlightId);
+            result.put("gate", gateConflicts.stream().map(flightMapper::toResponseDTO).toList());
+        }
+        if (departureAirportId != null && departureTime != null && arrivalTime != null) {
+            List<Flight> depConflicts = flightRepository.findDepartureAirportConflicts(departureAirportId, departureTime, arrivalTime, excludeFlightId == null ? -1L : excludeFlightId);
+            result.put("departureAirport", depConflicts.stream().map(flightMapper::toResponseDTO).toList());
+        }
+        if (arrivalAirportId != null && departureTime != null && arrivalTime != null) {
+            List<Flight> arrConflicts = flightRepository.findArrivalAirportConflicts(arrivalAirportId, departureTime, arrivalTime, excludeFlightId == null ? -1L : excludeFlightId);
+            result.put("arrivalAirport", arrConflicts.stream().map(flightMapper::toResponseDTO).toList());
+        }
+        return result;
+    }
+
+    @Override
+    public Map<String, Object> compareFlightPrices(Map<String, Object> params) {
+        // Validate and parse params
+        String type = (String) params.getOrDefault("type", "one-way");
+        List<Map<String, Object>> routes = (List<Map<String, Object>>) params.get("routes");
+        Integer dateRangeDays = (Integer) params.getOrDefault("dateRangeDays", 0);
+        if (dateRangeDays == null) dateRangeDays = 0;
+        if (dateRangeDays > 7) dateRangeDays = 7; // Giới hạn tối đa 7 ngày
+        if (routes == null || routes.isEmpty()) throw new IllegalArgumentException("Thiếu thông tin tuyến bay");
+
+        // Chuẩn bị danh sách các tuyến và ngày cần so sánh
+        List<Long> departureAirportIds = new ArrayList<>();
+        List<Long> arrivalAirportIds = new ArrayList<>();
+        List<java.time.LocalDate> allDates = new ArrayList<>();
+        for (Map<String, Object> route : routes) {
+            Long depId = ((Number) route.get("departureAirportId")).longValue();
+            Long arrId = ((Number) route.get("arrivalAirportId")).longValue();
+            String dateStr = (String) route.get("date");
+            java.time.LocalDate date = java.time.LocalDate.parse(dateStr);
+            departureAirportIds.add(depId);
+            arrivalAirportIds.add(arrId);
+            // Thêm các ngày trong khoảng dateRangeDays
+            for (int i = -dateRangeDays; i <= dateRangeDays; i++) {
+                allDates.add(date.plusDays(i));
+            }
+        }
+        // Loại bỏ trùng lặp ngày
+        allDates = allDates.stream().distinct().toList();
+
+        // Truy vấn batch lấy giá thấp nhất
+        List<Object[]> minPrices = flightRepository.findMinPriceByRouteAndDates(departureAirportIds, arrivalAirportIds, allDates);
+
+        // Gom kết quả trả về
+        Map<String, Object> result = new java.util.HashMap<>();
+        List<Map<String, Object>> priceList = new ArrayList<>();
+        for (Object[] row : minPrices) {
+            Map<String, Object> priceInfo = new java.util.HashMap<>();
+            priceInfo.put("departureAirportId", row[0]);
+            priceInfo.put("arrivalAirportId", row[1]);
+            priceInfo.put("date", row[2].toString());
+            priceInfo.put("minPrice", row[3]);
+            priceList.add(priceInfo);
+        }
+        result.put("prices", priceList);
+        result.put("type", type);
+        return result;
     }
 }

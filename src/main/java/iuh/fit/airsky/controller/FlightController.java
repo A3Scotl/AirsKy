@@ -48,7 +48,7 @@ public class FlightController {
     }
 
     @PostMapping
-//    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
     public ResponseEntity<ApiResponse<FlightResponse>> createFlight(@Valid @RequestBody FlightRequest request) {
         try {
             FlightResponse response = flightService.createFlight(request);
@@ -73,7 +73,7 @@ public class FlightController {
     }
 
     @PutMapping("/{id}")
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
     public ResponseEntity<ApiResponse<FlightResponse>> updateFlight(@PathVariable Long id, @Valid @RequestBody FlightRequest request) {
         try {
             FlightResponse response = flightService.updateFlight(id, request);
@@ -99,6 +99,7 @@ public class FlightController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<PageResponse<FlightResponse>>> getAllFlights(Pageable pageable) {
         try {
             PageResponse<FlightResponse> response = flightService.findAll(pageable);
@@ -227,11 +228,6 @@ public class FlightController {
         List<SeatResponse> seats = seatService.getSeatsByFlight(flightId);
         return ApiResponseUtil.buildResponse(true, "Seats retrieved successfully", seats, "/api/v1/flights/" + flightId + "/seats");
     }
-    @GetMapping("/{id}/seats/{travelClassId}")
-    public ResponseEntity<ApiResponse<List<SeatResponse>>> getSeatsByFlightAndTravelClass(@PathVariable("id") Long flightId,@PathVariable("travelClassId") Long travelClassId) {
-        List<SeatResponse> seats = seatService.getSeatsByFlightAndTravelClass(flightId,travelClassId);
-        return ApiResponseUtil.buildResponse(true, "Seats retrieved successfully", seats, "/api/v1/flights/" + flightId + "/seats/" + travelClassId);
-    }
 
     @GetMapping("/search-oneway")
     public ResponseEntity<ApiResponse<PageResponse<FlightResponse>>> searchOneWayFlights(
@@ -307,6 +303,48 @@ public class FlightController {
             log.error("Error in unified flight search: ", ex);
             ex.printStackTrace();
             return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Search failed", ex.getMessage(), "/api/v1/flights/search-unified");
+        }
+    }
+
+    @GetMapping("/check-conflicts")
+    public ResponseEntity<ApiResponse<Map<String, List<FlightResponse>>>> checkScheduleConflicts(
+            @RequestParam(value = "departureDate", required = false) String departureDate,
+            @RequestParam(value = "departureTime", required = false) String departureTime,
+            @RequestParam(value = "arrivalDate", required = false) String arrivalDate,
+            @RequestParam(value = "arrivalTime", required = false) String arrivalTime,
+            @RequestParam(value = "departureAirportId", required = false) Long departureAirportId,
+            @RequestParam(value = "arrivalAirportId", required = false) Long arrivalAirportId,
+            @RequestParam(value = "aircraftId", required = false) Long aircraftId,
+            @RequestParam(value = "gateId", required = false) Long gateId,
+            @RequestParam(value = "excludeFlightId", required = false) Long excludeFlightId
+    ) {
+        try {
+            LocalDateTime depTime = null;
+            LocalDateTime arrTime = null;
+            if (departureDate != null && departureTime != null) {
+                depTime = LocalDateTime.parse(departureDate + "T" + departureTime);
+            }
+            if (arrivalDate != null && arrivalTime != null) {
+                arrTime = LocalDateTime.parse(arrivalDate + "T" + arrivalTime);
+            }
+            Map<String, List<FlightResponse>> conflicts = flightService.checkScheduleConflicts(
+                    depTime, arrTime, departureAirportId, arrivalAirportId, aircraftId, gateId, excludeFlightId
+            );
+            return ApiResponseUtil.buildResponse(true, "Kiểm tra xung đột thành công", conflicts, "/api/v1/flights/check-conflicts");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Kiểm tra xung đột thất bại", ex.getMessage(), "/api/v1/flights/check-conflicts");
+        }
+    }
+
+    @PostMapping("/compare-prices")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> compareFlightPrices(@RequestBody Map<String, Object> params) {
+        try {
+            Map<String, Object> result = flightService.compareFlightPrices(params);
+            return ApiResponseUtil.buildResponse(true, "So sánh giá vé thành công", result, "/api/v1/flights/compare-prices");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "So sánh giá vé thất bại", ex.getMessage(), "/api/v1/flights/compare-prices");
         }
     }
 }

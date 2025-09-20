@@ -8,7 +8,6 @@ import java.util.List;
 public interface SeatService {
 
     List<SeatResponse> getSeatsByFlight(Long flightId);
-    List<SeatResponse> getSeatsByFlightAndTravelClass(Long flightId, Long travelClassId);
 
     void createSeatsForFlight(Flight flight);
 }

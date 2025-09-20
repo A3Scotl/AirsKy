@@ -37,15 +37,44 @@ public class UserServiceImpl implements UserService {
         log.info("Updating user with ID: {}", id);
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id " + id));
-        user.setFirstName(request.getFirstName());
-        user.setLastName(request.getLastName());
-        user.setPhone(request.getPhone());
-        user.setVerified(request.isVerified());
-        user.setRole(request.getRole());
-        user.setActive(request.isActive());
+        if (request.getFirstName() != null) {
+            user.setFirstName(request.getFirstName());
+        }
+        if (request.getLastName() != null) {
+            user.setLastName(request.getLastName());
+        }
+        if (request.getPhone() != null) {
+            user.setPhone(request.getPhone());
+        }
+        if (request.getRole() != null) {
+            user.setRole(request.getRole());
+        }
+
+        if (request.getDateOfBirth() != null) {
+            user.setDateOfBirth(request.getDateOfBirth());
+        }
+        if (request.getAvatar() != null) {
+            user.setAvatar(request.getAvatar());
+        }
+        if (request.getPassportNumber() != null) {
+            user.setPassportNumber(request.getPassportNumber());
+        }
+        if (request.getPassportExpiry() != null) {
+            user.setPassportExpiry(request.getPassportExpiry());
+        }
+        if (request.getLoyaltyPoints() != null) {
+            user.setLoyaltyPoints(request.getLoyaltyPoints());
+        }
+        if (request.getLoyaltyTier() != null) {
+            user.setLoyaltyTier(request.getLoyaltyTier());
+        }
+
         if (request.getPassword() != null && !request.getPassword().isEmpty()) {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
         }
+
+        user.setVerified(request.isVerified());
+        user.setActive(request.isActive());
         User updated = userRepository.save(user);
         log.info("User updated with ID: {}", updated.getId());
         return userMapper.toResponseDTO(updated);

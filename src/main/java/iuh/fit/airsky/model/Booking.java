@@ -7,7 +7,6 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -51,8 +50,7 @@ public class Booking extends BaseAuditOnlyEntity {
 
     // Thêm danh sách hành khách
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @Builder.Default
-    private List<Passenger> passengers = new ArrayList<>();
+    private List<Passenger> passengers;
 
     // Thêm payment
     @OneToOne(mappedBy = "booking", cascade = CascadeType.ALL, fetch = FetchType.LAZY)

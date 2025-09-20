@@ -60,10 +60,12 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail().toLowerCase())) {
-            throw new AuthException("Email already exists");
+            throw new AuthException("Email đã tồn tại");
         }
-
+        validateEmailFormat(request.getEmail());
+        validateEmailExists(request.getEmail());
         validatePasswordStrength(request.getPassword());
+        validatePhoneNumber(request.getPhone());
 
         // Dùng UserMapper để map
         User user = userMapper.toEntity(request.toUserRequest());
@@ -83,16 +85,16 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByEmail(request.getEmail().toLowerCase())
-                .orElseThrow(() -> new AuthException("Invalid credentials"));
+                .orElseThrow(() -> new AuthException("Tài khoản hoặc mật khẩu không đúng"));
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new AuthException("Invalid credentials");
+            throw new AuthException("Tài khoản hoặc mật khẩu không đúng");
         }
         if (!user.isVerified()) {
-            throw new AuthException("Email not verified");
+            throw new AuthException("Email chưa được xác thực");
         }
         if (!user.isActive()) {
-            throw new AuthException("Account is deactivated");
+            throw new AuthException("Tài khoản đã bị khóa");
         }
 
         authenticationManager.authenticate(
@@ -107,23 +109,25 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
 
         return buildAuthResponse(user);
-    }    @Override
+    }
+
+    @Override
     public AuthResponse forgotPassword(ForgotPasswordRequest request) {
         User user = userRepository.findByEmail(request.getEmail().toLowerCase())
-                .orElseThrow(() -> new AuthException("Email not found"));
+                .orElseThrow(() -> new AuthException("Email không tồn tại"));
 
         if (!user.isActive()) {
-            throw new AuthException("Account is deactivated");
+            throw new AuthException("Tài khoản đã bị khóa");
         }
 
         otpService.createAndSendOtp(user.getEmail());
-        return new AuthResponse("OTP has been sent to your email", null);
+        return null;
     }
 
     @Override
     public AuthResponse verifyRegistration(VerifyOtpRequest request) {
         User user = userRepository.findByEmail(request.getEmail().toLowerCase())
-                .orElseThrow(() -> new AuthException("User not found"));
+                .orElseThrow(() -> new AuthException("Không tìm thấy người dùng"));
 
         otpService.validateOtp(request.getEmail(), request.getOtpCode());
 
@@ -132,36 +136,36 @@ public class AuthServiceImpl implements AuthService {
 
         verificationTokenRepository.deleteByEmail(request.getEmail());
 
-        return new AuthResponse("Email verified successfully", null);
+        return null;
     }
 
     @Override
     public UserResponse getUserByEmail(String email) {
         User user = userRepository.findByEmail(email.toLowerCase())
-                .orElseThrow(() -> new AuthException("User not found"));
+                .orElseThrow(() -> new AuthException("Không tìm thấy người dùng"));
         return userMapper.toResponseDTO(user);
     }
 
     @Override
     public AuthResponse resendVerificationCode(ForgotPasswordRequest request) {
         User user = userRepository.findByEmail(request.getEmail().toLowerCase())
-                .orElseThrow(() -> new AuthException("Email not found"));
+                .orElseThrow(() -> new AuthException("Email không tồn tại"));
 
         if (!user.isActive()) {
-            throw new AuthException("Account is deactivated");
+            throw new AuthException("Tài khoản đã bị khóa");
         }
 
         otpService.resendOtp(user.getEmail());
-        return new AuthResponse("OTP has been resent to your email", null);
+        return null;
     }
 
     @Override
     public AuthResponse resetPassword(ResetPasswordRequest request) {
         User user = userRepository.findByEmail(request.getEmail().toLowerCase())
-                .orElseThrow(() -> new AuthException("User not found"));
+                .orElseThrow(() -> new AuthException("Không tìm thấy người dùng"));
 
         if (!user.isActive()) {
-            throw new AuthException("Account is deactivated");
+            throw new AuthException("Tài khoản đã bị khóa");
         }
 
         otpService.validateOtp(request.getEmail(), request.getOtpCode());
@@ -170,20 +174,20 @@ public class AuthServiceImpl implements AuthService {
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
 
-        return new AuthResponse("Password reset successfully", null);
+        return null;
     }
 
     @Override
     public AuthResponse changePassword(ChangePasswordRequest request) {
         User user = userRepository.findByEmail(request.getEmail().toLowerCase())
-                .orElseThrow(() -> new AuthException("User not found"));
+                .orElseThrow(() -> new AuthException("Không tìm thấy người dùng"));
 
         if (!user.isActive()) {
-            throw new AuthException("Account is deactivated");
+            throw new AuthException("Tài khoản đã bị khóa");
         }
 
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
-            throw new AuthException("Incorrect old password");
+            throw new AuthException("Mật khẩu cũ không đúng");
         }
 
         validatePasswordStrength(request.getNewPassword());
@@ -191,7 +195,7 @@ public class AuthServiceImpl implements AuthService {
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
 
-        return new AuthResponse("Password changed successfully", null);
+        return null;
     }
 
     private AuthResponse buildAuthResponse(User user) {
@@ -202,7 +206,33 @@ public class AuthServiceImpl implements AuthService {
 
     private void validatePasswordStrength(String password) {
         if (!PASSWORD_PATTERN.matcher(password).matches()) {
-            throw new AuthException("Password must be at least 8 characters, including uppercase, lowercase, digit, and special character");
+            throw new AuthException("Mật khẩu phải có ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt");
+        }
+    }
+
+    private void validatePhoneNumber(String phone) {
+        // Chỉ cho ph��p số điện thoại Việt Nam, 10 số, bắt đầu bằng 0
+        if (!phone.matches("^0[0-9]{9}$")) {
+            throw new AuthException("Số điện thoại phải bắt đầu bằng 0 và đủ 10 số");
+        }
+    }
+
+    private void validateEmailExists(String email) {
+        try {
+            javax.naming.directory.InitialDirContext ctx = new javax.naming.directory.InitialDirContext();
+            javax.naming.directory.Attributes attrs = ctx.getAttributes("dns:/" + email.substring(email.indexOf("@") + 1), new String[] {"MX"});
+            if (attrs == null || attrs.size() == 0) {
+                throw new AuthException("Email không tồn tại hoặc không thể nhận thư");
+            }
+        } catch (Exception e) {
+            throw new AuthException("Email không tồn tại hoặc không thể nhận thư");
+        }
+    }
+
+    private void validateEmailFormat(String email) {
+        // Chỉ cho phép email có domain kết thúc bằng .com, .net, .org, .edu, .info, .vn, ... (ít nhất 3 ký tự)
+        if (!email.matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{3,}$")) {
+            throw new AuthException("Email không đúng định dạng. Vui lòng nhập email có dạng example@gmail.com");
         }
     }
 }

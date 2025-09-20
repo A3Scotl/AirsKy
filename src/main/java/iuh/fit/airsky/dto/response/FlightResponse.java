@@ -26,6 +26,7 @@ public class FlightResponse {
     private FlightType type;
     private String businessName;
     private Integer availableSeats;
+    // Xóa totalSeats vì sẽ nằm trong aircraftResponse
     private BigDecimal basePrice;
     private FlightStatus status;
     private LocalDateTime createdAt;

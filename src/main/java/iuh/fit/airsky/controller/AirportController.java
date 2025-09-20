@@ -53,7 +53,7 @@ public class AirportController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
     public ResponseEntity<ApiResponse<Void>> deleteAirport(@PathVariable Long id) {
         try {
             airportService.softDelete(id);
@@ -67,7 +67,7 @@ public class AirportController {
     }
 
     @PostMapping(consumes = {"multipart/form-data"})
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
     public ResponseEntity<ApiResponse<AirportResponse>> createAirportWithImage(
             @RequestParam("airportCode") String airportCode,
             @RequestParam("airportName") String airportName,
@@ -109,7 +109,7 @@ public class AirportController {
     }
 
     @PutMapping(value = "/{id}", consumes = {"multipart/form-data"})
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
     public ResponseEntity<ApiResponse<AirportResponse>> updateAirportWithImage(
             @PathVariable Long id,
             @RequestParam("airportCode") String airportCode,

@@ -35,25 +35,7 @@ public class Payment extends BaseAuditOnlyEntity {
     @Enumerated(EnumType.STRING)
     private PaymentStatus status;  //  PAID,PENDING,REFUNDED
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "booking_id", nullable = false, unique = true)
+    @OneToOne
+    @JoinColumn(name = "booking_id", nullable = false)
     private Booking booking;
-    
-    // Helper method to set the booking and update the back reference
-    public void setBooking(Booking booking) {
-        if (this.booking == booking) {
-            return; // Prevent infinite recursion
-        }
-        
-        Booking oldBooking = this.booking;
-        this.booking = booking;
-        
-        if (oldBooking != null) {
-            oldBooking.setPayment(null);
-        }
-        
-        if (booking != null && booking.getPayment() != this) {
-            booking.setPayment(this);
-        }
-    }
 }

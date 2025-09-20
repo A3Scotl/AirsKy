@@ -4,7 +4,10 @@ import iuh.fit.airsky.dto.response.SeatResponse;
 import iuh.fit.airsky.enums.SeatStatus;
 import iuh.fit.airsky.mapper.SeatMapper;
 import iuh.fit.airsky.model.*;
-import iuh.fit.airsky.repository.*;
+import iuh.fit.airsky.repository.AircraftRepository;
+import iuh.fit.airsky.repository.PassengerRepository;
+import iuh.fit.airsky.repository.SeatRepository;
+import iuh.fit.airsky.repository.TravelClassRepository;
 import iuh.fit.airsky.service.SeatService;
 import iuh.fit.airsky.util.SeatGeneratorUtil;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Service
@@ -26,7 +28,6 @@ public class SeatServiceImpl implements SeatService {
     private final TravelClassRepository travelClassRepository;
     private final PassengerRepository passengerRepository;
     private final AircraftRepository aircraftRepository;
-    private final FlightRepository flightRepository;
     // Lock map theo flightId
     private final ConcurrentHashMap<Long, Object> flightLocks = new ConcurrentHashMap<>();
 
@@ -34,9 +35,8 @@ public class SeatServiceImpl implements SeatService {
     @Transactional
     public List<SeatResponse> getSeatsByFlight(Long flightId) {
         // First, check if seats already exist for this flight
-        Flight flight = flightRepository.findById(flightId)
-                .orElseThrow(() -> new RuntimeException("Flight not found with id: " + flightId));
-
+        Flight flight = new Flight();
+        flight.setFlightId(flightId);
         List<Seat> seats = seatRepository.findByFlight(flight);
 
         // Lazy seat generation
@@ -72,27 +72,6 @@ public class SeatServiceImpl implements SeatService {
         return seats.stream()
                 .map(seatMapper::toResponseDTO)
                 .toList();
-    }
-
-    /**
-     * Gets all seats for a given flight and travel class.
-     * <p>
-     * This method is used to get all seats for a given flight and travel class.
-     * <p>
-     * @param flightId   the ID of the flight
-     * @param travelClassId   the ID of the travel class
-     * @return  a list of {@link SeatResponse} objects
-     */
-    @Override
-    @Transactional
-    public List<SeatResponse> getSeatsByFlightAndTravelClass(Long flightId, Long travelClassId) {
-        // Get all seats for the given flight
-        List<Seat> seats = seatRepository.findByFlightIdAndTravelClassId(flightId, travelClassId);
-
-        // Map the list of seats to a list of SeatResponse objects
-        return seats.stream()
-                .map(seatMapper::toResponseDTO)
-                .collect(Collectors.toList());
     }
 
     @Override

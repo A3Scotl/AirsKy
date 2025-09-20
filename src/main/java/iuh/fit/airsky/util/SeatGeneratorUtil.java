@@ -38,62 +38,52 @@ public class SeatGeneratorUtil {
 
         int row = 1;
         int totalSeats = Optional.ofNullable(flight.getAvailableSeats()).orElse(seatsPerRow * 30); // default 30 row
+        int businessSeats = 0;
+        int economySeats = 0;
 
-        // chia theo tỷ lệ
-        int businessSeats = (int) (totalSeats * 0.2);
-        int standardSeats = (int) (totalSeats * 0.3);
-        int economySeats = totalSeats - businessSeats - standardSeats;
+        // phân loại Business / Economy
+        for (TravelClass tc : travelClasses) {
+            if ("Business".equalsIgnoreCase(tc.getClassName())) {
+                businessSeats = (int) (totalSeats * 0.2); // 20% Business
+            } else {
+                economySeats = totalSeats - businessSeats;
+            }
+        }
 
-        // lấy TravelClass
+        // tạo Business
         TravelClass businessClass = travelClasses.stream()
                 .filter(tc -> "Business".equalsIgnoreCase(tc.getClassName()))
                 .findFirst().orElse(null);
 
-        TravelClass standardClass = travelClasses.stream()
-                .filter(tc -> "Standard".equalsIgnoreCase(tc.getClassName()))
-                .findFirst().orElse(null);
-
-        TravelClass economyClass = travelClasses.stream()
-                .filter(tc -> "Economy".equalsIgnoreCase(tc.getClassName()))
-                .findFirst().orElse(null);
-
-        // tạo ghế Business
         for (int i = 0; i < businessSeats; i++) {
-            if (i % seatsPerRow == 0 && i != 0) row++;
             String seatNumber = row + String.valueOf(seatLetters[i % seatsPerRow]);
-            seats.add(Seat.builder()
+            if (i % seatsPerRow == 0 && i != 0) row++;
+            Seat seat = Seat.builder()
                     .seatNumber(seatNumber)
                     .flight(flight)
                     .travelClass(businessClass)
                     .status(SeatStatus.AVAILABLE)
-                    .build());
+                    .build();
+            seats.add(seat);
         }
 
-        // tạo ghế Standard
-        for (int i = 0; i < standardSeats; i++) {
-            if (i % seatsPerRow == 0 && i != 0) row++;
-            String seatNumber = row + String.valueOf(seatLetters[i % seatsPerRow]);
-            seats.add(Seat.builder()
-                    .seatNumber(seatNumber)
-                    .flight(flight)
-                    .travelClass(standardClass)
-                    .status(SeatStatus.AVAILABLE)
-                    .build());
-        }
+        // tạo Economy
+        TravelClass economyClass = travelClasses.stream()
+                .filter(tc -> "Economy".equalsIgnoreCase(tc.getClassName()))
+                .findFirst().orElse(null);
 
-        // tạo ghế Economy
         for (int i = 0; i < economySeats; i++) {
-            if (i % seatsPerRow == 0 && i != 0) row++;
             String seatNumber = row + String.valueOf(seatLetters[i % seatsPerRow]);
-            seats.add(Seat.builder()
+            if (i % seatsPerRow == 0 && i != 0) row++;
+            Seat seat = Seat.builder()
                     .seatNumber(seatNumber)
                     .flight(flight)
                     .travelClass(economyClass)
                     .status(SeatStatus.AVAILABLE)
-                    .build());
+                    .build();
+            seats.add(seat);
         }
 
         return seats;
     }
-
 }

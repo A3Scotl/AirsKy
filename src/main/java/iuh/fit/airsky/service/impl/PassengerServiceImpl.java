@@ -1,7 +1,6 @@
 package iuh.fit.airsky.service.impl;
 
 import iuh.fit.airsky.dto.request.PassengerRequest;
-import iuh.fit.airsky.dto.request.PassengerSeatRequest;
 import iuh.fit.airsky.dto.response.PassengerResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.dto.response.PassengerSeatResponse;
@@ -35,7 +34,7 @@ public class PassengerServiceImpl implements PassengerService {
     }
 
     @Override
-    public PassengerResponse createPassenger(PassengerSeatRequest request) {
+    public PassengerResponse createPassenger(PassengerRequest request) {
         log.info("Creating new passenger for booking ID: {}", request.getBookingId());
         Passenger passenger = passengerMapper.toEntity(request);
         passenger.setBooking(bookingRepository.findById(request.getBookingId())
@@ -46,7 +45,7 @@ public class PassengerServiceImpl implements PassengerService {
     }
 
     @Override
-    public PassengerResponse updatePassenger(Long id, PassengerSeatRequest request) {
+    public PassengerResponse updatePassenger(Long id, PassengerRequest request) {
         log.info("Updating passenger with ID: {}", id);
         Passenger passenger = passengerRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Passenger not found with id " + id));

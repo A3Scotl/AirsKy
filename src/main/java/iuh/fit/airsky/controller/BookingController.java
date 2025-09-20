@@ -25,7 +25,7 @@ public class BookingController {
     private final BookingService bookingService;
 
     @PostMapping
-//    @PreAuthorize("hasRole( 'CUSTOMER')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'BUSINESS')")
     public ResponseEntity<ApiResponse<BookingResponse>> createBooking(@Valid @RequestBody BookingRequest request) {
         try {
             BookingResponse response = bookingService.createBooking(request);
@@ -51,7 +51,7 @@ public class BookingController {
     }
 
     @GetMapping("/{id}")
-//    @PreAuthorize("hasAnyRole('BUSINESS', 'CUSTOMER','ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS', 'CUSTOMER', 'STAFF', 'ADMIN')")
     public ResponseEntity<ApiResponse<BookingResponse>> getBooking(@PathVariable Long id) {
         try {
             return bookingService.findById(id)
@@ -64,7 +64,7 @@ public class BookingController {
     }
 
     @GetMapping
-//    @PreAuthorize("hasAnyRole('CUSTOMER','ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'BUSINESS', 'STAFF')")
     public ResponseEntity<ApiResponse<PageResponse<BookingResponse>>> getAllBookings(Pageable pageable) {
         try {
             PageResponse<BookingResponse> response = bookingService.findAll(pageable);
@@ -76,7 +76,7 @@ public class BookingController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteBooking(@PathVariable Long id) {
         try {
             bookingService.delete(id);

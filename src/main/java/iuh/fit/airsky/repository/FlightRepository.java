@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -103,4 +104,38 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
     long countFlightsAtAirportInTimeRange(@Param("airportId") Long airportId,
                                           @Param("start") LocalDateTime start,
                                           @Param("end") LocalDateTime end);
+
+    // Trả về danh sách chuyến bay xung đột theo máy bay
+    @Query("SELECT f FROM Flight f WHERE f.aircraft.aircraftId = :aircraftId AND ((f.departureTime < :arrivalTime AND f.arrivalTime > :departureTime)) AND (:excludeId = -1 OR f.flightId != :excludeId)")
+    List<Flight> findAircraftConflicts(@Param("aircraftId") Long aircraftId,
+                                       @Param("departureTime") LocalDateTime departureTime,
+                                       @Param("arrivalTime") LocalDateTime arrivalTime,
+                                       @Param("excludeId") Long excludeId);
+
+    // Trả về danh sách chuyến bay xung đột theo cổng
+    @Query("SELECT f FROM Flight f WHERE f.gate.gateId = :gateId AND ((f.departureTime < :arrivalTime AND f.arrivalTime > :departureTime)) AND (:excludeId = -1 OR f.flightId != :excludeId)")
+    List<Flight> findGateConflicts(@Param("gateId") Long gateId,
+                                   @Param("departureTime") LocalDateTime departureTime,
+                                   @Param("arrivalTime") LocalDateTime arrivalTime,
+                                   @Param("excludeId") Long excludeId);
+
+    // Trả về danh sách chuyến bay xung đột tại sân bay khởi hành
+    @Query("SELECT f FROM Flight f WHERE f.departureAirport.airportId = :airportId AND ((f.departureTime < :arrivalTime AND f.arrivalTime > :departureTime)) AND (:excludeId = -1 OR f.flightId != :excludeId)")
+    List<Flight> findDepartureAirportConflicts(@Param("airportId") Long airportId,
+                                               @Param("departureTime") LocalDateTime departureTime,
+                                               @Param("arrivalTime") LocalDateTime arrivalTime,
+                                               @Param("excludeId") Long excludeId);
+
+    // Trả về danh sách chuyến bay xung đột tại sân bay hạ cánh
+    @Query("SELECT f FROM Flight f WHERE f.arrivalAirport.airportId = :airportId AND ((f.departureTime < :arrivalTime AND f.arrivalTime > :departureTime)) AND (:excludeId = -1 OR f.flightId != :excludeId)")
+    List<Flight> findArrivalAirportConflicts(@Param("airportId") Long airportId,
+                                             @Param("departureTime") LocalDateTime departureTime,
+                                             @Param("arrivalTime") LocalDateTime arrivalTime,
+                                             @Param("excludeId") Long excludeId);
+
+    // Lấy giá thấp nhất theo tuyến và ngày (batch query)
+    @Query("SELECT f.departureAirport.airportId, f.arrivalAirport.airportId, DATE(f.departureTime), MIN(tc.customPrice) FROM Flight f JOIN f.flightTravelClasses tc WHERE f.departureAirport.airportId IN :departureAirportIds AND f.arrivalAirport.airportId IN :arrivalAirportIds AND DATE(f.departureTime) IN :dates GROUP BY f.departureAirport.airportId, f.arrivalAirport.airportId, DATE(f.departureTime)")
+    List<Object[]> findMinPriceByRouteAndDates(@Param("departureAirportIds") List<Long> departureAirportIds,
+                                               @Param("arrivalAirportIds") List<Long> arrivalAirportIds,
+                                               @Param("dates") List<java.time.LocalDate> dates);
 }
