@@ -25,7 +25,7 @@ public class BookingController {
     private final BookingService bookingService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'BUSINESS')")
+//    @PreAuthorize("hasAnyRole('CUSTOMER', 'BUSINESS')")
     public ResponseEntity<ApiResponse<BookingResponse>> createBooking(@Valid @RequestBody BookingRequest request) {
         try {
             BookingResponse response = bookingService.createBooking(request);
@@ -64,7 +64,7 @@ public class BookingController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'BUSINESS', 'STAFF')")
+//    @PreAuthorize("hasAnyRole('ADMIN', 'BUSINESS', 'STAFF')")
     public ResponseEntity<ApiResponse<PageResponse<BookingResponse>>> getAllBookings(Pageable pageable) {
         try {
             PageResponse<BookingResponse> response = bookingService.findAll(pageable);

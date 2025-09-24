@@ -7,7 +7,7 @@ import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.BaggageMapper;
 import iuh.fit.airsky.model.Baggage;
 import iuh.fit.airsky.repository.BaggageRepository;
-import iuh.fit.airsky.repository.TicketRepository;
+import iuh.fit.airsky.repository.CheckinRepository;
 import iuh.fit.airsky.service.BaggageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -22,20 +22,20 @@ public class BaggageServiceImpl implements BaggageService {
 
     private final BaggageRepository baggageRepository;
     private final BaggageMapper baggageMapper;
-    private final TicketRepository ticketRepository; // Để map quan hệ ticketId
+    private final CheckinRepository checkinRepository; // Để map quan hệ checkinId
 
-    public BaggageServiceImpl(BaggageRepository baggageRepository, BaggageMapper baggageMapper, TicketRepository ticketRepository) {
+    public BaggageServiceImpl(BaggageRepository baggageRepository, BaggageMapper baggageMapper, CheckinRepository checkinRepository) {
         this.baggageRepository = baggageRepository;
         this.baggageMapper = baggageMapper;
-        this.ticketRepository = ticketRepository;
+        this.checkinRepository = checkinRepository;
     }
 
     @Override
     public BaggageResponse createBaggage(BaggageRequest request) {
-        log.info("Creating new baggage for ticket ID: {}", request.getTicketId());
+        log.info("Creating new baggage for checkin ID: {}", request.getCheckinId());
         Baggage baggage = baggageMapper.toEntity(request);
-        baggage.setTicket(ticketRepository.findById(request.getTicketId())
-                .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with id " + request.getTicketId())));
+        baggage.setCheckIn(checkinRepository.findById(request.getCheckinId())
+                .orElseThrow(() -> new ResourceNotFoundException("Checkin not found with id " + request.getCheckinId())));
         Baggage saved = baggageRepository.save(baggage);
         log.info("Baggage created with ID: {}", saved.getBaggageId());
         return baggageMapper.toResponseDTO(saved);

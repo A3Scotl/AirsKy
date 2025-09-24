@@ -40,5 +40,7 @@ public class Seat extends BaseFullSoftDeleteEntity {
     @JoinColumn(name = "booked_by")
     private Passenger bookedBy;
 
+
+
 }
 

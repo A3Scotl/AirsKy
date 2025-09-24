@@ -11,14 +11,17 @@ import java.util.List;
 @Repository
 public interface ReviewRepository extends JpaRepository<Review, Long> {
 
-    List<Review> findByFlightIdAndIsApprovedTrue(Long flightId);
+    @Query("SELECT r FROM Review r WHERE r.flight.flightId = :flightId AND r.isApproved = true")
+    List<Review> findByFlightIdAndIsApprovedTrue(@Param("flightId") Long flightId);
 
     List<Review> findByUserId(Long userId);
 
-    List<Review> findByBookingId(Long bookingId);
+    @Query("SELECT r FROM Review r WHERE r.booking.bookingId = :bookingId")
+    List<Review> findByBookingId(@Param("bookingId") Long bookingId);
 
-    @Query("SELECT AVG(r.rating) FROM Review r WHERE r.flightId = :flightId AND r.isApproved = true")
+    @Query("SELECT AVG(r.rating) FROM Review r WHERE r.flight.flightId = :flightId AND r.isApproved = true")
     Double findAverageRatingByFlightId(@Param("flightId") Long flightId);
 
-    boolean existsByBookingIdAndUserId(Long bookingId, Long userId);
+    @Query("SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END FROM Review r WHERE r.booking.bookingId = :bookingId AND r.user.id = :userId")
+    boolean existsByBookingIdAndUserId(@Param("bookingId") Long bookingId, @Param("userId") Long userId);
 }

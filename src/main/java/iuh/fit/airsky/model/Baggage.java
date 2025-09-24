@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 @Entity
 @Table(name = "baggage",
         indexes = {
-                @Index(name = "idx_ticket_baggage", columnList = "ticket_id")
+                @Index(name = "idx_checkin_baggage", columnList = "checkin_id")
         })
 @Getter
 @Setter
@@ -23,8 +23,8 @@ public class Baggage {
     private Long baggageId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ticket_id", nullable = false)
-    private Ticket ticket;
+    @JoinColumn(name = "checkin_id")
+    private CheckIn checkIn;
 
     @Column(precision = 5, scale = 2)
     private BigDecimal weight;
@@ -32,4 +32,6 @@ public class Baggage {
     private BaggageType type; // CABIN,CHECK_IN
 
     private Integer allowance;
+
+
 }

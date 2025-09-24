@@ -1,0 +1,67 @@
+*   [33m5db159e[m[33m ([m[1;36mHEAD -> [m[1;32mtest[m[33m)[m Resolve merge conflicts giữa test và kha
+[31m|[m[32m\[m  
+[31m|[m * [33m76d8f59[m[33m ([m[1;31morigin/kha[m[33m)[m config add flight
+[31m|[m * [33m6d0515a[m fix add flight
+[31m|[m *   [33m8e4c8f5[m merge test
+[31m|[m [33m|[m[34m\[m  
+[31m|[m * [34m|[m [33m2c4ed82[m config search flight rountrip flight
+[31m|[m * [34m|[m [33m3c25a78[m[33m ([m[1;31morigin/an[m[33m, [m[1;32man[m[33m)[m add terminal for gate and stopover for flight
+[31m|[m * [34m|[m   [33m318b7d6[m merge
+[31m|[m [35m|[m[36m\[m [34m\[m  
+[31m|[m * [36m|[m [34m|[m [33m26349d2[m fix
+* [36m|[m [36m|[m [34m|[m [33mfad1e93[m WIP: commit tạm trước khi merge kha
+[34m|[m [36m|[m[34m_[m[36m|[m[34m/[m  
+[34m|[m[34m/[m[36m|[m [36m|[m   
+* [36m|[m [36m|[m [33m5d8e83b[m[33m ([m[1;31morigin/test[m[33m)[m fix find seat
+* [36m|[m [36m|[m [33mf8787ef[m added terminal
+* [36m|[m [36m|[m [33mb60ef8a[m fix response classes
+* [36m|[m [36m|[m [33m1753669[m added travelClassController and Stop model
+* [36m|[m [36m|[m   [33mffafddd[m Merge pull request #7 from A3Scotl/kha
+[1;31m|[m[36m\[m [36m\[m [36m\[m  
+[1;31m|[m [36m|[m [36m|[m[36m/[m  
+[1;31m|[m [36m|[m[36m/[m[36m|[m   
+[1;31m|[m * [36m|[m [33ma502cd9[m update api airport, airline and countries with upload image file
+[1;31m|[m * [36m|[m [33m17ccce5[m update upload image for airline, airport
+[1;31m|[m * [36m|[m   [33me496a94[m Merge branch 'test' of https://github.com/A3Scotl/AirsKy into kha
+[1;31m|[m [1;33m|[m[1;31m\[m [36m\[m  
+[1;31m|[m [1;33m|[m[1;31m/[m [36m/[m  
+[1;31m|[m[1;31m/[m[1;33m|[m [36m|[m   
+* [1;33m|[m [36m|[m   [33m28c41cb[m Merge pull request #6 from A3Scotl/an
+[1;35m|[m[1;36m\[m [1;33m\[m [36m\[m  
+[1;35m|[m * [1;33m|[m [36m|[m [33mbb181ec[m update project
+[1;35m|[m * [1;33m|[m [36m|[m [33m64c8870[m feat: update see history blog and deal status
+[1;35m|[m * [1;33m|[m [36m|[m [33m65a7b7d[m feat: add handle crud - api deal and blog
+[1;35m|[m [36m|[m [1;33m|[m[36m/[m  
+[1;35m|[m [36m|[m[36m/[m[1;33m|[m   
+[1;35m|[m * [1;33m|[m   [33mca64adb[m Merge pull request #5 from A3Scotl/kha
+[1;35m|[m [31m|[m[32m\[m [1;33m\[m  
+[1;35m|[m [31m|[m [32m|[m * [33m04eaee0[m feat: update see history blog and deal status
+[1;35m|[m [31m|[m [32m|[m * [33mb276dd2[m feat: add handle crud - api deal and blog
+[1;35m|[m [31m|[m [32m|[m[32m/[m  
+[1;35m|[m [31m|[m * [33m32e3c93[m handle login with google
+[1;35m|[m [31m|[m[1;35m/[m  
+[1;35m|[m[1;35m/[m[31m|[m   
+* [31m|[m [33m090ca8d[m Merge pull request #4 from A3Scotl/an
+[33m|[m[31m\[m[31m|[m 
+[33m|[m * [33m3fecd3c[m fix res booking
+[33m|[m * [33m9ad03ac[m fix booking
+[33m|[m * [33m2636d14[m add table aircraft and country
+[33m|[m * [33m5c4ae70[m fix booking mapper
+[33m|[m * [33m0d7caa1[m fix user role -> CUSTOMER - BUSINESS - ADMIN
+[33m|[m * [33m3318bd6[m update
+[33m|[m * [33mb1f1418[m fix model and create response , request , mapper ,repository
+* [34m|[m [33m3680d7d[m Merge pull request #3 from A3Scotl/an
+[35m|[m[34m\[m[34m|[m 
+[35m|[m * [33mdb89f32[m fix auth
+[35m|[m [36m|[m *   [33maee021d[m[33m ([m[1;31morigin/dev[m[33m, [m[1;31morigin/HEAD[m[33m)[m Merge pull request #2 from A3Scotl/test
+[35m|[m [36m|[m [1;31m|[m[35m\[m  
+[35m|[m [36m|[m[35m_[m[1;31m|[m[35m/[m  
+[35m|[m[35m/[m[36m|[m [1;31m|[m   
+* [36m|[m [1;31m|[m [33m85bc161[m Merge pull request #1 from A3Scotl/an
+[1;31m|[m[36m\[m[36m|[m [1;31m|[m 
+[1;31m|[m [36m|[m[1;31m/[m  
+[1;31m|[m[1;31m/[m[36m|[m   
+[1;31m|[m * [33m3d78d2e[m Done AUTH
+[1;31m|[m * [33mc901f8e[m init model
+[1;31m|[m[1;31m/[m  
+* [33m519afa7[m init project

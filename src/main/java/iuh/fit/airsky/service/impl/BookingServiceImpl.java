@@ -1,5 +1,4 @@
 package iuh.fit.airsky.service.impl;
-
 import iuh.fit.airsky.dto.request.BookingRequest;
 import iuh.fit.airsky.dto.response.BookingResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
@@ -18,6 +17,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -34,6 +34,8 @@ public class BookingServiceImpl implements BookingService {
     private final TravelClassRepository travelClassRepository;
     private final SeatRepository seatRepository;
     private final PaymentRepository paymentRepository;
+    private final CheckinRepository checkinRepository;
+    private final BaggageRepository baggageRepository;
 
     public BookingServiceImpl(
             BookingRepository bookingRepository,
@@ -42,7 +44,9 @@ public class BookingServiceImpl implements BookingService {
             FlightRepository flightRepository,
             TravelClassRepository travelClassRepository,
             SeatRepository seatRepository,
-            PaymentRepository paymentRepository
+            PaymentRepository paymentRepository,
+            CheckinRepository checkinRepository,
+            BaggageRepository baggageRepository
     ) {
         this.bookingRepository = bookingRepository;
         this.bookingMapper = bookingMapper;
@@ -51,6 +55,8 @@ public class BookingServiceImpl implements BookingService {
         this.travelClassRepository = travelClassRepository;
         this.seatRepository = seatRepository;
         this.paymentRepository = paymentRepository;
+        this.checkinRepository = checkinRepository;
+        this.baggageRepository = baggageRepository;
     }
 
     @Transactional
@@ -58,37 +64,45 @@ public class BookingServiceImpl implements BookingService {
         Flight flight = flightRepository.findById(request.getFlightId())
                 .orElseThrow(() -> new ResourceNotFoundException("Flight not found"));
 
-        // Check booking time: must be at least 2 hours before departure
+        // Kiểm tra thời gian đặt vé: phải trước giờ khởi hành ít nhất 2 tiếng
         if (Duration.between(LocalDateTime.now(), flight.getDepartureTime()).toHours() < 2) {
-            throw new IllegalArgumentException("You can only book at least 2 hours before departure");
+            throw new IllegalArgumentException("Bạn chỉ có thể đặt vé trước giờ khởi hành ít nhất 2 tiếng");
         }
 
+        // Kiểm tra số lượng ghế trống
         if (flight.getAvailableSeats() < request.getPassengers().size()) {
-            throw new RuntimeException("Not enough available seats");
+            throw new IllegalStateException("Không đủ ghế trống");
         }
 
         Booking booking = bookingMapper.toEntity(request);
         booking.setUserId(userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found")));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng")));
         booking.setFlight(flight);
         booking.setTravelClass(travelClassRepository.findById(request.getClassId())
-                .orElseThrow(() -> new ResourceNotFoundException("TravelClass not found")));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy TravelClass")));
         booking.setBookingDate(LocalDateTime.now());
         booking.setStatus(BookingStatus.PENDING);
         booking.setHoldTime(LocalDateTime.now());
 
-        if (request.getPassengers() != null && !request.getPassengers().isEmpty()) {
-            List<Passenger> passengers = mapPassengers(request, booking);
-            booking.setPassengers(passengers);
-            updateAvailableSeats(flight, passengers.size());
-        }
+        List<Passenger> passengers = mapPassengers(request, booking);
+        booking.getPassengers().addAll(passengers);
 
-        Booking savedBooking = bookingRepository.saveAndFlush(booking);
+        // Cập nhật số lượng ghế trống và lưu chuyến bay
+        updateAvailableSeats(flight, passengers.size());
 
-        Payment payment = createPayment(request, savedBooking);
-        savedBooking.setPayment(payment);
 
+        Booking savedBooking = bookingRepository.save(booking);
+
+        // Tạo thanh toán
+        Payment payment = createPayment(request, booking);
+        booking.setPayment(payment);
         bookingRepository.save(savedBooking);
+        // Lưu booking
+
+
+        // Tạo CheckIn cho mỗi hành khách
+        passengers.forEach(passenger -> createCheckIn(savedBooking, passenger, request));
+
         return bookingMapper.toResponseDTO(savedBooking);
     }
 
@@ -129,8 +143,24 @@ public class BookingServiceImpl implements BookingService {
         return paymentRepository.saveAndFlush(payment);
     }
 
-    // Scheduled task to cancel expired bookings
+    private void createCheckIn(Booking booking, Passenger passenger, BookingRequest request) {
+        Baggage baggage = new Baggage();
+        baggage.setWeight(request.getBaggageWeight() != null ? BigDecimal.valueOf(request.getBaggageWeight()) : BigDecimal.valueOf(10.0));
+        baggage = baggageRepository.save(baggage);
+
+        CheckIn checkIn = CheckIn.builder()
+                .booking(booking)
+                .passenger(passenger)
+                .baggage(baggage)
+                .build();
+        checkIn = checkinRepository.save(checkIn);
+
+        baggage.setCheckIn(checkIn);
+        baggageRepository.save(baggage);
+    }
+
     @Scheduled(fixedRate = 60000)
+    @Transactional
     public void checkPendingBookings() {
         List<Booking> pendingBookings = bookingRepository.findByStatus(BookingStatus.PENDING);
         for (Booking booking : pendingBookings) {
