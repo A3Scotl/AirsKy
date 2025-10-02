@@ -36,7 +36,7 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
         ssl: true
-#        globally_quoted_identifiers: true
+  #        globally_quoted_identifiers: true
   sql:
     init:
       mode: always
@@ -61,9 +61,6 @@ jwt:
 #verification:
 #  code:
 #    expiration: 300000
-
-
-
 
 cloudinary:
   cloud_name: ${CLOUDINARY_CLOUD_NAME}

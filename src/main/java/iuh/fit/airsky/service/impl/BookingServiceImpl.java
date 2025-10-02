@@ -34,7 +34,7 @@ public class BookingServiceImpl implements BookingService {
     private final TravelClassRepository travelClassRepository;
     private final SeatRepository seatRepository;
     private final PaymentRepository paymentRepository;
-    private final TicketRepository checkInRepository;
+    private final CheckinRepository checkinRepository;
     private final BaggageRepository baggageRepository;
 
     public BookingServiceImpl(
@@ -45,7 +45,7 @@ public class BookingServiceImpl implements BookingService {
             TravelClassRepository travelClassRepository,
             SeatRepository seatRepository,
             PaymentRepository paymentRepository,
-            TicketRepository checkInRepository,
+            CheckinRepository checkinRepository,
             BaggageRepository baggageRepository
     ) {
         this.bookingRepository = bookingRepository;
@@ -55,7 +55,7 @@ public class BookingServiceImpl implements BookingService {
         this.travelClassRepository = travelClassRepository;
         this.seatRepository = seatRepository;
         this.paymentRepository = paymentRepository;
-        this.checkInRepository = checkInRepository;
+        this.checkinRepository = checkinRepository;
         this.baggageRepository = baggageRepository;
     }
 
@@ -153,7 +153,7 @@ public class BookingServiceImpl implements BookingService {
                 .passenger(passenger)
                 .baggage(baggage)
                 .build();
-        checkIn = checkInRepository.save(checkIn);
+        checkIn = checkinRepository.save(checkIn);
 
         baggage.setCheckIn(checkIn);
         baggageRepository.save(baggage);

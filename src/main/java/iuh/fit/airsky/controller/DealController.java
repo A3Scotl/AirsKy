@@ -203,7 +203,7 @@ public class DealController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    // @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<PageResponse<DealResponse>>> getAllDeals(
             @PageableDefault(size = 20) Pageable pageable) {
         PageResponse<DealResponse> response = dealService.findAll(pageable);

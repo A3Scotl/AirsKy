@@ -12,5 +12,6 @@ public interface BaggageMapper {
     @Mapping(target = "checkIn", ignore = true) // Map riêng trong service
     Baggage toEntity(BaggageRequest dto);
 
+    @Mapping(target = "checkinId", source = "checkIn.checkInId")
     BaggageResponse toResponseDTO(Baggage entity);
 }

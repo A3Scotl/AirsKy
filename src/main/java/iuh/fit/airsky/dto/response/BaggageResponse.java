@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 @Data
 public class BaggageResponse {
     private Long baggageId;
-    private Long ticketId;
+    private Long checkinId;
     private BigDecimal weight;
     private BaggageType type;
     private Integer allowance;

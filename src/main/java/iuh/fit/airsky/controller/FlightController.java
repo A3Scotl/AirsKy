@@ -99,7 +99,7 @@ public class FlightController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER', 'STAFF')")
+    // @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<PageResponse<FlightResponse>>> getAllFlights(Pageable pageable) {
         try {
             PageResponse<FlightResponse> response = flightService.findAll(pageable);

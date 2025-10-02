@@ -10,10 +10,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "tickets",
+@Table(name = "checkins",
         indexes = {
-                @Index(name = "idx_booking_ticket", columnList = "booking_id"),
-                @Index(name = "idx_passenger_ticket", columnList = "passenger_id")
+                @Index(name = "idx_booking_checkin", columnList = "booking_id"),
+                @Index(name = "idx_passenger_checkin", columnList = "passenger_id")
         })
 @Getter
 @Setter
@@ -24,7 +24,7 @@ public class CheckIn extends BaseFullSoftDeleteEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long ticketId;
+    private Long checkInId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "booking_id", nullable = false)
