@@ -43,7 +43,7 @@ public class TicketServiceImpl implements TicketService {
         checkIn.setPassenger(passengerRepository.findById(request.getPassengerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Passenger not found with id " + request.getPassengerId())));
         CheckIn saved = ticketRepository.save(checkIn);
-        log.info("Ticket created with ID: {}", saved.getTicketId());
+        log.info("Ticket created with ID: {}", saved.getCheckInId());
         return ticketMapper.toResponseDTO(saved);
     }
 
@@ -56,7 +56,7 @@ public class TicketServiceImpl implements TicketService {
         checkIn.setTicketPrice(request.getTicketPrice());
         checkIn.setCheckedAt(request.getIssueDate());
         CheckIn updated = ticketRepository.save(checkIn);
-        log.info("Ticket updated with ID: {}", updated.getTicketId());
+        log.info("Ticket updated with ID: {}", updated.getCheckInId());
         return ticketMapper.toResponseDTO(updated);
     }
 

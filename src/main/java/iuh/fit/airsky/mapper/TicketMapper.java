@@ -8,7 +8,7 @@ import org.mapstruct.Mapping;
 
 @Mapper(componentModel = "spring")
 public interface TicketMapper {
-    @Mapping(target = "ticketId", ignore = true)
+    @Mapping(target = "checkInId", ignore = true)
     @Mapping(target = "booking", ignore = true)
     @Mapping(target = "passenger", ignore = true)
     CheckIn toEntity(TicketRequest dto);

@@ -2,6 +2,7 @@ package iuh.fit.airsky.model;
 
 import iuh.fit.airsky.base.BaseAuditOnlyEntity;
 import iuh.fit.airsky.enums.BookingStatus;
+import iuh.fit.airsky.util.BookingCodeGenerator;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -46,7 +47,18 @@ public class Booking extends BaseAuditOnlyEntity {
     @Column(precision = 10, scale = 2)
     private BigDecimal totalAmount;
 
+    @Column(name = "booking_code", unique = true, nullable = false, length = 8)
+    private String bookingCode;
+
+    @Enumerated(EnumType.STRING)
     private BookingStatus status;
+    
+    @PrePersist
+    protected void onCreate() {
+        if (this.bookingCode == null) {
+            this.bookingCode = BookingCodeGenerator.generateBookingCode();
+        }
+    }
 
 
     // Thêm danh sách hành khách

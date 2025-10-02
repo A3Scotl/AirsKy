@@ -228,6 +228,11 @@ public class FlightController {
         List<SeatResponse> seats = seatService.getSeatsByFlight(flightId);
         return ApiResponseUtil.buildResponse(true, "Seats retrieved successfully", seats, "/api/v1/flights/" + flightId + "/seats");
     }
+    @GetMapping("/{flightId}/seats/{travelClassId}")
+    public ResponseEntity<ApiResponse<List<SeatResponse>>> getSeatsByFlightIdAndTravelClassId(@PathVariable("flightId") Long flightId, @PathVariable("travelClassId") Long travelClassId) {
+        List<SeatResponse> seats = seatService.getSeatsByFlightIdAndTravelClassId(flightId,travelClassId);
+        return ApiResponseUtil.buildResponse(true, "Seats retrieved successfully", seats, "/api/v1/flights/" + flightId + "/seats/"+travelClassId);
+    }
 
     @GetMapping("/search-oneway")
     public ResponseEntity<ApiResponse<PageResponse<FlightResponse>>> searchOneWayFlights(
