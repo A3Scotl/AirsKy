@@ -5,6 +5,7 @@ import lombok.Data;
 
 @Data
 public class SeatResponse {
+    private Long seatId;
     private String seatNumber;
     private String className;
     private SeatStatus status;

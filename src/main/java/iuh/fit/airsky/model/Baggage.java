@@ -28,10 +28,9 @@ public class Baggage {
 
     @Column(precision = 5, scale = 2)
     private BigDecimal weight;
+
     @Enumerated(EnumType.STRING)
     private BaggageType type; // CABIN,CHECK_IN
 
     private Integer allowance;
-
-
 }

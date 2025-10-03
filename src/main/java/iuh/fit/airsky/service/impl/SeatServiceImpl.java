@@ -94,6 +94,7 @@ public class SeatServiceImpl implements SeatService {
                 .map(seatMapper::toResponseDTO)
                 .toList();
     }
+
     @Override
     @Transactional(readOnly = true)
     public List<SeatResponse> getSeatsByFlightIdAndTravelClassId(Long flightId, Long travelClassId) {

@@ -8,7 +8,10 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface SeatMapper {
 
+    @Mapping(target = "seatId", source = "seatId")
+    @Mapping(target = "seatNumber", source = "seatNumber")
     @Mapping(target = "className", source = "travelClass.className")
+    @Mapping(target = "status", source = "status")
     @Mapping(target = "bookedBy", expression = "java(seat.getBookedBy() != null ? seat.getBookedBy().getFirstName() + \" \" + seat.getBookedBy().getLastName() : null)")
 
     SeatResponse toResponseDTO(Seat seat);

@@ -20,5 +20,5 @@ public class BookingResponse {
     private PaymentResponse payment;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-//    private LocalDateTime holdTime;
+    private List<BaggageResponse> baggage;
 }
