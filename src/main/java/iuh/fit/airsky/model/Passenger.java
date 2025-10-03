@@ -1,5 +1,6 @@
 package iuh.fit.airsky.model;
 
+import iuh.fit.airsky.enums.BaggagePackage;
 import iuh.fit.airsky.enums.PassengerType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -44,4 +45,8 @@ public class Passenger {
     @OneToOne
     @JoinColumn(name = "seat_id")
     private Seat seat;
+
+    // Chỉ lưu tạm thời trong quá trình booking (không map DB)
+    @Transient
+    private BaggagePackage tempBaggagePackage;
 }

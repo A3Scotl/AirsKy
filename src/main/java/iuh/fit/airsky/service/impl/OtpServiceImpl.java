@@ -123,6 +123,6 @@ public class OtpServiceImpl implements OtpService {
         String body = String.format("Your verification code is: %s. It will expire in %d minutes.",
                 code, verificationExpirationMinutes);
 
-        emailService.sendVerificationEmail(email, subject, body);
+        emailService.sendEmail(email, subject, body);
     }
 }

@@ -2,6 +2,7 @@ package iuh.fit.airsky.service.impl;
 import iuh.fit.airsky.dto.request.BookingRequest;
 import iuh.fit.airsky.dto.response.BookingResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
+import iuh.fit.airsky.enums.BaggageType;
 import iuh.fit.airsky.enums.BookingStatus;
 import iuh.fit.airsky.enums.PaymentStatus;
 import iuh.fit.airsky.enums.SeatStatus;
@@ -10,6 +11,7 @@ import iuh.fit.airsky.mapper.BookingMapper;
 import iuh.fit.airsky.model.*;
 import iuh.fit.airsky.repository.*;
 import iuh.fit.airsky.service.BookingService;
+import iuh.fit.airsky.service.EmailService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -36,6 +38,7 @@ public class BookingServiceImpl implements BookingService {
     private final PaymentRepository paymentRepository;
     private final CheckinRepository checkinRepository;
     private final BaggageRepository baggageRepository;
+    private final EmailService emailService;
 
     public BookingServiceImpl(
             BookingRepository bookingRepository,
@@ -46,7 +49,8 @@ public class BookingServiceImpl implements BookingService {
             SeatRepository seatRepository,
             PaymentRepository paymentRepository,
             CheckinRepository checkinRepository,
-            BaggageRepository baggageRepository
+            BaggageRepository baggageRepository,
+            EmailService emailService
     ) {
         this.bookingRepository = bookingRepository;
         this.bookingMapper = bookingMapper;
@@ -57,6 +61,7 @@ public class BookingServiceImpl implements BookingService {
         this.paymentRepository = paymentRepository;
         this.checkinRepository = checkinRepository;
         this.baggageRepository = baggageRepository;
+        this.emailService = emailService;
     }
 
     @Transactional
@@ -102,7 +107,15 @@ public class BookingServiceImpl implements BookingService {
 
         // Tạo CheckIn cho mỗi hành khách
         passengers.forEach(passenger -> createCheckIn(savedBooking, passenger, request));
+        String email = savedBooking.getUserId().getEmail(); // lấy email từ user
+        String subject = "Xác nhận đặt vé thành công";
+        String body = "<h3>Xin chào " + savedBooking.getUserId().getLastName() + "</h3>"
+                + "<p>Bạn đã đặt vé thành công cho chuyến bay: " + flight.getFlightNumber() + "</p>"
+                + "<p>Mã đặt vé: " + savedBooking.getBookingCode() + "</p>"
+                + "<p>Khởi hành: " + flight.getDepartureTime() + "</p>"
+                + "<p>Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.</p>";
 
+        emailService.sendEmail(email, subject, body);
         return bookingMapper.toResponseDTO(savedBooking);
     }
 
@@ -118,15 +131,18 @@ public class BookingServiceImpl implements BookingService {
             if (p.getSeatId() != null) {
                 Seat seat = seatRepository.findById(p.getSeatId())
                         .orElseThrow(() -> new ResourceNotFoundException("Seat not found"));
-                seat.setStatus(SeatStatus.PENDING_PAYMENT); // Hold seat
+                seat.setStatus(SeatStatus.PENDING_PAYMENT);
                 seat.setBookedBy(passenger);
                 passenger.setSeat(seat);
             }
 
+            // ✅ Gắn baggagePackage tạm vào Passenger qua BookingRequest (để xử lý tiếp ở createCheckIn)
             passenger.setBooking(booking);
+            passenger.setTempBaggagePackage(p.getBaggagePackage()); // cần thêm field transient
             return passenger;
         }).toList();
     }
+
 
     private void updateAvailableSeats(Flight flight, int bookedSeats) {
         int newAvailableSeats = flight.getAvailableSeats() - bookedSeats;
@@ -135,29 +151,50 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private Payment createPayment(BookingRequest request, Booking booking) {
+        BigDecimal total = request.getTotalAmount();
+
+        for (Passenger passenger : booking.getPassengers()) {
+            if (passenger.getTempBaggagePackage() != null) {
+                total = total.add(passenger.getTempBaggagePackage().getPrice());
+            }
+        }
+
         Payment payment = new Payment();
         payment.setBooking(booking);
-        payment.setAmount(request.getTotalAmount());
+        payment.setAmount(total);
         payment.setPaymentMethod(request.getPaymentMethod());
         payment.setStatus(PaymentStatus.PENDING);
         return paymentRepository.saveAndFlush(payment);
     }
 
+
     private void createCheckIn(Booking booking, Passenger passenger, BookingRequest request) {
-        Baggage baggage = new Baggage();
-        baggage.setWeight(request.getBaggageWeight() != null ? BigDecimal.valueOf(request.getBaggageWeight()) : BigDecimal.valueOf(10.0));
-        baggage = baggageRepository.save(baggage);
+        Baggage baggage = null;
+
+        if (passenger.getTempBaggagePackage() != null) {
+            baggage = Baggage.builder()
+                    .type(BaggageType.CHECK_IN)
+                    .purchasedPackage(passenger.getTempBaggagePackage())
+                    .packagePrice(passenger.getTempBaggagePackage().getPrice())
+                    .build();
+            baggage = baggageRepository.save(baggage);
+        }
 
         CheckIn checkIn = CheckIn.builder()
                 .booking(booking)
                 .passenger(passenger)
-                .baggage(baggage)
+                .baggage(baggage) // có thể null nếu không chọn
+                .seatNumber(passenger.getSeat().getSeatNumber())
+                .checkedAt(booking.getFlight().getDepartureTime())
                 .build();
         checkIn = checkinRepository.save(checkIn);
 
-        baggage.setCheckIn(checkIn);
-        baggageRepository.save(baggage);
+        if (baggage != null) {
+            baggage.setCheckIn(checkIn);
+            baggageRepository.save(baggage);
+        }
     }
+
 
     @Scheduled(fixedRate = 60000)
     @Transactional

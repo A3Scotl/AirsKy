@@ -49,7 +49,7 @@ public class CheckIn extends BaseFullSoftDeleteEntity {
     private String boardingPassUrl;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "baggage_id", nullable = false)
+    @JoinColumn(name = "baggage_id", nullable = true)
     private Baggage baggage;
 
 }

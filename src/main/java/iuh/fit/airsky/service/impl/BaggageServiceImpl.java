@@ -41,18 +41,18 @@ public class BaggageServiceImpl implements BaggageService {
         return baggageMapper.toResponseDTO(saved);
     }
 
-    @Override
-    public BaggageResponse updateBaggage(Long id, BaggageRequest request) {
-        log.info("Updating baggage with ID: {}", id);
-        Baggage baggage = baggageRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Baggage not found with id " + id));
-        baggage.setWeight(request.getWeight());
-        baggage.setType(request.getType());
-        baggage.setAllowance(request.getAllowance());
-        Baggage updated = baggageRepository.save(baggage);
-        log.info("Baggage updated with ID: {}", updated.getBaggageId());
-        return baggageMapper.toResponseDTO(updated);
-    }
+//    @Override
+//    public BaggageResponse updateBaggage(Long id, BaggageRequest request) {
+//        log.info("Updating baggage with ID: {}", id);
+//        Baggage baggage = baggageRepository.findById(id)
+//                .orElseThrow(() -> new ResourceNotFoundException("Baggage not found with id " + id));
+//        baggage.setWeight(request.getWeight());
+//        baggage.setType(request.getType());
+//        baggage.setAllowance(request.getAllowance());
+//        Baggage updated = baggageRepository.save(baggage);
+//        log.info("Baggage updated with ID: {}", updated.getBaggageId());
+//        return baggageMapper.toResponseDTO(updated);
+//    }
 
     @Override
     public Optional<BaggageResponse> findById(Long id) {

@@ -1,6 +1,7 @@
 package iuh.fit.airsky.model;
 
 import iuh.fit.airsky.enums.BaggageType;
+import iuh.fit.airsky.enums.BaggagePackage;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -26,11 +27,27 @@ public class Baggage {
     @JoinColumn(name = "checkin_id")
     private CheckIn checkIn;
 
-    @Column(precision = 5, scale = 2)
-    private BigDecimal weight;
-
     @Enumerated(EnumType.STRING)
-    private BaggageType type; // CABIN,CHECK_IN
+    private BaggageType type; // CABIN, CHECK_IN
 
-    private Integer allowance;
+    // Predefined package selected at booking time
+    @Enumerated(EnumType.STRING)
+    private BaggagePackage purchasedPackage; // e.g., KG_15, KG_20, ...
+
+    // Fixed price of the selected package at the time of purchase
+    @Column(precision = 12, scale = 2)
+    private BigDecimal packagePrice;
+
+    // Actual measured weight at airport check-in (nullable until check-in)
+    @Column(precision = 5, scale = 2)
+    private BigDecimal actualWeight;
+
+    // Excess information determined during check-in (nullable)
+    @Column(precision = 5, scale = 2)
+    private BigDecimal excessWeight; // max(actualWeight - purchasedPackage.weightKg, 0)
+
+    @Column(precision = 12, scale = 2)
+    private BigDecimal excessFee; // fee charged at airport for excess
+
+
 }
