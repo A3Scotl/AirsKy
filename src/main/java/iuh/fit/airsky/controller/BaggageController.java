@@ -36,19 +36,19 @@ public class BaggageController {
         }
     }
 
-    @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<BaggageResponse>> updateBaggage(@PathVariable Long id, @Valid @RequestBody BaggageRequest request) {
-        try {
-            BaggageResponse response = baggageService.updateBaggage(id, request);
-            return ApiResponseUtil.buildResponse(true, "Baggage updated successfully", response, "/api/v1/baggages/" + id);
-        } catch (ResourceNotFoundException ex) {
-            return ApiResponseUtil.buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), "RESOURCE_NOT_FOUND", "/api/v1/baggages/" + id);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Update failed", ex.getMessage(), "/api/v1/baggages/" + id);
-        }
-    }
+//    @PutMapping("/{id}")
+//    @PreAuthorize("hasRole('ADMIN')")
+//    public ResponseEntity<ApiResponse<BaggageResponse>> updateBaggage(@PathVariable Long id, @Valid @RequestBody BaggageRequest request) {
+//        try {
+//            BaggageResponse response = baggageService.updateBaggage(id, request);
+//            return ApiResponseUtil.buildResponse(true, "Baggage updated successfully", response, "/api/v1/baggages/" + id);
+//        } catch (ResourceNotFoundException ex) {
+//            return ApiResponseUtil.buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), "RESOURCE_NOT_FOUND", "/api/v1/baggages/" + id);
+//        } catch (Exception ex) {
+//            ex.printStackTrace();
+//            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Update failed", ex.getMessage(), "/api/v1/baggages/" + id);
+//        }
+//    }
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<BaggageResponse>> getBaggage(@PathVariable Long id) {

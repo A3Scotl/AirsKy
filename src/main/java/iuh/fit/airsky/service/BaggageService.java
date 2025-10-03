@@ -9,7 +9,7 @@ import java.util.Optional;
 
 public interface BaggageService {
     BaggageResponse createBaggage(BaggageRequest request);
-    BaggageResponse updateBaggage(Long id, BaggageRequest request);
+//    BaggageResponse updateBaggage(Long id, BaggageRequest request);
     Optional<BaggageResponse> findById(Long id);
     PageResponse<BaggageResponse> findAll(Pageable pageable);
     void delete(Long id);

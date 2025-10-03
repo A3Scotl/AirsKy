@@ -48,7 +48,7 @@ public class FlightController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
+//    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
     public ResponseEntity<ApiResponse<FlightResponse>> createFlight(@Valid @RequestBody FlightRequest request) {
         try {
             FlightResponse response = flightService.createFlight(request);

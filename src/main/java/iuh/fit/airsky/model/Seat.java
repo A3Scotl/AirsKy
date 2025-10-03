@@ -2,6 +2,7 @@ package iuh.fit.airsky.model;
 
 import iuh.fit.airsky.base.BaseFullSoftDeleteEntity;
 import iuh.fit.airsky.enums.SeatStatus;
+import iuh.fit.airsky.enums.SeatTypes;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -35,6 +36,10 @@ public class Seat extends BaseFullSoftDeleteEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 10)
     private SeatStatus status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", length = 10)
+    private SeatTypes type;
 
     @ManyToOne
     @JoinColumn(name = "booked_by")

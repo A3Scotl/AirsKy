@@ -1,5 +1,6 @@
 package iuh.fit.airsky.dto.response;
 
+import iuh.fit.airsky.enums.BaggagePackage;
 import iuh.fit.airsky.enums.BaggageType;
 import lombok.Data;
 import java.math.BigDecimal;
@@ -8,7 +9,10 @@ import java.math.BigDecimal;
 public class BaggageResponse {
     private Long baggageId;
     private Long checkinId;
-    private BigDecimal weight;
     private BaggageType type;
-    private Integer allowance;
+    private BaggagePackage purchasedPackage;
+    private BigDecimal packagePrice;
+    private BigDecimal actualWeight;
+    private BigDecimal excessWeight;
+    private BigDecimal excessFee;
 }

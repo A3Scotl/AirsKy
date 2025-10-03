@@ -5,6 +5,8 @@ import iuh.fit.airsky.model.Flight;
 import iuh.fit.airsky.model.Seat;
 import iuh.fit.airsky.model.TravelClass;
 import iuh.fit.airsky.enums.SeatStatus;
+import iuh.fit.airsky.enums.SeatTypes;
+import java.util.Random;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,8 +22,36 @@ public class SeatGeneratorUtil {
      * @param travelClasses danh sách hạng ghế
      * @return danh sách Seat đã tạo
      */
+    private static SeatTypes determineSeatType(String className, int row, int totalRows, int seatIndex, int totalSeatsInRow) {
+        Random random = new Random();
+        // Tỷ lệ phần trăm cho mỗi loại ghế
+        double standardChance = 0.7; // 70% cơ hội là ghế tiêu chuẩn
+        double specialChance = 0.15;  // 15% cơ hội cho mỗi loại đặc biệt
+
+        double randomValue = random.nextDouble();
+        
+        if (randomValue < standardChance) {
+            return SeatTypes.STANDARD;
+        } else if (randomValue < standardChance + specialChance) {
+            // Loại ghế đặc biệt phụ thuộc vào hạng ghế
+            if ("Economy".equalsIgnoreCase(className)) {
+                return random.nextBoolean() ? SeatTypes.EXTRA_LEGROOM : SeatTypes.EXIT_ROW;
+            } else {
+                return random.nextBoolean() ? SeatTypes.FRONT_ROW : SeatTypes.ACCESSIBLE;
+            }
+        } else {
+            // Loại ghế đặc biệt thứ hai
+            if ("Economy".equalsIgnoreCase(className)) {
+                return SeatTypes.EXIT_ROW;
+            } else {
+                return SeatTypes.ACCESSIBLE;
+            }
+        }
+    }
+
     public static List<Seat> generateSeats(Flight flight, Aircraft aircraft, List<TravelClass> travelClasses) {
         List<Seat> seats = new ArrayList<>();
+        Random random = new Random();
 
         // parse layout: "4-3" -> left=4, right=3
         String layout = Optional.ofNullable(aircraft.getSeatLayout()).orElse("3-3");
@@ -75,11 +105,14 @@ public class SeatGeneratorUtil {
         for (int i = 0; i < economySeats; i++) {
             String seatNumber = row + String.valueOf(seatLetters[i % seatsPerRow]);
             if (i % seatsPerRow == 0 && i != 0) row++;
+            SeatTypes seatType = determineSeatType(economyClass.getClassName(), row, totalSeats, i, seatsPerRow);
+                
             Seat seat = Seat.builder()
-                    .seatNumber(seatNumber)
+                    .seatNumber(row + String.valueOf(seatLetters[i]))
                     .flight(flight)
                     .travelClass(economyClass)
                     .status(SeatStatus.AVAILABLE)
+                    .type(seatType)
                     .build();
             seats.add(seat);
         }
