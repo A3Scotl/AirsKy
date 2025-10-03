@@ -27,6 +27,7 @@ public interface BookingMapper {
     @Mapping(target = "flightNumber", expression = "java(entity.getFlight() != null ? entity.getFlight().getFlightNumber() : null)")
     @Mapping(target = "travelClass", expression = "java(entity.getTravelClass() != null ? entity.getTravelClass().getClassName() : null)")
     @Mapping(target = "passengers", source = "passengers")
+    @Mapping(target = "bookingCode", source = "bookingCode")
     BookingResponse toResponseDTO(Booking entity);
 
     List<BookingResponse> toResponseDTOList(List<Booking> bookings);
