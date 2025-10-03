@@ -65,9 +65,8 @@ public class SecurityConfig {
             "/api/v1/export/**",
             "/api/v1/reviews/**",
             "/api/v1/payments/**",
-        "/api/v1/notifications/**",
-
-
+            "/api/v1/notifications/**",
+            "/api/v1/gates/**",
     };
     private static final String[] PERMISION_ROUTES = {
             "/api/v1/auth/change-password",

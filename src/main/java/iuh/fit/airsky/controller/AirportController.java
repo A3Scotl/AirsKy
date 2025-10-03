@@ -69,34 +69,19 @@ public class AirportController {
     @PostMapping(consumes = {"multipart/form-data"})
     @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
     public ResponseEntity<ApiResponse<AirportResponse>> createAirportWithImage(
-            @RequestParam("airportCode") String airportCode,
-            @RequestParam("airportName") String airportName,
-            @RequestParam(value = "cityNames", required = false) List<String> cityNames,
-            @RequestParam(value = "countryId", required = false) Long countryId,
-            @RequestParam(value = "active", required = false, defaultValue = "true") Boolean active,
-            @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail,
-            @RequestParam(value = "thumbnailUrl", required = false) String thumbnailUrl) {
+            @ModelAttribute AirportRequest request,
+            @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail) {
         try {
-            AirportRequest request = new AirportRequest();
-            request.setAirportCode(airportCode);
-            request.setAirportName(airportName);
-            request.setCityNames(cityNames);
-            request.setCountryId(countryId);
-            request.setActive(active);
-
-            // Handle image upload or URL
             if (thumbnail != null && !thumbnail.isEmpty()) {
                 String imageUrl = cloudinaryService.uploadFile(thumbnail);
-                request.setThumbnail(imageUrl);
+                request.setThumbnailUrl(imageUrl); // Gán lại url ảnh upload vào request
                 log.info("Thumbnail uploaded successfully: {}", imageUrl);
-            } else if (thumbnailUrl != null && !thumbnailUrl.trim().isEmpty()) {
-                request.setThumbnail(thumbnailUrl);
             }
-
-            if (airportCode == null || airportCode.trim().isEmpty()) {
+            // Validate các trường cần thiết
+            if (request.getAirportCode() == null || request.getAirportCode().trim().isEmpty()) {
                 return ApiResponseUtil.buildResponse(false, "Mã sân bay không được để trống", null, "/api/v1/airports/upload");
             }
-            if (airportName == null || airportName.trim().isEmpty()) {
+            if (request.getAirportName() == null || request.getAirportName().trim().isEmpty()) {
                 return ApiResponseUtil.buildResponse(false, "Tên sân bay không được để trống", null, "/api/v1/airports/upload");
             }
 
@@ -112,37 +97,24 @@ public class AirportController {
     @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
     public ResponseEntity<ApiResponse<AirportResponse>> updateAirportWithImage(
             @PathVariable Long id,
-            @RequestParam("airportCode") String airportCode,
-            @RequestParam("airportName") String airportName,
-            @RequestParam(value = "cityNames", required = false) List<String> cityNames,
-            @RequestParam(value = "countryId", required = false) Long countryId,
-            @RequestParam(value = "active", required = false, defaultValue = "true") Boolean active,
-            @RequestParam(value = "existingThumbnail", required = false) String existingThumbnail,
+            @ModelAttribute AirportRequest request,
             @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail,
-            @RequestParam(value = "thumbnailUrl", required = false) String thumbnailUrl) {
+            @RequestParam(value = "existingThumbnail", required = false) String existingThumbnail) {
         try {
-            AirportRequest request = new AirportRequest();
-            request.setAirportCode(airportCode);
-            request.setAirportName(airportName);
-            request.setCityNames(cityNames);
-            request.setCountryId(countryId);
-            request.setActive(active);
-
-            // Handle image upload or URL
+            // Xử lý ảnh: nếu upload file thì set lại thumbnailUrl, nếu không thì giữ nguyên thumbnailUrl hoặc lấy existingThumbnail
             if (thumbnail != null && !thumbnail.isEmpty()) {
                 String imageUrl = cloudinaryService.uploadFile(thumbnail);
-                request.setThumbnail(imageUrl);
+                request.setThumbnailUrl(imageUrl);
                 log.info("Thumbnail uploaded successfully: {}", imageUrl);
-            } else if (thumbnailUrl != null && !thumbnailUrl.trim().isEmpty()) {
-                request.setThumbnail(thumbnailUrl);
-            } else if (existingThumbnail != null && !existingThumbnail.trim().isEmpty()) {
-                request.setThumbnail(existingThumbnail);
+            } else if ((request.getThumbnailUrl() == null || request.getThumbnailUrl().trim().isEmpty())
+                    && existingThumbnail != null && !existingThumbnail.trim().isEmpty()) {
+                request.setThumbnailUrl(existingThumbnail);
             }
-
-            if (airportCode == null || airportCode.trim().isEmpty()) {
+            // Validate các trường cần thiết
+            if (request.getAirportCode() == null || request.getAirportCode().trim().isEmpty()) {
                 return ApiResponseUtil.buildResponse(false, "Mã sân bay không được để trống", null, "/api/v1/airports/" + id + "/upload");
             }
-            if (airportName == null || airportName.trim().isEmpty()) {
+            if (request.getAirportName() == null || request.getAirportName().trim().isEmpty()) {
                 return ApiResponseUtil.buildResponse(false, "Tên sân bay không được để trống", null, "/api/v1/airports/" + id + "/upload");
             }
 

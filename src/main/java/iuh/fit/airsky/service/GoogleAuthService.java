@@ -5,6 +5,7 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import iuh.fit.airsky.dto.response.AuthResponse;
+import iuh.fit.airsky.enums.AuthProvider;
 import iuh.fit.airsky.enums.Role;
 import iuh.fit.airsky.exception.GoogleAuthException;
 import iuh.fit.airsky.exception.InvalidTokenException;
@@ -41,7 +42,7 @@ public class GoogleAuthService {
             Boolean emailVerified = payload.getEmailVerified();
 
             // Find or create user
-            User user = findOrCreateGoogleUser(email, firstName, lastName, emailVerified);
+            User user = findOrCreateGoogleUser(email, firstName, lastName, emailVerified, payload);
 
             // Check if user is active
             if (!user.isActive()) {
@@ -75,15 +76,18 @@ public class GoogleAuthService {
         return idToken.getPayload();
     }
 
-    private User findOrCreateGoogleUser(String email, String firstName, String lastName, Boolean emailVerified) {
+    private User findOrCreateGoogleUser(String email, String firstName, String lastName, Boolean emailVerified, GoogleIdToken.Payload payload) {
         return userService.findByEmail(email)
-                .orElseGet(() -> createGoogleUser(email, firstName, lastName, emailVerified));
+                .orElseGet(() -> createGoogleUser(email, firstName, lastName, emailVerified, payload));
     }
 
-    private User createGoogleUser(String email, String firstName, String lastName, Boolean emailVerified) {
+    private User createGoogleUser(String email, String firstName, String lastName, Boolean emailVerified, GoogleIdToken.Payload payload) {
         // Tạo password phức tạp tuân thủ validation rules (uppercase, lowercase, digit, special char, min 8 chars)
         String securePassword = "GoogleAuth@" + System.currentTimeMillis();
-        
+
+        // Get avatar from Google profile
+        String avatarUrl = (String) payload.get("picture");
+
         User newUser = User.builder()
                 .email(email)
                 .firstName(firstName)
@@ -91,6 +95,8 @@ public class GoogleAuthService {
                 .password(passwordEncoder.encode(securePassword)) // Password tuân thủ validation rules
                 .isVerified(emailVerified != null ? emailVerified : true)
                 .role(Role.CUSTOMER)
+                .authProvider(AuthProvider.GOOGLE)
+                .avatar(avatarUrl)
                 .active(true)
                 .deleted(false)
                 .build();

@@ -1,5 +1,6 @@
 package iuh.fit.airsky.dto.response;
 
+import iuh.fit.airsky.enums.AuthProvider;
 import iuh.fit.airsky.enums.LoyaltyTier;
 import iuh.fit.airsky.enums.Role;
 import lombok.Data;
@@ -27,4 +28,5 @@ public class UserResponse {
     private LocalDate passportExpiry;
     private Integer loyaltyPoints;
     private LoyaltyTier loyaltyTier;
+    private AuthProvider authProvider;
 }

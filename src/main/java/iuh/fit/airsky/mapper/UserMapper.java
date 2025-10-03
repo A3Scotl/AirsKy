@@ -20,6 +20,7 @@ public interface UserMapper {
     @Mapping(target = "businessName", ignore = true)
     @Mapping(target = "isVerified", ignore = true)
     @Mapping(target = "lastLogin", ignore = true)
+    @Mapping(target = "authProvider", ignore = true) // Không cho phép update từ request
     User toEntity(UserRequest dto);
 
     UserResponse toResponseDTO(User entity);

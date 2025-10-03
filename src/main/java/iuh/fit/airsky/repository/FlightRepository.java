@@ -138,4 +138,18 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
     List<Object[]> findMinPriceByRouteAndDates(@Param("departureAirportIds") List<Long> departureAirportIds,
                                                @Param("arrivalAirportIds") List<Long> arrivalAirportIds,
                                                @Param("dates") List<java.time.LocalDate> dates);
+
+    // Lấy các cặp chuyến bay khứ hồi theo groupId, ngày đi/về và giá từng chiều
+    @Query("SELECT f1.roundTripGroupId, DATE(f1.departureTime), DATE(f2.departureTime), MIN(tc1.customPrice), MIN(tc2.customPrice) " +
+            "FROM Flight f1 JOIN Flight f2 ON f1.roundTripGroupId = f2.roundTripGroupId " +
+            "AND f1.tripType = 'ROUND_TRIP' AND f2.tripType = 'ROUND_TRIP' " +
+            "AND f1.departureAirport.airportId = :depAirportId AND f1.arrivalAirport.airportId = :arrAirportId " +
+            "AND f2.departureAirport.airportId = :arrAirportId AND f2.arrivalAirport.airportId = :depAirportId " +
+            "AND DATE(f1.departureTime) IN :outboundDates AND DATE(f2.departureTime) IN :returnDates " +
+            "JOIN f1.flightTravelClasses tc1 JOIN f2.flightTravelClasses tc2 " +
+            "GROUP BY f1.roundTripGroupId, DATE(f1.departureTime), DATE(f2.departureTime)")
+    List<Object[]> findRoundTripMinPrices(@Param("depAirportId") Long depAirportId,
+                                          @Param("arrAirportId") Long arrAirportId,
+                                          @Param("outboundDates") List<java.time.LocalDate> outboundDates,
+                                          @Param("returnDates") List<java.time.LocalDate> returnDates);
 }

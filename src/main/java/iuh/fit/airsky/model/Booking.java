@@ -48,7 +48,6 @@ public class Booking extends BaseAuditOnlyEntity {
 
     private BookingStatus status;
 
-
     // Thêm danh sách hành khách
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Passenger> passengers = new ArrayList<>();

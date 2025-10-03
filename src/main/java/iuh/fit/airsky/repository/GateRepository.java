@@ -28,4 +28,9 @@ public interface GateRepository extends JpaRepository<Gate, Long> {
     void softDeleteById(Long id, LocalDateTime now);
 
     List<Gate> findAllByAirport_AirportId(Long airportAirportId);
+
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM Gate g WHERE g.airport.airportId = :airportId")
+    void deleteAllByAirportId(Long airportId);
 }

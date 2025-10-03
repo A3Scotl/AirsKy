@@ -1,6 +1,7 @@
 package iuh.fit.airsky.model;
 
 import iuh.fit.airsky.base.BaseFullSoftDeleteEntity;
+import iuh.fit.airsky.enums.AuthProvider;
 import iuh.fit.airsky.enums.LoyaltyTier;
 import iuh.fit.airsky.enums.Role;
 import jakarta.persistence.*;
@@ -51,9 +52,10 @@ public class User  extends BaseFullSoftDeleteEntity implements UserDetails {
     private LoyaltyTier loyaltyTier;
 
     @Enumerated(EnumType.STRING)
-    private Role role;
+    private AuthProvider authProvider;
 
-    // UserDetails implementation
+    @Enumerated(EnumType.STRING)
+    private Role role;
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority(role.name()));

@@ -2,25 +2,46 @@ package iuh.fit.airsky.controller;
 
 import iuh.fit.airsky.dto.request.UserRequest;
 import iuh.fit.airsky.dto.response.ApiResponse;
+import iuh.fit.airsky.dto.response.BookingResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.dto.response.UserResponse;
+import iuh.fit.airsky.repository.UserRepository;
+import iuh.fit.airsky.service.CloudinaryService;
 import iuh.fit.airsky.service.UserService;
 import iuh.fit.airsky.util.ApiResponseUtil;
+import jakarta.validation.Valid;
+import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
+@Slf4j
 public class UserController {
 
     private final UserService userService;
+    private final CloudinaryService cloudinaryService;
+    private final UserRepository userRepository;
+
+    @InitBinder
+    public void initBinder(WebDataBinder binder) {
+        binder.setDisallowedFields("avatar"); // Ignore avatar file binding to UserRequest
+    }
 
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
@@ -43,13 +64,74 @@ public class UserController {
         }
     }
 
-    @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','CUSTOMER')")
-    public ResponseEntity<ApiResponse<UserResponse>> updateUser(@PathVariable Long id, @RequestBody UserRequest request) {
-        UserResponse updatedUser = userService.updateUser(id, request);
-        return ApiResponseUtil.buildResponse(true, "User updated successfully", updatedUser, "/api/users/" + id);
-    }
+    @PutMapping(value = "/{id}", consumes = {"multipart/form-data"})
+    @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
+    public ResponseEntity<ApiResponse<UserResponse>> updateUser(
+            @PathVariable Long id,
+            @ModelAttribute @Valid UserRequest request,
+            @RequestParam(value = "avatar", required = false) MultipartFile avatar,
+            @RequestParam(value = "avatarUrl", required = false) String avatarUrl,
+            @RequestParam(value = "existingAvatar", required = false) String existingAvatar) {
 
+        log.info("UpdateUser called with id={}, request={}, avatar present={}, avatarUrl={}, existingAvatar={}",
+                 id, request, avatar != null && !avatar.isEmpty(), avatarUrl, existingAvatar);
+
+        try {
+            if (request == null) {
+                request = new UserRequest(); // Allow partial updates
+            }
+
+            Long currentUserId = getCurrentUserId();
+            log.info("currentUserId={}, hasRole ADMIN={}, id={}", currentUserId, hasRole("ADMIN"), id);
+
+            // Kiểm tra quyền: ADMIN có thể cập nhật bất kỳ user nào, CUSTOMER chỉ cập nhật chính mình
+            if (!hasRole("ADMIN") && !id.equals(currentUserId)) {
+                throw new AccessDeniedException("Customer can only update their own profile");
+            }
+
+            // Kiểm tra nếu CUSTOMER cố cập nhật các trường chỉ dành cho ADMIN
+            if (hasRole("CUSTOMER") && (request.getRole() != null || request.getIsVerified() != null ||
+                    request.getActive() != null || request.getLoyaltyPoints() != null || request.getLoyaltyTier() != null)) {
+                throw new AccessDeniedException("Customer cannot update admin-only fields");
+            }
+
+            // Handle avatar upload or URL
+            String finalAvatarUrl = request.getAvatar(); // Default to existing in request
+            if (avatar != null && !avatar.isEmpty()) {
+                log.info("Attempting to upload avatar file: {}", avatar.getOriginalFilename());
+                try {
+                    finalAvatarUrl = cloudinaryService.uploadFile(avatar);
+                    log.info("Avatar uploaded successfully: {}", finalAvatarUrl);
+                } catch (Exception e) {
+                    log.error("Failed to upload avatar to Cloudinary, using dummy URL", e);
+                    finalAvatarUrl = "https://dummy-avatar-url.com/" + avatar.getOriginalFilename();
+                }
+            } else if (avatarUrl != null && !avatarUrl.trim().isEmpty()) {
+                finalAvatarUrl = avatarUrl;
+                log.info("Using provided avatarUrl: {}", finalAvatarUrl);
+            } else if (existingAvatar != null && !existingAvatar.trim().isEmpty()) {
+                finalAvatarUrl = existingAvatar;
+                log.info("Using existing avatar: {}", finalAvatarUrl);
+            }
+            request.setAvatar(finalAvatarUrl);
+            log.info("Final request avatar: {}", request.getAvatar());
+
+            log.info("Final request to update: {}", request);
+
+            // Gọi service để cập nhật
+            UserResponse updatedUser = userService.updateUser(id, request);
+            return ApiResponseUtil.buildResponse(true, "User updated successfully", updatedUser, "/api/users/" + id);
+
+        } catch (AccessDeniedException e) {
+            return ApiResponseUtil.buildErrorResponse(org.springframework.http.HttpStatus.FORBIDDEN, e.getMessage(), "ACCESS_DENIED", "/api/users/" + id);
+        } catch (ValidationException e) {
+            return ApiResponseUtil.buildErrorResponse(org.springframework.http.HttpStatus.BAD_REQUEST, "Validation failed", e.getMessage(), "/api/users/" + id);
+        } catch (Exception e) {
+            log.error("Error updating user", e);
+            return ApiResponseUtil.buildErrorResponse(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred: " + e.getMessage(), "UNEXPECTED_ERROR", "/api/users/" + id);
+        }
+    }    
+    
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','CUSTOMER')")
     public ResponseEntity<ApiResponse<Void>> softDeleteUser(@PathVariable Long id) {
@@ -62,5 +144,52 @@ public class UserController {
     public ResponseEntity<ApiResponse<Void>> toggleActive(@PathVariable Long id) {
         userService.toggleActive(id);
         return ApiResponseUtil.buildResponse(true, "User active status toggled successfully", null, "/api/users/" + id + "/toggle-active");
+    }
+
+    @GetMapping("/{id}/bookings")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<BookingResponse>>> getBookingsByUserId(@PathVariable Long id) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ADMIN"));
+        String currentUsername = authentication.getName();
+        // Nếu không phải admin, chỉ cho phép lấy booking của chính mình
+        if (!isAdmin) {
+            Optional<UserResponse> userOpt = userService.findById(id);
+            if (userOpt.isEmpty() || !userOpt.get().getEmail().equals(currentUsername)) {
+                throw new AccessDeniedException("You are not authorized to view these bookings.");
+            }
+        }
+        List<BookingResponse> bookings = userService.getBookingsByUserId(id);
+        return ApiResponseUtil.buildResponse(true, "Get bookings by user successful", bookings, "/api/v1/users/" + id + "/bookings");
+    }
+
+    // Helper methods for authorization
+    private Long getCurrentUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            throw new AccessDeniedException("No authentication found");
+        }
+        log.info("getCurrentUserId: auth.getName() = {}", auth.getName());
+        try {
+            Long userId = Long.valueOf(auth.getName());
+            log.info("getCurrentUserId: parsed userId = {}", userId);
+            return userId;
+        } catch (NumberFormatException e) {
+            log.info("getCurrentUserId: auth.getName() is not a number, querying by email");
+            var user = userRepository.findByEmail(auth.getName())
+                .orElseThrow(() -> new AccessDeniedException("User not found with email: " + auth.getName()));
+            log.info("getCurrentUserId: found userId = {} for email = {}", user.getId(), auth.getName());
+            return user.getId();
+        }
+    }
+
+    private boolean hasRole(String role) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null) {
+            return authentication.getAuthorities().stream()
+                    .anyMatch(authority -> authority.getAuthority().equals("ROLE_" + role));
+        }
+        return false;
     }
 }
