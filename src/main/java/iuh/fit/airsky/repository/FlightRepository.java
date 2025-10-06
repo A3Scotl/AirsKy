@@ -152,4 +152,12 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
                                           @Param("arrAirportId") Long arrAirportId,
                                           @Param("outboundDates") List<java.time.LocalDate> outboundDates,
                                           @Param("returnDates") List<java.time.LocalDate> returnDates);
+
+    @Query("SELECT f FROM Flight f WHERE f.departureTime < :departureTime AND f.status != :status")
+    List<Flight> findFlightsByDepartureTimeBeforeAndStatusNot(@Param("departureTime") LocalDateTime departureTime,
+                                                              @Param("status") FlightStatus status);
+
+    @Query("SELECT f FROM Flight f WHERE f.departureTime < :departureTime AND f.status = :status")
+    List<Flight> findFlightsByDepartureTimeBeforeAndStatus(@Param("departureTime") LocalDateTime departureTime,
+                                                           @Param("status") FlightStatus status);
 }

@@ -8,6 +8,7 @@ import iuh.fit.airsky.model.Airport;
 import iuh.fit.airsky.model.Gate;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.Named;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -70,10 +71,13 @@ public interface AirportMapper {
         return airport;
     }
 
-    @Mapping(target = "country", expression = "java(airport.getCountry() != null ? airport.getCountry().getCountryName() : null)")
-    @Mapping(target = "gates", expression = "java(mapGates(airport.getGates()))")
+    @Mapping(target = "country", expression = "java(airport != null && airport.getCountry() != null ? airport.getCountry().getCountryName() : null)")
+    @Mapping(target = "gates", expression = "java(airport != null ? mapGates(airport.getGates()) : null)")
     @Mapping(target = "thumbnail", source = "thumbnail")
     default AirportResponse toResponseDTO(Airport airport) {
+        if (airport == null) {
+            return null;
+        }
         AirportResponse response = new AirportResponse();
         response.setAirportId(airport.getAirportId());
         response.setAirportCode(airport.getAirportCode());
@@ -85,6 +89,13 @@ public interface AirportMapper {
         response.setGates(mapGates(airport.getGates()));
         return response;
     }
+
+    // Airport mapping without gates for booking contexts to avoid lazy loading issues
+    @Mapping(target = "country", expression = "java(airport.getCountry() != null ? airport.getCountry().getCountryName() : null)")
+    @Mapping(target = "gates", ignore = true)
+    @Mapping(target = "thumbnail", source = "thumbnail")
+    @Named("toResponseDTOWithoutGates")
+    AirportResponse toResponseDTOWithoutGates(Airport airport);
 
     default List<AirportResponse> toResponseDTOList(List<Airport> airports) {
         if (airports == null) return null;

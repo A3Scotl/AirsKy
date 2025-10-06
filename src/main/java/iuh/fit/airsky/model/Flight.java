@@ -103,6 +103,7 @@ public class Flight  extends BaseAuditOnlyEntity {
             stops = "NON_STOP";
         } else {
             stops = stopsList.stream()
+                    .filter(stop -> stop.getAirport() != null)
                     .map(stop -> stop.getAirport().getAirportCode())
                     .collect(Collectors.joining(","));
         }

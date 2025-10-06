@@ -13,4 +13,5 @@ public interface BookingService {
     Optional<BookingResponse> findById(Long id);
     PageResponse<BookingResponse> findAll(Pageable pageable);
     void delete(Long id);
+    BookingResponse completeBooking(Long bookingId);
 }

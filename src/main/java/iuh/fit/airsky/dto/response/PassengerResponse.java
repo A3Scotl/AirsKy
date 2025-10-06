@@ -1,5 +1,6 @@
 package iuh.fit.airsky.dto.response;
 
+import iuh.fit.airsky.enums.Gender;
 import iuh.fit.airsky.enums.PassengerType;
 import lombok.Data;
 import java.time.LocalDate;
@@ -13,4 +14,7 @@ public class PassengerResponse {
     private LocalDate dateOfBirth;
     private String passportNumber;
     private PassengerType type;
+    private String email;
+    private String phone;
+    private Gender gender;
 }

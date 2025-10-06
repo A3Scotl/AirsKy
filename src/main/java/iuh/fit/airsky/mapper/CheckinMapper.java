@@ -11,6 +11,10 @@ public interface CheckinMapper {
     @Mapping(target = "checkInId", ignore = true)
     @Mapping(target = "booking", ignore = true)
     @Mapping(target = "passenger", ignore = true)
+    @Mapping(target = "checkedAt", source = "issueDate")
+    @Mapping(target = "checkInType", ignore = true)
+    @Mapping(target = "boardingPassUrl", ignore = true)
+    @Mapping(target = "baggage", ignore = true)
     CheckIn toEntity(CheckinRequest dto);
 
     @Mapping(target = "checkinId", source = "checkInId")

@@ -21,4 +21,14 @@ public class BookingResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<BaggageResponse> baggage;
+    private List<FlightSegmentResponse> flightSegments;
+
+    // Deal information
+    private String appliedDealCode;
+    private BigDecimal discountPercentage;
+    private BigDecimal discountAmount;
+    
+    // Ancillary services
+    private List<BookingAncillaryServiceResponse> ancillaryServices;
+    private BigDecimal ancillaryServicesAmount;
 }

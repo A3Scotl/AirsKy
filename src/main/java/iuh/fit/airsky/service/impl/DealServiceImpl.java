@@ -238,7 +238,6 @@ public class DealServiceImpl implements DealService {
     }
 
     @Override
-    @Transactional
     public DealUsageResponse applyDeal(String dealCode, Long userId, Long bookingId, BigDecimal orderAmount) {
         log.info("Applying deal {} for user {} on booking {}", dealCode, userId, bookingId);
         
@@ -252,22 +251,36 @@ public class DealServiceImpl implements DealService {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking không tồn tại với ID: " + bookingId));
         
+        // Check if this deal has already been applied to this booking
+        if (dealUsageRepository.existsByDealAndBooking(deal, booking)) {
+            throw new IllegalArgumentException("Deal này đã được áp dụng cho booking này");
+        }
+        
         // Check minimum order amount
         if (orderAmount.compareTo(deal.getMinimumOrderAmount()) < 0) {
             throw new IllegalArgumentException("Giá trị đơn hàng tối thiểu: " + deal.getMinimumOrderAmount());
         }
         
+        // Check total usage limit
+        if (deal.getTotalUsageLimit() != null && deal.getTotalUsageLimit() > 0 && 
+            (deal.getUsedCount() != null ? deal.getUsedCount() : 0) >= deal.getTotalUsageLimit()) {
+            throw new IllegalArgumentException("Deal đã hết lượt sử dụng");
+        }
+        
         // Check user usage limit
         long userUsageCount = dealUsageRepository.countByDealAndUser(deal, user);
-        if (userUsageCount >= deal.getUsagePerUser()) {
+        if (deal.getUsagePerUser() != null && userUsageCount >= deal.getUsagePerUser()) {
             throw new IllegalArgumentException("Bạn đã sử dụng hết số lần cho phép với deal này");
         }
         
         // Calculate discount
+        log.info("Calculating discount - Order Amount: {}, Discount Percentage: {}%", orderAmount, deal.getDiscountPercentage());
         BigDecimal discountAmount = orderAmount.multiply(deal.getDiscountPercentage().divide(BigDecimal.valueOf(100)));
+        log.info("Calculated discount amount: {}", discountAmount);
         
         // Apply max discount limit
         if (deal.getMaxDiscountAmount() != null && discountAmount.compareTo(deal.getMaxDiscountAmount()) > 0) {
+            log.info("Applying max discount limit: {} -> {}", discountAmount, deal.getMaxDiscountAmount());
             discountAmount = deal.getMaxDiscountAmount();
         }
         
@@ -325,7 +338,8 @@ public class DealServiceImpl implements DealService {
                 .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại với ID: " + userId));
         
         long userUsageCount = dealUsageRepository.countByDealAndUser(deal, user);
-        return userUsageCount < deal.getUsagePerUser();
+        // Handle null usagePerUser (unlimited usage per user)
+        return deal.getUsagePerUser() == null || userUsageCount < deal.getUsagePerUser();
     }
 
     @Override

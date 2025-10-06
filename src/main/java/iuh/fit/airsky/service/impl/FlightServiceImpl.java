@@ -188,7 +188,7 @@ public class FlightServiceImpl implements FlightService {
         // Validate gate belongs to departure airport
         Gate gate = gateRepository.findById(request.getGateId())
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy cổng"));
-        if (!gate.getAirport().getAirportId().equals(request.getDepartureAirportId())) {
+        if (gate.getAirport() == null || !gate.getAirport().getAirportId().equals(request.getDepartureAirportId())) {
             throw new IllegalArgumentException("Cổng phải thuộc về sân bay khởi hành");
         }
 

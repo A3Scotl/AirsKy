@@ -30,7 +30,7 @@ public class Booking extends BaseAuditOnlyEntity {
     private Long bookingId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = true)
     private User userId;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -63,6 +63,16 @@ public class Booking extends BaseAuditOnlyEntity {
     // Thêm danh sách hành khách
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Passenger> passengers = new ArrayList<>();
+
+    // Thêm danh sách check-ins
+    @Builder.Default
+    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CheckIn> checkIns = new ArrayList<>();
+
+    // Thêm danh sách flight segments
+    @Builder.Default
+    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<FlightSegment> flightSegments = new ArrayList<>();
 
     // Thêm payment
     @OneToOne(mappedBy = "booking", cascade = CascadeType.ALL, fetch = FetchType.LAZY)

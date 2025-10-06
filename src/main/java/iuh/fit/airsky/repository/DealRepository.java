@@ -31,7 +31,7 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
     
     @Query("SELECT d FROM Deal d WHERE d.dealCode = :dealCode AND d.isActive = true " +
            "AND d.validFrom <= :currentTime AND d.validTo >= :currentTime " +
-           "AND d.usedCount < d.totalUsageLimit")
+           "AND (d.totalUsageLimit IS NULL OR d.usedCount < d.totalUsageLimit)")
     Optional<Deal> findValidDealByCode(@Param("dealCode") String dealCode, 
                                       @Param("currentTime") LocalDateTime currentTime);
     

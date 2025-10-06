@@ -42,7 +42,4 @@ public class DealResponse {
     // Thống kê
     private Integer remainingUsage;
     private String status;
-
-    private Integer earnLoyaltyPoints;
-    private Integer redeemLoyaltyPoints;
 }

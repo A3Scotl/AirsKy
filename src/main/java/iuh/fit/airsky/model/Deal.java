@@ -73,7 +73,4 @@ public class Deal extends BaseAuditOnlyEntity {
 
     @Builder.Default
     private Integer usagePerUser = 1;
-
-    private Integer earnLoyaltyPoints;  // Tích điểm thưởng
-    private Integer redeemLoyaltyPoints;  // Đổi điểm thưởng
 }

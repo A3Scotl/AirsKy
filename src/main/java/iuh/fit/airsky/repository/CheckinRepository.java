@@ -1,6 +1,7 @@
 package iuh.fit.airsky.repository;
 
 import iuh.fit.airsky.model.CheckIn;
+import iuh.fit.airsky.model.Passenger;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -25,4 +26,9 @@ public interface CheckinRepository extends JpaRepository<CheckIn, Long> {
     @Transactional
     @Query("UPDATE CheckIn c SET c.deleted = true, c.deletedAt = :now, c.active = false WHERE c.checkInId = :id")
     void softDeleteById(Long id, LocalDateTime now);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE CheckIn c SET c.deleted = true, c.deletedAt = :now, c.active = false WHERE c.passenger = :passenger")
+    void deleteByPassenger(Passenger passenger, LocalDateTime now);
 }
