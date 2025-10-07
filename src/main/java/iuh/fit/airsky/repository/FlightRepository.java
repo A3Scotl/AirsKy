@@ -134,13 +134,13 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
                                              @Param("excludeId") Long excludeId);
 
     // Lấy giá thấp nhất theo tuyến và ngày (batch query)
-    @Query("SELECT f.departureAirport.airportId, f.arrivalAirport.airportId, DATE(f.departureTime), MIN(tc.customPrice) FROM Flight f JOIN f.flightTravelClasses tc WHERE f.departureAirport.airportId IN :departureAirportIds AND f.arrivalAirport.airportId IN :arrivalAirportIds AND DATE(f.departureTime) IN :dates GROUP BY f.departureAirport.airportId, f.arrivalAirport.airportId, DATE(f.departureTime)")
+    @Query("SELECT f.departureAirport.airportId, f.arrivalAirport.airportId, DATE(f.departureTime), MIN(tc.price) FROM Flight f JOIN f.flightTravelClasses tc WHERE f.departureAirport.airportId IN :departureAirportIds AND f.arrivalAirport.airportId IN :arrivalAirportIds AND DATE(f.departureTime) IN :dates GROUP BY f.departureAirport.airportId, f.arrivalAirport.airportId, DATE(f.departureTime)")
     List<Object[]> findMinPriceByRouteAndDates(@Param("departureAirportIds") List<Long> departureAirportIds,
                                                @Param("arrivalAirportIds") List<Long> arrivalAirportIds,
                                                @Param("dates") List<java.time.LocalDate> dates);
 
     // Lấy các cặp chuyến bay khứ hồi theo groupId, ngày đi/về và giá từng chiều
-    @Query("SELECT f1.roundTripGroupId, DATE(f1.departureTime), DATE(f2.departureTime), MIN(tc1.customPrice), MIN(tc2.customPrice) " +
+    @Query("SELECT f1.roundTripGroupId, DATE(f1.departureTime), DATE(f2.departureTime), MIN(tc1.price), MIN(tc2.price) " +
             "FROM Flight f1 JOIN Flight f2 ON f1.roundTripGroupId = f2.roundTripGroupId " +
             "AND f1.tripType = 'ROUND_TRIP' AND f2.tripType = 'ROUND_TRIP' " +
             "AND f1.departureAirport.airportId = :depAirportId AND f1.arrivalAirport.airportId = :arrAirportId " +
@@ -160,4 +160,7 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
     @Query("SELECT f FROM Flight f WHERE f.departureTime < :departureTime AND f.status = :status")
     List<Flight> findFlightsByDepartureTimeBeforeAndStatus(@Param("departureTime") LocalDateTime departureTime,
                                                            @Param("status") FlightStatus status);
+
+    @Query("SELECT f FROM Flight f LEFT JOIN FETCH f.aircraft LEFT JOIN FETCH f.flightTravelClasses ftc LEFT JOIN FETCH ftc.travelClass WHERE f.flightId = :flightId")
+    Optional<Flight> findByIdWithAircraftAndTravelClasses(@Param("flightId") Long flightId);
 }

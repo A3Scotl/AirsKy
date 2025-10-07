@@ -2,6 +2,7 @@ package iuh.fit.airsky.util;
 
 import iuh.fit.airsky.model.Aircraft;
 import iuh.fit.airsky.model.Flight;
+import iuh.fit.airsky.model.FlightTravelClass;
 import iuh.fit.airsky.model.Seat;
 import iuh.fit.airsky.model.TravelClass;
 import iuh.fit.airsky.enums.SeatStatus;
@@ -67,56 +68,92 @@ public class SeatGeneratorUtil {
         }
 
         int row = 1;
-        int totalSeats = Optional.ofNullable(flight.getAvailableSeats()).orElse(seatsPerRow * 30); // default 30 row
-        int businessSeats = 0;
-        int economySeats = 0;
-
-        // phân loại Business / Economy
-        for (TravelClass tc : travelClasses) {
-            if ("Business".equalsIgnoreCase(tc.getClassName())) {
-                businessSeats = (int) (totalSeats * 0.2); // 20% Business
-            } else {
-                economySeats = totalSeats - businessSeats;
+        
+        // Get seat count from FlightTravelClass capacity instead of calculating distribution
+        List<FlightTravelClass> flightTravelClasses = flight.getFlightTravelClasses();
+        if (flightTravelClasses == null || flightTravelClasses.isEmpty()) {
+            throw new IllegalStateException("No flight travel classes found for flight " + flight.getFlightId());
+        }
+        
+        // Find ONLY the 3 standard travel classes by exact name match
+        TravelClass firstClass = travelClasses.stream()
+                .filter(tc -> "First".equals(tc.getClassName()))
+                .findFirst().orElse(null);
+        TravelClass businessClass = travelClasses.stream()
+                .filter(tc -> "Business".equals(tc.getClassName()))
+                .findFirst().orElse(null);
+        TravelClass economyClass = travelClasses.stream()
+                .filter(tc -> "Economy".equals(tc.getClassName()))
+                .findFirst().orElse(null);
+        
+        // Get seat counts from FlightTravelClass capacity
+        int firstSeats = 0, businessSeats = 0, economySeats = 0;
+        for (FlightTravelClass ftc : flightTravelClasses) {
+            String className = ftc.getTravelClass().getClassName();
+            if ("First".equals(className)) {
+                firstSeats = ftc.getCapacity();
+            } else if ("Business".equals(className)) {
+                businessSeats = ftc.getCapacity();
+            } else if ("Economy".equals(className)) {
+                economySeats = ftc.getCapacity();
             }
         }
 
-        // tạo Business
-        TravelClass businessClass = travelClasses.stream()
-                .filter(tc -> "Business".equalsIgnoreCase(tc.getClassName()))
-                .findFirst().orElse(null);
-
-        for (int i = 0; i < businessSeats; i++) {
-            String seatNumber = row + String.valueOf(seatLetters[i % seatsPerRow]);
-            if (i % seatsPerRow == 0 && i != 0) row++;
-            Seat seat = Seat.builder()
-                    .seatNumber(seatNumber)
-                    .flight(flight)
-                    .travelClass(businessClass)
-                    .status(SeatStatus.AVAILABLE)
-                    .build();
-            seats.add(seat);
-        }
-
-        // tạo Economy
-        TravelClass economyClass = travelClasses.stream()
-                .filter(tc -> "Economy".equalsIgnoreCase(tc.getClassName()))
-                .findFirst().orElse(null);
-
-        for (int i = 0; i < economySeats; i++) {
-            String seatNumber = row + String.valueOf(seatLetters[i % seatsPerRow]);
-            if (i % seatsPerRow == 0 && i != 0) row++;
-            SeatTypes seatType = determineSeatType(economyClass.getClassName(), row, totalSeats, i, seatsPerRow);
+        // Generate First Class seats (rows 1-2)
+        if (firstClass != null) {
+            for (int i = 0; i < firstSeats; i++) {
+                String seatNumber = row + String.valueOf(seatLetters[i % seatsPerRow]);
+                if (i % seatsPerRow == 0 && i != 0) row++;
                 
-            Seat seat = Seat.builder()
-                    .seatNumber(row + String.valueOf(seatLetters[i]))
-                    .flight(flight)
-                    .travelClass(economyClass)
-                    .status(SeatStatus.AVAILABLE)
-                    .type(seatType)
-                    .build();
-            seats.add(seat);
+                Seat seat = Seat.builder()
+                        .seatNumber(seatNumber)
+                        .flight(flight)
+                        .travelClass(firstClass)
+                        .status(SeatStatus.AVAILABLE)
+                        .type(SeatTypes.FRONT_ROW)
+                        .build();
+                seats.add(seat);
+            }
         }
 
+        // Generate Business Class seats
+        if (businessClass != null) {
+            for (int i = 0; i < businessSeats; i++) {
+                String seatNumber = row + String.valueOf(seatLetters[i % seatsPerRow]);
+                if (i % seatsPerRow == 0 && i != 0) row++;
+                
+                Seat seat = Seat.builder()
+                        .seatNumber(seatNumber)
+                        .flight(flight)
+                        .travelClass(businessClass)
+                        .status(SeatStatus.AVAILABLE)
+                        .type(SeatTypes.EXTRA_LEGROOM)
+                        .build();
+                seats.add(seat);
+            }
+        }
+
+        // Generate Economy Class seats
+        if (economyClass != null) {
+            for (int i = 0; i < economySeats; i++) {
+                String seatNumber = row + String.valueOf(seatLetters[i % seatsPerRow]);
+                if (i % seatsPerRow == 0 && i != 0) row++;
+                
+                int totalSeats = firstSeats + businessSeats + economySeats;
+                SeatTypes seatType = determineSeatType("Economy", row, totalSeats, i, seatsPerRow);
+                    
+                Seat seat = Seat.builder()
+                        .seatNumber(seatNumber)
+                        .flight(flight)
+                        .travelClass(economyClass)
+                        .status(SeatStatus.AVAILABLE)
+                        .type(seatType)
+                        .build();
+                seats.add(seat);
+            }
+        }
+        
+        System.out.println("Generated seats: First=" + firstSeats + ", Business=" + businessSeats + ", Economy=" + economySeats + ", Total=" + seats.size());
         return seats;
     }
 }

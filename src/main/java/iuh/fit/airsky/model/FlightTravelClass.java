@@ -24,12 +24,15 @@ public class FlightTravelClass extends BaseAuditOnlyEntity {
     private Flight flight;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "class_id", nullable = false)
+    @JoinColumn(name = "travel_class_id", nullable = false)
     private TravelClass travelClass;
 
-    @Column(name = "custom_price", precision = 10, scale = 2)
-    private BigDecimal customPrice; // Giá tùy chỉnh cho hạng vé này trong chuyến bay này
+    @Column(name = "price", precision = 10, scale = 2)
+    private BigDecimal price; // Giá cho hạng vé này trong chuyến bay này
 
-    @Column(name = "available_seats")
-    private Integer availableSeats; // Số ghế còn trống cho hạng vé này
+    @Column(name = "capacity")
+    private Integer capacity; // Tổng số ghế cho hạng vé này
+    
+    @Column(name = "booked_seat")
+    private Integer bookedSeat; // Số ghế đã được đặt
 }

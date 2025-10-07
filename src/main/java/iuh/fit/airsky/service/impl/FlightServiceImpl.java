@@ -43,6 +43,11 @@ import java.util.stream.Collectors;
 public class FlightServiceImpl implements FlightService {
 
     private static final int MIN_BUFFER_TIME_MINUTES = 30;
+    
+    // Standard travel class names
+    private static final String ECONOMY_CLASS = "Economy";
+    private static final String BUSINESS_CLASS = "Business";
+    private static final String FIRST_CLASS = "First";
 
     private final FlightRepository flightRepository;
     private final FlightMapper flightMapper;
@@ -50,29 +55,29 @@ public class FlightServiceImpl implements FlightService {
     private final AirportRepository airportRepository;
     private final GateRepository gateRepository;
     private final GenerateCodeUtil generateCodeUtil;
-    private final SeatService seatService;
     private final AircraftRepository aircraftRepository;
     private final StopRepository stopRepository;
     private final StopMapper stopMapper;
     private final TravelClassRepository travelClassRepository;
+    private final SeatService seatService;
 
     public FlightServiceImpl(FlightRepository flightRepository, FlightMapper flightMapper,
                              AirlineRepository airlineRepository, AirportRepository airportRepository,
                              GateRepository gateRepository, GenerateCodeUtil generateCodeUtil,
-                             SeatService seatService, AircraftRepository aircraftRepository,
+                             AircraftRepository aircraftRepository,
                              StopRepository stopRepository, StopMapper stopMapper,
-                             TravelClassRepository travelClassRepository) {
+                             TravelClassRepository travelClassRepository, SeatService seatService) {
         this.flightRepository = flightRepository;
         this.flightMapper = flightMapper;
         this.airlineRepository = airlineRepository;
         this.airportRepository = airportRepository;
         this.gateRepository = gateRepository;
         this.generateCodeUtil = generateCodeUtil;
-        this.seatService = seatService;
         this.aircraftRepository = aircraftRepository;
         this.stopRepository = stopRepository;
         this.stopMapper = stopMapper;
         this.travelClassRepository = travelClassRepository;
+        this.seatService = seatService;
     }
 
     // Helper methods for schedule validation
@@ -92,8 +97,14 @@ public class FlightServiceImpl implements FlightService {
 
     // Method helper để tính availableSeats tự động
     private Integer calculateAvailableSeats(Flight flight) {
+        if (flight.getAircraft() == null) {
+            log.warn("Aircraft is null for flight, using default capacity");
+            return 180; // Default capacity
+        }
+        
         // Tính tổng ghế từ aircraft
         int totalSeats = flight.getAircraft().getTotalSeats();
+        log.info("Aircraft {} has {} total seats", flight.getAircraft().getAircraftName(), totalSeats);
         
         // Tính ghế đã đặt (giả sử có BookingRepository)
         // int bookedSeats = bookingRepository.countBookedSeatsByFlightId(flight.getFlightId());
@@ -112,43 +123,7 @@ public class FlightServiceImpl implements FlightService {
             throw new IllegalArgumentException("Thời gian khởi hành phải trước thời gian hạ cánh");
         }
 
-        // Validate round-trip: phải có đủ thông tin và hợp lệ
-        if (request.getTripType() == iuh.fit.airsky.enums.TripType.ROUND_TRIP) {
-            if (request.getRoundTripGroupId() == null || request.getRoundTripGroupId().isEmpty()) {
-                throw new IllegalArgumentException("Chuyến bay khứ hồi phải có roundTripGroupId");
-            }
-            if (request.getDepartureAirportId().equals(request.getArrivalAirportId())) {
-                throw new IllegalArgumentException("Sân bay đi và đến phải khác nhau cho chuyến bay khứ hồi");
-            }
-            // Có thể kiểm tra thêm: ngày đi và ngày về phải hợp lý nếu có thông tin chuyến về
-        }
-
-        // Validate multi-city: stopsList phải hợp lệ
-        if (request.getTripType() == iuh.fit.airsky.enums.TripType.MULTI_CITY) {
-            if (request.getStopsList() == null || request.getStopsList().isEmpty()) {
-                throw new IllegalArgumentException("Chuyến bay nhiều chặng phải có ít nhất một điểm dừng");
-            }
-            for (int i = 0; i < request.getStopsList().size(); i++) {
-                var stop = request.getStopsList().get(i);
-                if (stop.getStopOrder() == null || stop.getStopOrder() != i + 1) {
-                    throw new IllegalArgumentException("Thứ tự điểm dừng phải liên tiếp bắt đầu từ 1");
-                }
-                if (i > 0) {
-                    var prev = request.getStopsList().get(i - 1);
-                    if (stop.getAirportId().equals(prev.getAirportId())) {
-                        throw new IllegalArgumentException("Hai điểm dừng liên tiếp không được cùng một sân bay");
-                    }
-                    if (prev.getDepartureTime() != null && stop.getArrivalTime() != null &&
-                        !stop.getArrivalTime().isAfter(prev.getDepartureTime())) {
-                        throw new IllegalArgumentException("Thời gian đến của mỗi điểm dừng phải sau thời gian rời điểm dừng trước đó");
-                    }
-                }
-                if (stop.getArrivalTime() != null && stop.getDepartureTime() != null &&
-                    !stop.getDepartureTime().isAfter(stop.getArrivalTime())) {
-                    throw new IllegalArgumentException("Thời gian rời điểm dừng phải sau thời gian đến");
-                }
-            }
-        }
+                // Basic validation only - support all trip types but keep it simple
 
         // check airline id
         if (!airlineRepository.existsById(request.getAirlineId())) {
@@ -216,31 +191,10 @@ public class FlightServiceImpl implements FlightService {
         flight.setGate(gateRepository.findById(request.getGateId())
                 .orElseThrow(() -> new ResourceNotFoundException("Gate not found with id " + request.getGateId())));
 
-        // Set flight travel classes if provided
-        if (request.getFlightTravelClasses() != null && !request.getFlightTravelClasses().isEmpty()) {
-            List<FlightTravelClass> flightTravelClasses = request.getFlightTravelClasses().stream()
-                .map(ftcRequest -> {
-                    FlightTravelClass ftc = new FlightTravelClass();
-                    ftc.setFlight(flight);
-                    TravelClass travelClass = travelClassRepository.findById(ftcRequest.getClassId())
-                        .orElseThrow(() -> new IllegalArgumentException("Travel class not found with id " + ftcRequest.getClassId()));
-                    ftc.setTravelClass(travelClass);
-                    ftc.setCustomPrice(ftcRequest.getCustomPrice());
-                    ftc.setAvailableSeats(ftcRequest.getAvailableSeats());
-                    return ftc;
-                })
-                .collect(Collectors.toList());
-            flight.setFlightTravelClasses(flightTravelClasses);
-            // Tự động lấy giá thấp nhất trong các customPrice của hạng vé để set basePrice
-            flight.setBasePrice(flightTravelClasses.stream()
-                .map(FlightTravelClass::getCustomPrice)
-                .filter(price -> price != null)
-                .min(BigDecimal::compareTo)
-                .orElse(BigDecimal.ZERO));
-        } else {
-            // Nếu không có hạng vé nào thì basePrice là 0
-            flight.setBasePrice(BigDecimal.ZERO);
-        }
+        // Set base price from request
+        flight.setBasePrice(request.getBasePrice());
+        
+        // Travel classes will be auto-generated by SQL trigger
 
         // Handle stops
         if (request.getStopsList() != null && !request.getStopsList().isEmpty()) {
@@ -281,9 +235,21 @@ public class FlightServiceImpl implements FlightService {
         flight.setDuration((int) Duration.between(request.getDepartureTime(), request.getArrivalTime()).toMinutes());
 
         Flight saved = flightRepository.save(flight);
-        seatService.createSeatsForFlight(saved);
-        log.info("Flight created with ID: {}", saved.getFlightId());
-        return flightMapper.toResponseDTO(saved);
+        
+        // Generate standard travel classes after flight is saved
+        List<FlightTravelClass> flightTravelClasses = generateStandardTravelClasses(saved);
+        saved.setFlightTravelClasses(flightTravelClasses);
+        
+        // Save again with travel classes
+        Flight finalSaved = flightRepository.save(saved);
+        log.info("Flight created with ID: {} - Travel classes auto-generated: {}", 
+                finalSaved.getFlightId(), flightTravelClasses.size());
+        
+        // Generate seats for each travel class after travel classes are saved
+        seatService.createSeatsForFlight(finalSaved);
+        log.info("Seats auto-generated for flight: {}", finalSaved.getFlightId());
+        
+        return flightMapper.toResponseDTO(finalSaved);
     }
 
     @Override
@@ -348,35 +314,10 @@ public class FlightServiceImpl implements FlightService {
         flight.setAircraft(aircraftRepository.findById(request.getAircraftId())
                 .orElseThrow(() -> new ResourceNotFoundException("Aircraft not found with id " + request.getAircraftId())));
 
-        // Update flight travel classes if provided
-        if (request.getFlightTravelClasses() != null) {
-            if (request.getFlightTravelClasses().isEmpty()) {
-                flight.getFlightTravelClasses().clear();
-                // Nếu không còn hạng vé nào thì basePrice là 0
-                flight.setBasePrice(BigDecimal.ZERO);
-            } else {
-                // Clear existing and add new ones
-                flight.getFlightTravelClasses().clear();
-                List<FlightTravelClass> flightTravelClasses = request.getFlightTravelClasses().stream()
-                    .map(ftcRequest -> {
-                        FlightTravelClass ftc = new FlightTravelClass();
-                        ftc.setFlight(flight);
-                        TravelClass travelClass = travelClassRepository.findById(ftcRequest.getClassId())
-                            .orElseThrow(() -> new IllegalArgumentException("Travel class not found with id " + ftcRequest.getClassId()));
-                        ftc.setTravelClass(travelClass);
-                        ftc.setCustomPrice(ftcRequest.getCustomPrice());
-                        ftc.setAvailableSeats(ftcRequest.getAvailableSeats());
-                        return ftc;
-                    })
-                    .collect(Collectors.toList());
-                flight.setFlightTravelClasses(flightTravelClasses);
-                // Tự động lấy giá thấp nhất trong các customPrice của hạng vé để set basePrice
-                flight.setBasePrice(flightTravelClasses.stream()
-                    .map(FlightTravelClass::getCustomPrice)
-                    .filter(price -> price != null)
-                    .min(BigDecimal::compareTo)
-                    .orElse(BigDecimal.ZERO));
-            }
+        // Update base price if provided
+        if (request.getBasePrice() != null) {
+            flight.setBasePrice(request.getBasePrice());
+            // Travel classes will be updated by trigger or manual update
         }
 
         // Update stops
@@ -685,7 +626,7 @@ public class FlightServiceImpl implements FlightService {
                     for (var ftc : flight.getFlightTravelClasses()) {
                         log.debug("FlightId: {}, Class: {}, Seats: {}", flight.getFlightId(),
                                 ftc.getTravelClass() != null ? ftc.getTravelClass().getClassName() : null,
-                                ftc.getAvailableSeats());
+                                ftc.getCapacity());
                     }
                 } else {
                     log.debug("FlightId: {} has no travel classes", flight.getFlightId());
@@ -700,7 +641,7 @@ public class FlightServiceImpl implements FlightService {
                 .anyMatch(ftc ->
                     ftc.getTravelClass().getClassName() != null &&
                     ftc.getTravelClass().getClassName().toLowerCase().contains(travelClass.toLowerCase()) &&
-                    ftc.getAvailableSeats() >= totalPassengers
+                    (ftc.getCapacity() - ftc.getBookedSeat()) >= totalPassengers
                 ))
             .collect(Collectors.toList());
         log.debug("After travel class filter: {}", result.size());
@@ -872,5 +813,66 @@ public class FlightServiceImpl implements FlightService {
             result.put("type", type);
             return result;
         }
+    }
+    
+    /**
+     * Generate standard 3 travel classes for a flight
+     * Economy (1.0x), Business (2.0x), First (3.0x)
+     */
+    private List<FlightTravelClass> generateStandardTravelClasses(Flight flight) {
+        List<FlightTravelClass> flightTravelClasses = new ArrayList<>();
+        
+        // Get ONLY the 3 standard travel classes by name
+        TravelClass economyClass = travelClassRepository.findByClassName(ECONOMY_CLASS)
+            .orElseThrow(() -> new IllegalStateException("Economy travel class not found. Please run setup_standard_travel_classes.sql"));
+        TravelClass businessClass = travelClassRepository.findByClassName(BUSINESS_CLASS)
+            .orElseThrow(() -> new IllegalStateException("Business travel class not found. Please run setup_standard_travel_classes.sql"));
+        TravelClass firstClass = travelClassRepository.findByClassName(FIRST_CLASS)
+            .orElseThrow(() -> new IllegalStateException("First travel class not found. Please run setup_standard_travel_classes.sql"));
+        
+        // Calculate total seats and distribution from AIRCRAFT capacity
+        Integer totalSeats = flight.getAircraft().getTotalSeats();
+        if (totalSeats == null || totalSeats <= 0) {
+            totalSeats = 180; // Default aircraft capacity
+        }
+        log.info("Using aircraft capacity: {} seats for flight travel class distribution", totalSeats);
+        
+        // Seat distribution: First(10%), Business(20%), Economy(70%)
+        int firstSeats = (int) (totalSeats * 0.10);
+        int businessSeats = (int) (totalSeats * 0.20);
+        int economySeats = totalSeats - firstSeats - businessSeats;
+        
+        log.info("Seat distribution for {} total seats: First={}, Business={}, Economy={}", 
+                totalSeats, firstSeats, businessSeats, economySeats);
+        
+        // Create Economy class
+        FlightTravelClass economyFTC = new FlightTravelClass();
+        economyFTC.setFlight(flight);
+        economyFTC.setTravelClass(economyClass);
+        economyFTC.setPrice(flight.getBasePrice().multiply(economyClass.getPriceMultiplier()));
+        economyFTC.setCapacity(economySeats);
+        economyFTC.setBookedSeat(0);
+        flightTravelClasses.add(economyFTC);
+        
+        // Create Business class
+        FlightTravelClass businessFTC = new FlightTravelClass();
+        businessFTC.setFlight(flight);
+        businessFTC.setTravelClass(businessClass);
+        businessFTC.setPrice(flight.getBasePrice().multiply(businessClass.getPriceMultiplier()));
+        businessFTC.setCapacity(businessSeats);
+        businessFTC.setBookedSeat(0);
+        flightTravelClasses.add(businessFTC);
+        
+        // Create First class
+        FlightTravelClass firstFTC = new FlightTravelClass();
+        firstFTC.setFlight(flight);
+        firstFTC.setTravelClass(firstClass);
+        firstFTC.setPrice(flight.getBasePrice().multiply(firstClass.getPriceMultiplier()));
+        firstFTC.setCapacity(firstSeats);
+        firstFTC.setBookedSeat(0);
+        flightTravelClasses.add(firstFTC);
+        
+        log.info("Generated 3 standard travel classes for flight: Economy, Business, First");
+        return flightTravelClasses;
     }
 }

@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 public class FlightTravelClassResponse {
     private Long id;
     private TravelClassResponse travelClass;
-    private BigDecimal customPrice;
-    private Integer availableSeats;
+    private BigDecimal price;
+    private Integer capacity;
+    private Integer bookedSeat;
 }

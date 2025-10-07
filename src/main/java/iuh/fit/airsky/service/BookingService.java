@@ -1,6 +1,7 @@
 package iuh.fit.airsky.service;
 
 import iuh.fit.airsky.dto.request.BookingRequest;
+import iuh.fit.airsky.dto.request.PaymentRequest;
 import iuh.fit.airsky.dto.response.BookingResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import org.springframework.data.domain.Pageable;
@@ -14,4 +15,6 @@ public interface BookingService {
     PageResponse<BookingResponse> findAll(Pageable pageable);
     void delete(Long id);
     BookingResponse completeBooking(Long bookingId);
+    Optional<BookingResponse> findByBookingCodeAndPassengerName(String bookingCode, String fullName);
+    BookingResponse processPaymentForGuestBooking(Long bookingId, PaymentRequest paymentRequest);
 }

@@ -16,7 +16,7 @@ public interface FlightSegmentMapper {
     @Mapping(target = "segmentOrder", source = "segmentOrder")
     @Mapping(target = "flightId", source = "flight.flightId")
     @Mapping(target = "flightNumber", source = "flight.flightNumber")
-    @Mapping(target = "classId", source = "travelClass.classId")
+        @Mapping(target = "classId", source = "travelClass.id")
     @Mapping(target = "className", source = "travelClass.className")
     @Mapping(target = "departureAirport", source = "departureAirport")
     @Mapping(target = "arrivalAirport", source = "arrivalAirport")

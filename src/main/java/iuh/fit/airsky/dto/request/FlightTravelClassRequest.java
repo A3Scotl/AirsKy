@@ -11,9 +11,12 @@ public class FlightTravelClassRequest {
     @NotNull(message = "Travel class ID is required")
     private Long classId;
 
-    @DecimalMin(value = "0.0", inclusive = false, message = "Custom price must be greater than 0")
-    private BigDecimal customPrice;
+    @DecimalMin(value = "0.0", inclusive = false, message = "Price must be greater than 0")
+    private BigDecimal price;
 
-    @Min(value = 0, message = "Available seats cannot be negative")
-    private Integer availableSeats;
+    @Min(value = 0, message = "Capacity cannot be negative")
+    private Integer capacity;
+    
+    @Min(value = 0, message = "Booked seats cannot be negative")
+    private Integer bookedSeat;
 }

@@ -61,17 +61,18 @@ public class Booking extends BaseAuditOnlyEntity {
     }
 
     // Thêm danh sách hành khách
-    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Passenger> passengers = new ArrayList<>();
 
     // Thêm danh sách check-ins
     @Builder.Default
-    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<CheckIn> checkIns = new ArrayList<>();
 
     // Thêm danh sách flight segments
     @Builder.Default
-    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<FlightSegment> flightSegments = new ArrayList<>();
 
     // Thêm payment

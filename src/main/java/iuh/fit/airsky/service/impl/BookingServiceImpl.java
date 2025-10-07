@@ -3,10 +3,12 @@ import iuh.fit.airsky.dto.request.BookingAncillaryServiceRequest;
 import iuh.fit.airsky.dto.request.BookingRequest;
 import iuh.fit.airsky.dto.request.FlightSegmentRequest;
 import iuh.fit.airsky.dto.request.PassengerSeatRequest;
+import iuh.fit.airsky.dto.request.PaymentRequest;
 import iuh.fit.airsky.dto.response.BaggageResponse;
 import iuh.fit.airsky.dto.response.BookingAncillaryServiceResponse;
 import iuh.fit.airsky.dto.response.BookingResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
+import iuh.fit.airsky.dto.response.PassengerSeatResponse;
 import iuh.fit.airsky.enums.BaggageType;
 import iuh.fit.airsky.enums.BaggagePackage;
 import iuh.fit.airsky.enums.BookingStatus;
@@ -23,6 +25,7 @@ import iuh.fit.airsky.service.BookingService;
 import iuh.fit.airsky.service.DealService;
 import iuh.fit.airsky.service.EmailService;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.Hibernate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -320,9 +323,21 @@ public class BookingServiceImpl implements BookingService {
         entityManager.flush();
         entityManager.clear();
         
-        // Reload booking with full details for response (EntityGraph will load checkIns.baggage)
+        // Reload booking with basic details first
         Booking reloadedBooking = bookingRepository.findById(savedBooking.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
+        
+        // Load passengers separately if needed
+        if (reloadedBooking.getPassengers().isEmpty()) {
+            reloadedBooking = bookingRepository.findByIdWithPassengers(savedBooking.getBookingId())
+                    .orElse(reloadedBooking);
+        }
+        
+        // Load check-ins separately if needed
+        if (reloadedBooking.getCheckIns().isEmpty()) {
+            reloadedBooking = bookingRepository.findByIdWithCheckIns(savedBooking.getBookingId())
+                    .orElse(reloadedBooking);
+        }
         
         log.info("Booking {} has {} checkIns", reloadedBooking.getBookingId(), 
                 reloadedBooking.getCheckIns() != null ? reloadedBooking.getCheckIns().size() : 0);
@@ -400,9 +415,36 @@ public class BookingServiceImpl implements BookingService {
         Page<Booking> bookingPage = bookingRepository.findAll(pageable);
         List<BookingResponse> bookingResponses = bookingPage.getContent().stream()
                 .map(booking -> {
-                    BookingResponse response = bookingMapper.toResponseDTO(booking);
-                    populateDealInformation(response, booking);
-                    return response;
+                    try {
+                        BookingResponse response = bookingMapper.toResponseDTO(booking);
+                        populateDealInformation(response, booking);
+                        populateBaggageInformation(response, booking);
+                        populateAncillaryServicesInformation(response, booking);
+                        return response;
+                    } catch (Exception e) {
+                        log.warn("Could not fully populate booking response for booking {}: {}", booking.getBookingId(), e.getMessage());
+                        // Create a minimal response with basic info
+                        BookingResponse response = new BookingResponse();
+                        response.setBookingId(booking.getBookingId());
+                        response.setBookingCode(booking.getBookingCode());
+                        response.setStatus(booking.getStatus());
+                        response.setTotalAmount(booking.getTotalAmount());
+                        response.setBookingDate(booking.getBookingDate());
+                        // Try to populate at least basic passenger info if available
+                        if (booking.getPassengers() != null && !booking.getPassengers().isEmpty()) {
+                            response.setPassengers(booking.getPassengers().stream()
+                                    .map((Passenger p) -> {
+                                        PassengerSeatResponse psr = new PassengerSeatResponse();
+                                        psr.setPassengerId(p.getPassengerId());
+                                        psr.setFirstName(p.getFirstName());
+                                        psr.setLastName(p.getLastName());
+                                        psr.setType(p.getType());
+                                        return psr;
+                                    })
+                                    .collect(java.util.stream.Collectors.toList()));
+                        }
+                        return response;
+                    }
                 })
                 .collect(java.util.stream.Collectors.toList());
 
@@ -599,11 +641,19 @@ public class BookingServiceImpl implements BookingService {
     
     private void populateBaggageInformation(BookingResponse response, Booking booking) {
         List<BaggageResponse> baggageList = new ArrayList<>();
-        
-        if (booking.getCheckIns() != null && !booking.getCheckIns().isEmpty()) {
-            log.info("Populating baggage info for {} checkIns", booking.getCheckIns().size());
-            
-            for (CheckIn checkIn : booking.getCheckIns()) {
+
+        // Check if checkIns are loaded, if not fetch them for baggage population
+        List<CheckIn> checkIns = booking.getCheckIns();
+        if (checkIns == null || !org.hibernate.Hibernate.isInitialized(checkIns)) {
+            log.debug("CheckIns not loaded for booking {}, fetching for baggage population", booking.getBookingId());
+            // Fetch checkIns with baggage information
+            checkIns = checkinRepository.findByBookingIdWithBaggage(booking.getBookingId());
+        }
+
+        if (checkIns != null && !checkIns.isEmpty()) {
+            log.info("Populating baggage info for {} checkIns", checkIns.size());
+
+            for (CheckIn checkIn : checkIns) {
                 if (checkIn.getBaggage() != null) {
                     Baggage baggage = checkIn.getBaggage();
                     BaggageResponse baggageResponse = new BaggageResponse();
@@ -616,12 +666,12 @@ public class BookingServiceImpl implements BookingService {
                     baggageResponse.setExcessWeight(baggage.getExcessWeight());
                     baggageResponse.setExcessFee(baggage.getExcessFee());
                     baggageList.add(baggageResponse);
-                    
+
                     log.info("Added baggage {} for checkIn {}", baggage.getBaggageId(), checkIn.getCheckInId());
                 }
             }
         }
-        
+
         response.setBaggage(baggageList);
         log.info("Set {} baggage items in response", baggageList.size());
     }
@@ -796,8 +846,8 @@ public class BookingServiceImpl implements BookingService {
                     
                     // Set price from database FlightTravelClass, not from request
                     BigDecimal segmentPrice = flight.getFlightTravelClasses().stream()
-                            .filter(ftc -> ftc.getTravelClass().getClassId().equals(segmentRequest.getClassId()))
-                            .map(ftc -> ftc.getCustomPrice() != null ? ftc.getCustomPrice() : flight.getBasePrice())
+                            .filter(ftc -> ftc.getTravelClass().getId().equals(segmentRequest.getClassId()))
+                            .map(ftc -> ftc.getPrice() != null ? ftc.getPrice() : flight.getBasePrice())
                             .findFirst()
                             .orElse(flight.getBasePrice());
                     segment.setPrice(segmentPrice);
@@ -890,6 +940,109 @@ public class BookingServiceImpl implements BookingService {
             log.info("Awarded {} loyalty points ({} base + {} bonus) for completed booking {} to user {}",
                     totalPoints, points, bonusPoints, booking.getBookingId(), user.getEmail());
         }
+    }
+
+    @Override
+    public Optional<BookingResponse> findByBookingCodeAndPassengerName(String bookingCode, String fullName) {
+        log.info("Finding booking by booking code: {} and passenger name: {}", bookingCode, fullName);
+
+        Optional<Booking> bookingOpt = bookingRepository.findByBookingCodeAndPassengerFullName(bookingCode, fullName);
+        if (bookingOpt.isPresent()) {
+            Booking booking = bookingOpt.get();
+            try {
+                BookingResponse response = bookingMapper.toResponseDTO(booking);
+                populateDealInformation(response, booking);
+                try {
+                    populateBaggageInformation(response, booking);
+                } catch (Exception e) {
+                    log.warn("Could not populate baggage information for guest booking lookup: {}", e.getMessage());
+                    // Baggage information is optional for guest booking lookup
+                }
+                populateAncillaryServicesInformation(response, booking);
+                return Optional.of(response);
+            } catch (Exception e) {
+                log.warn("Could not fully populate booking response for lookup {}: {}", bookingCode, e.getMessage());
+                // Create a minimal response for lookup
+                BookingResponse response = new BookingResponse();
+                response.setBookingId(booking.getBookingId());
+                response.setBookingCode(booking.getBookingCode());
+                response.setStatus(booking.getStatus());
+                response.setTotalAmount(booking.getTotalAmount());
+                response.setBookingDate(booking.getBookingDate());
+                if (booking.getPassengers() != null && !booking.getPassengers().isEmpty()) {
+                    response.setPassengers(booking.getPassengers().stream()
+                            .map((Passenger p) -> {
+                                PassengerSeatResponse psr = new PassengerSeatResponse();
+                                psr.setPassengerId(p.getPassengerId());
+                                psr.setFirstName(p.getFirstName());
+                                psr.setLastName(p.getLastName());
+                                psr.setType(p.getType());
+                                return psr;
+                            })
+                            .collect(java.util.stream.Collectors.toList()));
+                }
+                return Optional.of(response);
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    @Override
+    public BookingResponse processPaymentForGuestBooking(Long bookingId, PaymentRequest paymentRequest) {
+        log.info("Processing payment for guest booking: {}", bookingId);
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy booking với id: " + bookingId));
+
+        // Validate booking status - only allow payment for PENDING bookings
+        if (booking.getStatus() != BookingStatus.PENDING) {
+            throw new IllegalStateException("Chỉ có thể thanh toán booking ở trạng thái PENDING");
+        }
+
+        // Create or update payment
+        Payment payment;
+        if (booking.getPayment() != null) {
+            payment = booking.getPayment();
+            payment.setAmount(paymentRequest.getAmount());
+            payment.setPaymentMethod(paymentRequest.getPaymentMethod());
+            payment.setStatus(paymentRequest.getStatus());
+            payment.setPaymentDate(paymentRequest.getPaymentDate());
+        } else {
+            payment = new Payment();
+            payment.setBooking(booking);
+            payment.setAmount(paymentRequest.getAmount());
+            payment.setPaymentMethod(paymentRequest.getPaymentMethod());
+            payment.setStatus(paymentRequest.getStatus());
+            payment.setPaymentDate(paymentRequest.getPaymentDate());
+            booking.setPayment(payment);
+        }
+
+        // If payment is successful, update booking status
+        if (paymentRequest.getStatus() == PaymentStatus.SUCCESS) {
+            booking.setStatus(BookingStatus.CONFIRMED);
+
+            // Update seat status to BOOKED
+            for (Passenger passenger : booking.getPassengers()) {
+                if (passenger.getSeat() != null) {
+                    passenger.getSeat().setStatus(SeatStatus.BOOKED);
+                    seatRepository.save(passenger.getSeat());
+                }
+            }
+
+            log.info("Booking {} confirmed and seats booked after successful payment", bookingId);
+        }
+
+        Payment savedPayment = paymentRepository.save(payment);
+        Booking savedBooking = bookingRepository.save(booking);
+
+        log.info("Payment processed successfully for guest booking: {}", bookingId);
+
+        BookingResponse response = bookingMapper.toResponseDTO(savedBooking);
+        populateDealInformation(response, savedBooking);
+        populateBaggageInformation(response, savedBooking);
+        populateAncillaryServicesInformation(response, savedBooking);
+        return response;
     }
 }
 

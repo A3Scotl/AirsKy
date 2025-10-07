@@ -32,7 +32,7 @@ public class TravelClassController {
         try {
             log.info("Creating new travel class: {}", request.getClassName());
             TravelClassResponse response = travelClassService.createTravelClass(request);
-            String resourcePath = String.format("%s/%d", BASE_PATH, response.getClassId());
+            String resourcePath = String.format("%s/%d", BASE_PATH, response.getId());
 
             return ApiResponseUtil.buildResponse(
                     true,

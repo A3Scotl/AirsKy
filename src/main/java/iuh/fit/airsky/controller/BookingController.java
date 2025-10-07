@@ -1,6 +1,7 @@
 package iuh.fit.airsky.controller;
 
 import iuh.fit.airsky.dto.request.BookingRequest;
+import iuh.fit.airsky.dto.request.PaymentRequest;
 import iuh.fit.airsky.dto.response.BookingResponse;
 import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
@@ -15,6 +16,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Optional;
 
 @Slf4j
 @RestController
@@ -86,6 +89,40 @@ public class BookingController {
         } catch (Exception ex) {
             ex.printStackTrace();
             return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Deletion failed", ex.getMessage(), "/api/v1/bookings/" + id);
+        }
+    }
+
+    @GetMapping("/lookup")
+    public ResponseEntity<ApiResponse<BookingResponse>> lookupBooking(
+            @RequestParam String bookingCode,
+            @RequestParam String fullName) {
+        try {
+            Optional<BookingResponse> bookingOpt = bookingService.findByBookingCodeAndPassengerName(bookingCode, fullName);
+            if (bookingOpt.isPresent()) {
+                return ApiResponseUtil.buildResponse(true, "Booking found", bookingOpt.get(), "/api/v1/bookings/lookup");
+            } else {
+                return ApiResponseUtil.buildErrorResponse(HttpStatus.NOT_FOUND, "Booking not found", "BOOKING_NOT_FOUND", "/api/v1/bookings/lookup");
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Lookup failed", ex.getMessage(), "/api/v1/bookings/lookup");
+        }
+    }
+
+    @PostMapping("/{bookingId}/guest-payment")
+    public ResponseEntity<ApiResponse<BookingResponse>> processGuestPayment(
+            @PathVariable Long bookingId,
+            @Valid @RequestBody PaymentRequest paymentRequest) {
+        try {
+            BookingResponse response = bookingService.processPaymentForGuestBooking(bookingId, paymentRequest);
+            return ApiResponseUtil.buildResponse(true, "Payment processed successfully", response, "/api/v1/bookings/" + bookingId + "/guest-payment");
+        } catch (ResourceNotFoundException ex) {
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), "RESOURCE_NOT_FOUND", "/api/v1/bookings/" + bookingId + "/guest-payment");
+        } catch (IllegalStateException ex) {
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), "INVALID_STATE", "/api/v1/bookings/" + bookingId + "/guest-payment");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Payment processing failed", ex.getMessage(), "/api/v1/bookings/" + bookingId + "/guest-payment");
         }
     }
 }
