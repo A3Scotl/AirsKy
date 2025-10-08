@@ -78,6 +78,7 @@ public class BookingController {
         }
     }
 
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteBooking(@PathVariable Long id) {

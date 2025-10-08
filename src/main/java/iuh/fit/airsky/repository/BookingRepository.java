@@ -24,8 +24,11 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findByStatus(BookingStatus bookingStatus);
 
     @Override
-    @Query("SELECT b FROM Booking b LEFT JOIN FETCH b.userId LEFT JOIN FETCH b.flight LEFT JOIN FETCH b.travelClass LEFT JOIN FETCH b.payment WHERE b.id = :id")
+    @Query("SELECT b FROM Booking b LEFT JOIN FETCH b.userId LEFT JOIN FETCH b.flight LEFT JOIN FETCH b.travelClass LEFT JOIN FETCH b.payment WHERE b.bookingId = :id")
     Optional<Booking> findById(@Param("id") Long id);
+
+
+
 
     List<Booking> findByUserId(User user);
 
@@ -46,4 +49,6 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     // Method để fetch check-ins riêng
     @Query("SELECT b FROM Booking b LEFT JOIN FETCH b.checkIns c LEFT JOIN FETCH c.baggage LEFT JOIN FETCH c.passenger WHERE b.bookingId = :bookingId")
     Optional<Booking> findByIdWithCheckIns(@Param("bookingId") Long bookingId);
+
+
 }

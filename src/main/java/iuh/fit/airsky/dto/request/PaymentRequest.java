@@ -9,8 +9,8 @@ import java.time.LocalDateTime;
 @Data
 public class PaymentRequest {
     private Long bookingId;
-    private BigDecimal amount;
-    private LocalDateTime paymentDate;
     private PaymentMethod paymentMethod;
-    private PaymentStatus status;
+    private PaymentStatus paymentStatus;
+    private BigDecimal totalAmount;
+    private LocalDateTime paymentDate;
 }
