@@ -63,7 +63,8 @@ public class BookingServiceImpl implements BookingService {
     private final PassengerMapper passengerMapper;
     private final AncillaryServiceRepository ancillaryServiceRepository;
     private final BookingAncillaryServiceRepository bookingAncillaryServiceRepository;
-    
+    private final FlightTravelClassRepository flightTravelClassRepository;
+
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -83,7 +84,8 @@ public class BookingServiceImpl implements BookingService {
             DealUsageRepository dealUsageRepository,
             PassengerMapper passengerMapper,
             AncillaryServiceRepository ancillaryServiceRepository,
-            BookingAncillaryServiceRepository bookingAncillaryServiceRepository
+            BookingAncillaryServiceRepository bookingAncillaryServiceRepository,
+            FlightTravelClassRepository flightTravelClassRepository
     ) {
         this.bookingRepository = bookingRepository;
         this.bookingMapper = bookingMapper;
@@ -101,6 +103,7 @@ public class BookingServiceImpl implements BookingService {
         this.passengerMapper = passengerMapper;
         this.ancillaryServiceRepository = ancillaryServiceRepository;
         this.bookingAncillaryServiceRepository = bookingAncillaryServiceRepository;
+        this.flightTravelClassRepository = flightTravelClassRepository;
     }
 
     @Transactional
@@ -170,11 +173,18 @@ public class BookingServiceImpl implements BookingService {
 
         booking.setFlight(flight);
         // Lấy class từ segment đầu tiên
-        booking.setTravelClass(travelClassRepository.findById(firstSegment.getClassId())
-                .orElseThrow(() -> {
-                    log.error("TravelClass not found with id: {}", firstSegment.getClassId());
-                    return new ResourceNotFoundException("Không tìm thấy TravelClass");
-                }));
+//        booking.setTravelClass(travelClassRepository.findById(firstSegment.getClassId())
+//                .orElseThrow(() -> {
+//                    log.error("TravelClass not found with id: {}", firstSegment.getClassId());
+//                    return new ResourceNotFoundException("Không tìm thấy TravelClass");
+//                }));
+
+            FlightTravelClass flightTravelClass = flightTravelClassRepository.findById(firstSegment.getClassId())
+                    .orElseThrow(() -> {
+                        log.error("FlightTravelClass not found with id: {}", firstSegment.getClassId());
+                        return new ResourceNotFoundException("Không tìm thấy FlightTravelClass");
+                    });
+            booking.setTravelClass(flightTravelClass.getTravelClass());
         booking.setBookingDate(LocalDateTime.now());
         booking.setStatus(BookingStatus.PENDING);
         booking.setHoldTime(LocalDateTime.now());
@@ -567,6 +577,7 @@ public class BookingServiceImpl implements BookingService {
                 for (Passenger passenger : booking.getPassengers()) {
                     if (passenger.getSeat() != null) {
                         passenger.getSeat().setStatus(SeatStatus.AVAILABLE);
+                        passenger.getSeat().setBookedBy(null); // Release bookedBy
                     }
                 }
                 bookingRepository.save(booking);
@@ -837,8 +848,12 @@ public class BookingServiceImpl implements BookingService {
                     Airport arrivalAirport = flight.getArrivalAirport();
                     
                     segment.setFlight(flight);
-                    segment.setTravelClass(travelClassRepository.findById(segmentRequest.getClassId())
-                            .orElseThrow(() -> new ResourceNotFoundException("Travel class not found")));
+//                    segment.setTravelClass(travelClassRepository.findById(segmentRequest.getClassId())
+//                            .orElseThrow(() -> new ResourceNotFoundException("Travel class not found")));
+
+                    FlightTravelClass flightTravelClass = flightTravelClassRepository.findById(segmentRequest.getClassId())
+                            .orElseThrow(() -> new ResourceNotFoundException("FlightTravelClass not found"));
+                    segment.setTravelClass(flightTravelClass.getTravelClass());
                     
                     // Set airport information from the flight
                     segment.setDepartureAirport(departureAirport);
@@ -1045,5 +1060,4 @@ public class BookingServiceImpl implements BookingService {
         return response;
     }
 }
-
 

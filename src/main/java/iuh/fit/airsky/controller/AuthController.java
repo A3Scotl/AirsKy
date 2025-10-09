@@ -119,7 +119,7 @@ public class AuthController {
     }
 
     @GetMapping("/profile/me")
-    @PreAuthorize("hasAnyRole('ADMIN','CUSTOMER')")
+    @PreAuthorize("hasAnyRole('ADMIN','CUSTOMER', 'BUSINESS' , 'MANAGER_FLIGHT' , 'STAFF')")
     public ResponseEntity<ApiResponse<UserResponse>> getUserProfile() {
         try {
             String email = SecurityContextHolder.getContext().getAuthentication().getName();

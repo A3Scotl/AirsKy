@@ -13,6 +13,10 @@ public interface SeatMapper {
     @Mapping(target = "className", source = "travelClass.className")
     @Mapping(target = "status", source = "status")
     @Mapping(target = "bookedBy", expression = "java(seat.getBookedBy() != null ? seat.getBookedBy().getFirstName() + \" \" + seat.getBookedBy().getLastName() : null)")
+    @Mapping(target = "seatType", source = "type")
+    @Mapping(target = "flightId", source = "flight.flightId")
+    @Mapping(target = "travelClassId", source = "travelClass.id")
+    @Mapping(target = "bookedById", expression = "java(seat.getBookedBy() != null ? seat.getBookedBy().getPassengerId() : null)")
 
     SeatResponse toResponseDTO(Seat seat);
 }
