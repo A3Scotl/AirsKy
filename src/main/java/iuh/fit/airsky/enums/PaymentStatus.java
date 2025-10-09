@@ -1,7 +1,9 @@
 package iuh.fit.airsky.enums;
 
 public enum PaymentStatus {
-    SUCCESS,
+    COMPLETED,
     PENDING,
-    REFUNDED
+    REFUNDED,
+    FAILED,
+    CANCELLED
 }

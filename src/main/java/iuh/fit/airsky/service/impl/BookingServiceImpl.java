@@ -526,7 +526,7 @@ public class BookingServiceImpl implements BookingService {
         }
 
         // Validate payment status
-        if (booking.getPayment() == null || booking.getPayment().getStatus() != PaymentStatus.SUCCESS) {
+        if (booking.getPayment() == null || booking.getPayment().getStatus() != PaymentStatus.COMPLETED) {
             throw new IllegalStateException("Phải hoàn thành thanh toán trước khi hoàn thành booking");
         }
 
@@ -1019,22 +1019,22 @@ public class BookingServiceImpl implements BookingService {
         Payment payment;
         if (booking.getPayment() != null) {
             payment = booking.getPayment();
-            payment.setAmount(paymentRequest.getAmount());
+            payment.setAmount(paymentRequest.getTotalAmount());
             payment.setPaymentMethod(paymentRequest.getPaymentMethod());
-            payment.setStatus(paymentRequest.getStatus());
+            payment.setStatus(paymentRequest.getPaymentStatus());
             payment.setPaymentDate(paymentRequest.getPaymentDate());
         } else {
             payment = new Payment();
             payment.setBooking(booking);
-            payment.setAmount(paymentRequest.getAmount());
+            payment.setAmount(paymentRequest.getTotalAmount());
             payment.setPaymentMethod(paymentRequest.getPaymentMethod());
-            payment.setStatus(paymentRequest.getStatus());
+            payment.setStatus(paymentRequest.getPaymentStatus());
             payment.setPaymentDate(paymentRequest.getPaymentDate());
             booking.setPayment(payment);
         }
 
         // If payment is successful, update booking status
-        if (paymentRequest.getStatus() == PaymentStatus.SUCCESS) {
+        if (paymentRequest.getPaymentStatus() == PaymentStatus.COMPLETED) {
             booking.setStatus(BookingStatus.CONFIRMED);
 
             // Update seat status to BOOKED
@@ -1059,5 +1059,8 @@ public class BookingServiceImpl implements BookingService {
         populateAncillaryServicesInformation(response, savedBooking);
         return response;
     }
+
+
+
 }
 

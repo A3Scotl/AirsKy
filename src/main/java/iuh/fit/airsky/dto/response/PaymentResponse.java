@@ -16,4 +16,7 @@ public class PaymentResponse {
     private PaymentStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String transactionId;
+    private String payerId;
+    private String paypalApprovalUrl;
 }
