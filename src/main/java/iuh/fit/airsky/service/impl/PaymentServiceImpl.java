@@ -21,6 +21,8 @@ import iuh.fit.airsky.model.Passenger;
 import iuh.fit.airsky.model.Payment;
 import iuh.fit.airsky.repository.BookingRepository;
 import iuh.fit.airsky.repository.PaymentRepository;
+import iuh.fit.airsky.repository.SeatRepository;
+import iuh.fit.airsky.service.EmailService;
 import iuh.fit.airsky.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +49,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final PaymentMapper paymentMapper;
     private final BookingRepository bookingRepository;
+    private final SeatRepository seatRepository;
+    private final EmailService emailService;
     private final APIContext paypalApiContext;
 
     @Value("${paypal.success-url}")
@@ -182,6 +186,11 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    private PaymentResponse processRegularPayment(Booking booking, Payment payment) {
+        // Implementation for other payment methods
+        throw new UnsupportedOperationException("Regular payment processing not implemented");
+    }
+
     private PaymentResponse processPayPalPayment(Payment payment, Booking booking) throws PayPalRESTException {
         if (payment.getTransactionId() != null && payment.getStatus() == PaymentStatus.PENDING) {
             return buildPaymentResponse(payment);
@@ -279,11 +288,75 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Transactional
     protected void updatePassengerSeats(Booking booking) {
-        // Implementation for updating passenger seats
+        // Cập nhật trạng thái ghế từ PENDING_PAYMENT thành OCCUPIED khi thanh toán thành công
+        for (Passenger passenger : booking.getPassengers()) {
+            if (passenger.getSeat() != null && passenger.getSeat().getStatus() == SeatStatus.PENDING_PAYMENT) {
+                passenger.getSeat().setStatus(SeatStatus.OCCUPIED);
+                seatRepository.save(passenger.getSeat());
+                log.debug("Updated seat {} status to OCCUPIED for passenger {}",
+                    passenger.getSeat().getSeatNumber(), passenger.getFirstName());
+            }
+        }
     }
 
-    private PaymentResponse processRegularPayment(Booking booking, Payment payment) {
-        // Implementation for other payment methods
-        throw new UnsupportedOperationException("Regular payment processing not implemented");
+    @Transactional
+    public void processRefundForCancelledBooking(Booking booking, String reason) {
+        log.info("Processing refund for cancelled booking {}: {}", booking.getBookingId(), reason);
+
+        if (booking.getPayment() == null) {
+            log.info("No payment found for booking {}, skipping refund", booking.getBookingId());
+            return;
+        }
+
+        Payment payment = booking.getPayment();
+
+        // Chỉ xử lý refund cho payment đã hoàn thành
+        if (payment.getStatus() == PaymentStatus.COMPLETED) {
+            try {
+                // Đánh dấu payment là REFUNDED
+                payment.setStatus(PaymentStatus.REFUNDED);
+                paymentRepository.save(payment);
+
+                // TODO: Implement actual refund logic với PayPal/VNPay/etc.
+                // Hiện tại chỉ log và đánh dấu đã refund
+                log.info("Marked payment {} as refunded for booking {}", payment.getPaymentId(), booking.getBookingId());
+
+                // Gửi email thông báo refund
+                if (booking.getUserId() != null) {
+                    sendRefundNotificationEmail(booking, reason);
+                }
+
+            } catch (Exception e) {
+                log.error("Failed to process refund for booking {}: {}", booking.getBookingId(), e.getMessage(), e);
+                // Có thể throw exception hoặc xử lý graceful
+            }
+        } else {
+            log.info("Payment {} for booking {} is not completed (status: {}), no refund needed",
+                payment.getPaymentId(), booking.getBookingId(), payment.getStatus());
+        }
+    }
+
+    private void sendRefundNotificationEmail(Booking booking, String reason) {
+        try {
+            String email = booking.getUserId().getEmail();
+            String subject = "Thông báo: Hoàn tiền booking đã hủy";
+            String body = String.format(
+                "<h3>Xin chào %s</h3>" +
+                "<p>Mã đặt vé: <strong>%s</strong></p>" +
+                "<p>Booking của bạn đã được hoàn tiền vì: <strong>%s</strong></p>" +
+                "<p>Số tiền đã hoàn: $%.2f</p>" +
+                "<p>Quy trình hoàn tiền có thể mất 3-5 ngày làm việc tùy thuộc vào phương thức thanh toán.</p>" +
+                "<p>Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.</p>",
+                booking.getUserId().getLastName(),
+                booking.getBookingCode(),
+                reason,
+                booking.getTotalAmount()
+            );
+
+            emailService.sendEmail(email, subject, body);
+            log.info("Refund notification email sent to: {}", email);
+        } catch (Exception e) {
+            log.error("Failed to send refund notification email for booking {}: {}", booking.getBookingId(), e.getMessage());
+        }
     }
 }

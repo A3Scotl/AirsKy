@@ -41,8 +41,9 @@ public class Booking extends BaseAuditOnlyEntity {
     @JoinColumn(name = "class_id", nullable = false)
     private TravelClass travelClass;
 
-    private LocalDateTime holdTime;
+    private LocalDateTime holdTime; // Thời gian bắt đầu giữ ghế (30 phút để chọn ghế và chuẩn bị thanh toán)
     private LocalDateTime bookingDate;
+    private LocalDateTime paymentTimeout; // Thời hạn thanh toán (45 phút tổng thời gian từ lúc tạo booking)
 
     @Column(precision = 10, scale = 2)
     private BigDecimal totalAmount;

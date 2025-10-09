@@ -18,6 +18,8 @@ public class PassengerSeatRequest {
     private PassengerType type;
     private Long seatId;
 
+    private SeatTypes seatType; // Loại ghế được chọn (STANDARD, EXTRA_LEGROOM, etc.)
+
     private BaggagePackage baggagePackage;
 
     // Thêm các trường mới (không bắt buộc)

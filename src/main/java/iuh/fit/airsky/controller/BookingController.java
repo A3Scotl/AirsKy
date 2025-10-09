@@ -5,6 +5,7 @@ import iuh.fit.airsky.dto.request.PaymentRequest;
 import iuh.fit.airsky.dto.response.BookingResponse;
 import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
+import iuh.fit.airsky.dto.response.CheckinEligiblePassengerResponse;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.service.BookingService;
 import iuh.fit.airsky.util.ApiResponseUtil;
@@ -18,6 +19,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -107,6 +109,23 @@ public class BookingController {
         } catch (Exception ex) {
             ex.printStackTrace();
             return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Lookup failed", ex.getMessage(), "/api/v1/bookings/lookup");
+        }
+    }
+
+    @GetMapping("/checkin-eligible")
+    public ResponseEntity<ApiResponse<List<CheckinEligiblePassengerResponse>>> getCheckinEligiblePassengers(
+            @RequestParam String bookingCode,
+            @RequestParam String fullName) {
+        try {
+            List<CheckinEligiblePassengerResponse> passengers = bookingService.getCheckinEligiblePassengers(bookingCode, fullName);
+            return ApiResponseUtil.buildResponse(true, "Check-in eligible passengers retrieved", passengers, "/api/v1/bookings/checkin-eligible");
+        } catch (ResourceNotFoundException ex) {
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), "RESOURCE_NOT_FOUND", "/api/v1/bookings/checkin-eligible");
+        } catch (IllegalStateException ex) {
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), "INVALID_STATE", "/api/v1/bookings/checkin-eligible");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to get check-in eligible passengers", ex.getMessage(), "/api/v1/bookings/checkin-eligible");
         }
     }
 

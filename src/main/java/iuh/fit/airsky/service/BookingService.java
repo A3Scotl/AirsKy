@@ -4,8 +4,10 @@ import iuh.fit.airsky.dto.request.BookingRequest;
 import iuh.fit.airsky.dto.request.PaymentRequest;
 import iuh.fit.airsky.dto.response.BookingResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
+import iuh.fit.airsky.dto.response.CheckinEligiblePassengerResponse;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface BookingService {
@@ -17,4 +19,5 @@ public interface BookingService {
     BookingResponse completeBooking(Long bookingId);
     Optional<BookingResponse> findByBookingCodeAndPassengerName(String bookingCode, String fullName);
     BookingResponse processPaymentForGuestBooking(Long bookingId, PaymentRequest paymentRequest);
+    List<CheckinEligiblePassengerResponse> getCheckinEligiblePassengers(String bookingCode, String fullName);
 }

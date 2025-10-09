@@ -196,6 +196,17 @@
         <artifactId>html2pdf</artifactId>
         <version>5.0.5</version>
     </dependency>
+    <!-- ZXing for QR Code -->
+    <dependency>
+        <groupId>com.google.zxing</groupId>
+        <artifactId>core</artifactId>
+        <version>3.5.2</version>
+    </dependency>
+    <dependency>
+        <groupId>com.google.zxing</groupId>
+        <artifactId>javase</artifactId>
+        <version>3.5.2</version>
+    </dependency>
     <!-- OpenCSV for CSV -->
     <dependency>
         <groupId>com.opencsv</groupId>

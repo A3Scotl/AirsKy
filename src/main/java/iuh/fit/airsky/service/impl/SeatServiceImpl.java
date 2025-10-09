@@ -180,7 +180,7 @@ public class SeatServiceImpl implements SeatService {
                     .orElseThrow(() -> new RuntimeException("Passenger not found"));
 
             seat.setBookedBy(passenger);
-            seat.setStatus(SeatStatus.BOOKED);
+            seat.setStatus(SeatStatus.PENDING_PAYMENT); // Đặt trạng thái chờ thanh toán thay vì BOOKED ngay lập tức
 
 
             seatRepository.save(seat);

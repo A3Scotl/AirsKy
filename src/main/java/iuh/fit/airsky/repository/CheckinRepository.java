@@ -36,4 +36,7 @@ public interface CheckinRepository extends JpaRepository<CheckIn, Long> {
     @Transactional
     @Query("UPDATE CheckIn c SET c.deleted = true, c.deletedAt = :now, c.active = false WHERE c.passenger = :passenger")
     void deleteByPassenger(Passenger passenger, LocalDateTime now);
+
+    @Query("SELECT COUNT(c) > 0 FROM CheckIn c WHERE c.passenger = :passenger AND c.deleted = false")
+    boolean existsByPassenger(@Param("passenger") Passenger passenger);
 }

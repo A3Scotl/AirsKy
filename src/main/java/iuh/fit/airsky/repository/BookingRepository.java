@@ -50,5 +50,8 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     @Query("SELECT b FROM Booking b LEFT JOIN FETCH b.checkIns c LEFT JOIN FETCH c.baggage LEFT JOIN FETCH c.passenger WHERE b.bookingId = :bookingId")
     Optional<Booking> findByIdWithCheckIns(@Param("bookingId") Long bookingId);
 
+    // Method để tìm các booking đã hết thời hạn thanh toán
+    @Query("SELECT b FROM Booking b LEFT JOIN FETCH b.userId LEFT JOIN FETCH b.flight LEFT JOIN FETCH b.payment WHERE b.paymentTimeout < :now AND b.status = :status")
+    List<Booking> findExpiredBookings(@Param("now") java.time.LocalDateTime now, @Param("status") BookingStatus status);
 
 }

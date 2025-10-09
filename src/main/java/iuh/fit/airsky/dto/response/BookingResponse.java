@@ -10,7 +10,7 @@ import java.util.List;
 public class BookingResponse {
     private Long bookingId;
     private String bookingCode;
-    private String userEmail;
+    private String userEmail; // Email của user (authenticated) hoặc passenger đầu tiên (guest)
     private String flightNumber;
     private String travelClass;
     private LocalDateTime bookingDate;
@@ -31,4 +31,8 @@ public class BookingResponse {
     // Ancillary services
     private List<BookingAncillaryServiceResponse> ancillaryServices;
     private BigDecimal ancillaryServicesAmount;
+
+    // Seat type pricing details
+    private BigDecimal seatTypeAmount;
+    private List<SeatTypePricingDetail> seatTypeDetails;
 }

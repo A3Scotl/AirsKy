@@ -39,4 +39,9 @@ public interface PaymentService {
      * Delete a payment
      */
     void delete(Long id);
+
+    /**
+     * Process refund for cancelled booking
+     */
+    void processRefundForCancelledBooking(iuh.fit.airsky.model.Booking booking, String reason);
 }

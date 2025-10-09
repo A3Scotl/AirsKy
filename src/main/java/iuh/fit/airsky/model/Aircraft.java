@@ -9,6 +9,7 @@ package iuh.fit.airsky.model;
 import iuh.fit.airsky.base.BaseFullSoftDeleteEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 
@@ -42,6 +43,8 @@ public class Aircraft extends BaseFullSoftDeleteEntity {
     private Integer totalSeats;
 
     @Column(name = "seat_layout", length = 10)
-    private String seatLayout; // ví dụ "3-3" hoặc "4-3"
+    @NotNull
+    @Pattern(regexp = "^\\d+(-\\d+)+$", message = "Seat layout must be in format like '3-3', '3-2-3', '2-4-2'")
+    private String seatLayout; // ví dụ "3-3" hoặc "3-2-3"
 
 }

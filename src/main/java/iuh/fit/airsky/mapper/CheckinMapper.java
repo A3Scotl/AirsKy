@@ -11,7 +11,7 @@ public interface CheckinMapper {
     @Mapping(target = "checkInId", ignore = true)
     @Mapping(target = "booking", ignore = true)
     @Mapping(target = "passenger", ignore = true)
-    @Mapping(target = "checkedAt", source = "issueDate")
+    @Mapping(target = "checkedAt", ignore = true)
     @Mapping(target = "checkInType", ignore = true)
     @Mapping(target = "boardingPassUrl", ignore = true)
     @Mapping(target = "baggage", ignore = true)
@@ -21,5 +21,6 @@ public interface CheckinMapper {
     @Mapping(target = "bookingId", source = "booking.bookingId")
     @Mapping(target = "passengerId", source = "passenger.passengerId")
     @Mapping(target = "issueDate", source = "checkedAt")
+    @Mapping(target = "boardingPassUrl", source = "boardingPassUrl")
     CheckinResponse toResponseDTO(CheckIn entity);
 }

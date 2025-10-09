@@ -17,4 +17,5 @@ public class CheckinResponse {
     private boolean isActive;
     private LocalDateTime deletedAt;
     private boolean deleted;
+    private String boardingPassUrl;
 }

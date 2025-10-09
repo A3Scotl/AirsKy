@@ -29,7 +29,7 @@ public interface BookingMapper {
     @Mapping(target = "flightSegments", ignore = true)
     Booking toEntity(BookingRequest dto);
 
-    @Mapping(target = "userEmail", expression = "java(entity.getUserId() != null ? entity.getUserId().getEmail() : null)")
+    @Mapping(target = "userEmail", expression = "java(entity.getUserId() != null ? entity.getUserId().getEmail() : (entity.getPassengers() != null && !entity.getPassengers().isEmpty() ? entity.getPassengers().get(0).getEmail() : null))")
     @Mapping(target = "flightNumber", expression = "java(entity.getFlight() != null ? entity.getFlight().getFlightNumber() : null)")
     @Mapping(target = "travelClass", expression = "java(entity.getTravelClass() != null ? entity.getTravelClass().getClassName() : null)")
     @Mapping(target = "passengers", source = "passengers")
@@ -41,6 +41,10 @@ public interface BookingMapper {
     @Mapping(target = "appliedDealCode", ignore = true)
     @Mapping(target = "discountPercentage", ignore = true)
     @Mapping(target = "discountAmount", ignore = true)
+    @Mapping(target = "ancillaryServices", ignore = true)
+    @Mapping(target = "ancillaryServicesAmount", ignore = true)
+    @Mapping(target = "seatTypeAmount", ignore = true)
+    @Mapping(target = "seatTypeDetails", ignore = true)
     BookingResponse toResponseDTO(Booking entity);
 
     List<BookingResponse> toResponseDTOList(List<Booking> bookings);

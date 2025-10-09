@@ -16,6 +16,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -34,6 +38,9 @@ public class DealServiceImpl implements DealService {
     private final UserRepository userRepository;
     private final BookingRepository bookingRepository;
     private final AirportRepository airportRepository;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @Override
     @Transactional
@@ -238,15 +245,21 @@ public class DealServiceImpl implements DealService {
     }
 
     @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public DealUsageResponse applyDeal(String dealCode, Long userId, Long bookingId, BigDecimal orderAmount) {
-        log.info("Applying deal {} for user {} on booking {}", dealCode, userId, bookingId);
+        log.info("Starting applyDeal: dealCode={}, userId={}, bookingId={}, orderAmount={}", dealCode, userId, bookingId, orderAmount);
         
         LocalDateTime now = LocalDateTime.now();
         Deal deal = dealRepository.findValidDealByCode(dealCode, now)
                 .orElseThrow(() -> new IllegalArgumentException("Deal không hợp lệ hoặc đã hết hạn: " + dealCode));
         
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại với ID: " + userId));
+        User user = null;
+        if (userId != null) {
+            user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại với ID: " + userId));
+        } else {
+            log.info("Applying deal for guest user (no user account)");
+        }
         
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking không tồn tại với ID: " + bookingId));
@@ -267,10 +280,30 @@ public class DealServiceImpl implements DealService {
             throw new IllegalArgumentException("Deal đã hết lượt sử dụng");
         }
         
-        // Check user usage limit
-        long userUsageCount = dealUsageRepository.countByDealAndUser(deal, user);
-        if (deal.getUsagePerUser() != null && userUsageCount >= deal.getUsagePerUser()) {
-            throw new IllegalArgumentException("Bạn đã sử dụng hết số lần cho phép với deal này");
+        // Check user usage limit (only for authenticated users)
+        if (user != null && deal.getUsagePerUser() != null) {
+            long userUsageCount = dealUsageRepository.countByDealAndUser(deal, user);
+            if (userUsageCount >= deal.getUsagePerUser()) {
+                throw new IllegalArgumentException("Bạn đã sử dụng hết số lần cho phép với deal này");
+            }
+        }
+        
+        // Check route-specific deal (if deal has specific departure/arrival airports)
+        if (deal.getDepartureAirport() != null && deal.getArrivalAirport() != null) {
+            boolean routeMatches = booking.getFlightSegments().stream()
+                    .anyMatch(segment -> 
+                        segment.getFlight().getDepartureAirport().getAirportId().equals(deal.getDepartureAirport().getAirportId()) &&
+                        segment.getFlight().getArrivalAirport().getAirportId().equals(deal.getArrivalAirport().getAirportId())
+                    );
+            
+            if (!routeMatches) {
+                throw new IllegalArgumentException("Deal này chỉ áp dụng cho tuyến bay từ " + 
+                    deal.getDepartureAirport().getAirportCode() + " đến " + 
+                    deal.getArrivalAirport().getAirportCode());
+            }
+            log.info("Route-specific deal validated for booking {}", bookingId);
+        } else {
+            log.info("Deal applies to all routes (no route restrictions)");
         }
         
         // Calculate discount
@@ -297,15 +330,29 @@ public class DealServiceImpl implements DealService {
                 .build();
         
         DealUsage savedUsage = dealUsageRepository.save(dealUsage);
+        log.info("DealUsage saved with ID: {}, user: {}, booking: {}", 
+                savedUsage.getUsageId(), savedUsage.getUser() != null ? savedUsage.getUser().getId() : "null", savedUsage.getBooking().getBookingId());
+        
+        // Flush to ensure DealUsage is committed before proceeding
+        dealUsageRepository.flush();
+        
+        // Detach the DealUsage entity to prevent it from being flushed in the main transaction
+        entityManager.detach(savedUsage);
+        log.info("DealUsage entity detached from session to prevent cross-transaction flushing");
         
         // Update deal usage count
         Integer currentUsedCount = deal.getUsedCount() != null ? deal.getUsedCount() : 0;
         deal.setUsedCount(currentUsedCount + 1);
         dealRepository.save(deal);
+        log.info("Deal usage count updated to: {} for deal: {}", deal.getUsedCount(), deal.getDealCode());
         
-        log.info("Deal applied successfully. Discount: {}", discountAmount);
+        // Flush to ensure deal update is committed
+        dealRepository.flush();
         
-        return DealUsageResponse.builder()
+        log.info("Deal applied successfully. DealUsage ID: {}, discount: {}", savedUsage.getUsageId(), discountAmount);
+        
+        // Create response
+        DealUsageResponse.DealUsageResponseBuilder responseBuilder = DealUsageResponse.builder()
                 .usageId(savedUsage.getUsageId())
                 .discountAmount(discountAmount)
                 .originalAmount(orderAmount)
@@ -314,11 +361,25 @@ public class DealServiceImpl implements DealService {
                 .dealId(deal.getDealId())
                 .dealCode(deal.getDealCode())
                 .dealTitle(deal.getTitle())
+                .bookingId(booking.getBookingId())
+                .bookingCode(booking.getBookingCode());
+        
+        // Set user info only if user is not null (authenticated user)
+        if (user != null) {
+            responseBuilder
                 .userId(user.getId())
                 .userName(user.getFirstName() + " " + user.getLastName())
-                .userEmail(user.getEmail())
-                .bookingId(booking.getBookingId())
-                .build();
+                .userEmail(user.getEmail());
+        } else {
+            responseBuilder
+                .userId(null)
+                .userName("Guest User")
+                .userEmail(null);
+        }
+        
+        DealUsageResponse response = responseBuilder.build();
+        
+        return response;
     }
 
     @Override

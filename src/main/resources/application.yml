@@ -84,10 +84,13 @@ logging:
 paypal:
   client-id: ${PAYPAL_CLIENT_ID:}
   client-secret: ${PAYPAL_CLIENT_SECRET:}
-  mode: ${PAYPAL_MODE:sandbox}  # or 'live' for production
-  success-url: http://localhost:8080/api/v1/payments/success
-  cancel-url: http://localhost:8080/api/v1/payments/cancel
+  mode: ${PAYPAL_MODE:sandbox} # or 'live' for production
+  success-url: http://localhost:5173/api/v1/payments/success
+  cancel-url: http://localhost:5173/api/v1/payments/cancel
 
 # Application URL
-#app:
-#  url: ${APP_URL:http://localhost:8080}
+app:
+  url: ${APP_URL:http://localhost:8080}
+  boarding-pass:
+    storage-path: ${BOARDING_PASS_STORAGE_PATH:boarding-passes}
+    base-url: ${BOARDING_PASS_BASE_URL:http://localhost:8080/api/v1/boarding-passes}

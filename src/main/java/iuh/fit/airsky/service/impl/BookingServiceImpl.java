@@ -9,6 +9,8 @@ import iuh.fit.airsky.dto.response.BookingAncillaryServiceResponse;
 import iuh.fit.airsky.dto.response.BookingResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.dto.response.PassengerSeatResponse;
+import iuh.fit.airsky.dto.response.SeatTypePricingDetail;
+import iuh.fit.airsky.dto.response.CheckinEligiblePassengerResponse;
 import iuh.fit.airsky.enums.BaggageType;
 import iuh.fit.airsky.enums.BaggagePackage;
 import iuh.fit.airsky.enums.BookingStatus;
@@ -16,6 +18,7 @@ import iuh.fit.airsky.enums.PaymentStatus;
 import iuh.fit.airsky.enums.SeatStatus;
 import iuh.fit.airsky.enums.LoyaltyTier;
 import iuh.fit.airsky.enums.FlightStatus;
+import iuh.fit.airsky.enums.SeatTypePrice;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.BookingMapper;
 import iuh.fit.airsky.mapper.PassengerMapper;
@@ -24,6 +27,7 @@ import iuh.fit.airsky.repository.*;
 import iuh.fit.airsky.service.BookingService;
 import iuh.fit.airsky.service.DealService;
 import iuh.fit.airsky.service.EmailService;
+import iuh.fit.airsky.service.PaymentService;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Hibernate;
 import org.springframework.data.domain.Page;
@@ -59,7 +63,9 @@ public class BookingServiceImpl implements BookingService {
     private final AirportRepository airportRepository;
     private final EmailService emailService;
     private final DealService dealService;
+    private final PaymentService paymentService;
     private final DealUsageRepository dealUsageRepository;
+    private final PassengerRepository passengerRepository;
     private final PassengerMapper passengerMapper;
     private final AncillaryServiceRepository ancillaryServiceRepository;
     private final BookingAncillaryServiceRepository bookingAncillaryServiceRepository;
@@ -81,7 +87,9 @@ public class BookingServiceImpl implements BookingService {
             AirportRepository airportRepository,
             EmailService emailService,
             DealService dealService,
+            PaymentService paymentService,
             DealUsageRepository dealUsageRepository,
+            PassengerRepository passengerRepository,
             PassengerMapper passengerMapper,
             AncillaryServiceRepository ancillaryServiceRepository,
             BookingAncillaryServiceRepository bookingAncillaryServiceRepository,
@@ -99,7 +107,9 @@ public class BookingServiceImpl implements BookingService {
         this.airportRepository = airportRepository;
         this.emailService = emailService;
         this.dealService = dealService;
+        this.paymentService = paymentService;
         this.dealUsageRepository = dealUsageRepository;
+        this.passengerRepository = passengerRepository;
         this.passengerMapper = passengerMapper;
         this.ancillaryServiceRepository = ancillaryServiceRepository;
         this.bookingAncillaryServiceRepository = bookingAncillaryServiceRepository;
@@ -188,6 +198,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setBookingDate(LocalDateTime.now());
         booking.setStatus(BookingStatus.PENDING);
         booking.setHoldTime(LocalDateTime.now());
+        booking.setPaymentTimeout(LocalDateTime.now().plusMinutes(45)); // 45 phút tổng thời gian (30 phút hold + 15 phút payment)
 
         log.info("Mapping passengers...");
         List<Passenger> passengers = mapPassengers(request, booking);
@@ -246,23 +257,31 @@ public class BookingServiceImpl implements BookingService {
             }
         }
 
+        // Tính tổng giá seat types (loại ghế)
+        BigDecimal seatTypeAmount = calculateSeatTypeAmount(request, savedBooking);
+        log.info("Seat type amount: {}", seatTypeAmount);
+
         // Calculate ancillary services amount
         BigDecimal ancillaryServicesAmount = calculateAncillaryServicesAmount(request.getAncillaryServices(), savedBooking.getPassengers());
         
-        BigDecimal finalAmount = baseAmount.add(baggageAmount).add(ancillaryServicesAmount);
-        log.info("Base amount: {}, Baggage amount: {}, Ancillary services amount: {}, Total before deal: {}", 
-                baseAmount, baggageAmount, ancillaryServicesAmount, finalAmount);
+        BigDecimal finalAmount = baseAmount.add(baggageAmount).add(seatTypeAmount).add(ancillaryServicesAmount);
+        log.info("Base amount: {}, Baggage amount: {}, Seat type amount: {}, Ancillary services amount: {}, Total before deal: {}", 
+                baseAmount, baggageAmount, seatTypeAmount, ancillaryServicesAmount, finalAmount);
 
         if (request.getDealCode() != null && !request.getDealCode().trim().isEmpty()) {
-            log.info("Applying deal: {}", request.getDealCode());
+            log.info("Applying deal: {} with orderAmount: {}", request.getDealCode(), finalAmount);
             try {
                 var dealUsage = dealService.applyDeal(request.getDealCode(), request.getUserId(), savedBooking.getBookingId(), finalAmount);
+                BigDecimal oldFinalAmount = finalAmount;
                 finalAmount = dealUsage.getFinalAmount();
-                log.info("Applied deal {} to booking {}, discount: {}", request.getDealCode(), savedBooking.getBookingId(), dealUsage.getDiscountAmount());
+                log.info("Applied deal {} to booking {}, discount: {}, amount changed: {} -> {}",
+                        request.getDealCode(), savedBooking.getBookingId(), dealUsage.getDiscountAmount(), oldFinalAmount, finalAmount);
             } catch (Exception e) {
-                log.warn("Failed to apply deal {}: {}", request.getDealCode(), e.getMessage());
+                log.error("Failed to apply deal {} for booking {}: {}", request.getDealCode(), savedBooking.getBookingId(), e.getMessage(), e);
                 // Tiếp tục với amount gốc nếu deal thất bại
             }
+        } else {
+            log.info("No deal code provided in request");
         }
 
         // Tích điểm loyalty cho user nếu có userId
@@ -356,6 +375,7 @@ public class BookingServiceImpl implements BookingService {
         populateDealInformation(response, reloadedBooking);
         populateBaggageInformation(response, reloadedBooking);
         populateAncillaryServicesInformation(response, reloadedBooking);
+        populateSeatTypeInformation(response, reloadedBooking);
         return response;
 
     } catch (Exception e) {
@@ -412,10 +432,62 @@ public class BookingServiceImpl implements BookingService {
             BookingResponse response = bookingMapper.toResponseDTO(booking);
             populateDealInformation(response, booking);
             populateBaggageInformation(response, booking);
+            populateAncillaryServicesInformation(response, booking);
             return Optional.of(response);
         }
 
         return Optional.empty();
+    }
+
+    @Transactional(readOnly = true)
+    public BookingResponse getBookingWithStatusCheck(Long bookingId) {
+        log.info("Getting booking with status check: {}", bookingId);
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy booking với id: " + bookingId));
+
+        // Kiểm tra và cập nhật trạng thái booking nếu cần
+        checkAndUpdateBookingStatus(booking);
+
+        BookingResponse response = bookingMapper.toResponseDTO(booking);
+        populateDealInformation(response, booking);
+        populateBaggageInformation(response, booking);
+        populateAncillaryServicesInformation(response, booking);
+
+        return response;
+    }
+
+    private void checkAndUpdateBookingStatus(Booking booking) {
+        LocalDateTime now = LocalDateTime.now();
+
+        // Nếu booking đang PENDING, kiểm tra timeout
+        if (booking.getStatus() == BookingStatus.PENDING) {
+            boolean shouldCancel = false;
+            String cancelReason = "";
+
+            // Kiểm tra seat hold time (30 phút - thời gian giữ ghế)
+            if (booking.getHoldTime() != null && Duration.between(booking.getHoldTime(), now).toMinutes() > 30) {
+                shouldCancel = true;
+                cancelReason = "Seat hold time expired (30 minutes) - seats released";
+            }
+            // Kiểm tra payment timeout (45 phút tổng thời gian)
+            else if (booking.getPaymentTimeout() != null && now.isAfter(booking.getPaymentTimeout())) {
+                if (booking.getPayment() != null) {
+                    PaymentStatus paymentStatus = booking.getPayment().getStatus();
+                    if (paymentStatus == PaymentStatus.PENDING || paymentStatus == PaymentStatus.FAILED) {
+                        shouldCancel = true;
+                        cancelReason = "Payment timeout expired (45 minutes total)";
+                    }
+                } else {
+                    shouldCancel = true;
+                    cancelReason = "No payment initiated within timeout";
+                }
+            }
+
+            if (shouldCancel) {
+                cancelBookingAndReleaseSeats(booking, cancelReason);
+            }
+        }
     }
 
     @Override
@@ -566,22 +638,182 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
-    @Scheduled(fixedRate = 60000)
+    @Scheduled(fixedRate = 60000) // Run every 1 minute
     @Transactional
-    public void checkPendingBookings() {
+    public void checkPendingBookingsAndPayments() {
+        log.info("Starting check for expired bookings and payments...");
+
+        LocalDateTime now = LocalDateTime.now();
         List<Booking> pendingBookings = bookingRepository.findByStatus(BookingStatus.PENDING);
+
         for (Booking booking : pendingBookings) {
-            if (booking.getHoldTime() == null) continue;
-            if (Duration.between(booking.getHoldTime(), LocalDateTime.now()).toMinutes() > 15) {
-                booking.setStatus(BookingStatus.CANCELLED);
-                for (Passenger passenger : booking.getPassengers()) {
-                    if (passenger.getSeat() != null) {
-                        passenger.getSeat().setStatus(SeatStatus.AVAILABLE);
-                        passenger.getSeat().setBookedBy(null); // Release bookedBy
+            try {
+                // Kiểm tra thời hạn giữ chỗ (30 phút)
+                if (booking.getHoldTime() != null && Duration.between(booking.getHoldTime(), now).toMinutes() > 30) {
+                    cancelBookingAndReleaseSeats(booking, "Seat hold time expired (30 minutes)");
+                    continue;
+                }
+
+                // Cảnh báo sớm khi còn 10 phút nữa hết holdTime
+                if (booking.getHoldTime() != null &&
+                    Duration.between(booking.getHoldTime(), now).toMinutes() <= 20 &&
+                    Duration.between(booking.getHoldTime(), now).toMinutes() > 19) {
+                    sendHoldTimeWarningEmail(booking, 10);
+                }
+
+                // Kiểm tra thời hạn thanh toán (45 phút tổng)
+                if (booking.getPaymentTimeout() != null && now.isAfter(booking.getPaymentTimeout())) {
+                    // Kiểm tra trạng thái payment
+                    if (booking.getPayment() != null) {
+                        PaymentStatus paymentStatus = booking.getPayment().getStatus();
+                        if (paymentStatus == PaymentStatus.PENDING || paymentStatus == PaymentStatus.FAILED) {
+                            cancelBookingAndReleaseSeats(booking, "Payment timeout expired (45 minutes total)");
+                            // Cập nhật payment status nếu cần
+                            if (paymentStatus == PaymentStatus.PENDING) {
+                                booking.getPayment().setStatus(PaymentStatus.FAILED);
+                                paymentRepository.save(booking.getPayment());
+                            }
+                            continue;
+                        }
+                    } else {
+                        // Không có payment record, hủy booking
+                        cancelBookingAndReleaseSeats(booking, "No payment initiated within 45 minutes");
+                        continue;
                     }
                 }
-                bookingRepository.save(booking);
+
+                // Gửi cảnh báo khi còn 5 phút nữa là hết hạn thanh toán (sau 40 phút)
+                if (booking.getPaymentTimeout() != null &&
+                    Duration.between(now, booking.getPaymentTimeout()).toMinutes() <= 5 &&
+                    Duration.between(now, booking.getPaymentTimeout()).toMinutes() > 0) {
+
+                    if (booking.getUserId() != null && booking.getPayment() != null &&
+                        booking.getPayment().getStatus() == PaymentStatus.PENDING) {
+                        sendPaymentReminderEmail(booking);
+                    }
+                }
+
+            } catch (Exception e) {
+                log.error("Error processing booking {}: {}", booking.getBookingId(), e.getMessage(), e);
             }
+        }
+
+        log.info("Completed check for expired bookings and payments");
+    }
+
+    private void cancelBookingAndReleaseSeats(Booking booking, String reason) {
+        log.info("Cancelling booking {} due to: {}", booking.getBookingId(), reason);
+
+        // Hủy booking
+        booking.setStatus(BookingStatus.CANCELLED);
+        bookingRepository.save(booking);
+
+        // Giải phóng ghế và cập nhật availableSeats
+        int releasedSeats = 0;
+        List<Passenger> passengersToDelete = new ArrayList<>(booking.getPassengers());
+
+        // Đầu tiên release tất cả seats trước khi xóa passengers
+        for (Passenger passenger : passengersToDelete) {
+            if (passenger.getSeat() != null) {
+                // Reset seat về AVAILABLE và xóa bookedBy
+                passenger.getSeat().setStatus(SeatStatus.AVAILABLE);
+                passenger.getSeat().setBookedBy(null);
+                seatRepository.save(passenger.getSeat());
+                releasedSeats++;
+                log.debug("Released seat {} for passenger {}", passenger.getSeat().getSeatNumber(), passenger.getFirstName());
+            }
+        }
+
+        // Sau đó xóa tất cả passengers của booking này
+        if (!passengersToDelete.isEmpty()) {
+            passengerRepository.deleteAll(passengersToDelete);
+            log.info("Deleted {} passenger records for cancelled booking {}", passengersToDelete.size(), booking.getBookingId());
+        }
+
+        // Cập nhật availableSeats của flight
+        if (releasedSeats > 0 && booking.getFlight() != null) {
+            Flight flight = booking.getFlight();
+            flight.setAvailableSeats(flight.getAvailableSeats() + releasedSeats);
+            flightRepository.save(flight);
+            log.info("Updated available seats for flight {}: +{}", flight.getFlightNumber(), releasedSeats);
+        }
+
+        // Xử lý payment status khi cancel booking
+        if (booking.getPayment() != null) {
+            Payment payment = booking.getPayment();
+            PaymentStatus currentStatus = payment.getStatus();
+
+            // Cập nhật payment status dựa trên trạng thái hiện tại
+            if (currentStatus == PaymentStatus.COMPLETED) {
+                // Nếu đã hoàn thành thì xử lý refund
+                paymentService.processRefundForCancelledBooking(booking, reason);
+            } else if (currentStatus == PaymentStatus.PENDING) {
+                // Nếu đang pending thì đánh dấu là expired/cancelled
+                payment.setStatus(PaymentStatus.CANCELLED);
+                paymentRepository.save(payment);
+                log.info("Marked pending payment {} as cancelled for booking {}", payment.getPaymentId(), booking.getBookingId());
+            } else if (currentStatus == PaymentStatus.FAILED) {
+                // Nếu đã failed thì giữ nguyên status
+                log.info("Payment {} already failed for booking {}, no action needed", payment.getPaymentId(), booking.getBookingId());
+            }
+        }
+
+        // Gửi email thông báo hủy booking
+        if (booking.getUserId() != null) {
+            sendCancellationEmail(booking, reason);
+        }
+
+        log.info("Successfully cancelled booking {} and released {} seats", booking.getBookingId(), releasedSeats);
+    }
+
+    private void sendPaymentReminderEmail(Booking booking) {
+        try {
+            String email = booking.getUserId().getEmail();
+            String subject = "Cảnh báo: Thời hạn thanh toán sắp hết";
+            String body = String.format(
+                "<h3>Xin chào %s</h3>" +
+                "<p>Mã đặt vé: <strong>%s</strong></p>" +
+                "<p>Thời hạn thanh toán cho booking của bạn sẽ hết trong 5 phút nữa.</p>" +
+                "<p>Vui lòng hoàn thành thanh toán để tránh việc hủy booking tự động.</p>" +
+                "<p>Chuyến bay: %s</p>" +
+                "<p>Số tiền: $%.2f</p>" +
+                "<p>Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.</p>",
+                booking.getUserId().getLastName(),
+                booking.getBookingCode(),
+                booking.getFlight().getFlightNumber(),
+                booking.getTotalAmount()
+            );
+
+            emailService.sendEmail(email, subject, body);
+            log.info("Payment reminder email sent to: {}", email);
+        } catch (Exception e) {
+            log.error("Failed to send payment reminder email for booking {}: {}", booking.getBookingId(), e.getMessage());
+        }
+    }
+
+    private void sendCancellationEmail(Booking booking, String reason) {
+        try {
+            String email = booking.getUserId().getEmail();
+            String subject = "Thông báo: Booking đã bị hủy";
+            String body = String.format(
+                "<h3>Xin chào %s</h3>" +
+                "<p>Mã đặt vé: <strong>%s</strong></p>" +
+                "<p>Booking của bạn đã bị hủy vì: <strong>%s</strong></p>" +
+                "<p>Chuyến bay: %s</p>" +
+                "<p>Số tiền đã hoàn: $%.2f</p>" +
+                "<p>Ghế đã được giải phóng và có thể đặt lại.</p>" +
+                "<p>Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.</p>",
+                booking.getUserId().getLastName(),
+                booking.getBookingCode(),
+                reason,
+                booking.getFlight().getFlightNumber(),
+                booking.getTotalAmount()
+            );
+
+            emailService.sendEmail(email, subject, body);
+            log.info("Cancellation email sent to: {}", email);
+        } catch (Exception e) {
+            log.error("Failed to send cancellation email for booking {}: {}", booking.getBookingId(), e.getMessage());
         }
     }
 
@@ -638,12 +870,17 @@ public class BookingServiceImpl implements BookingService {
     private void populateDealInformation(BookingResponse response, Booking booking) {
         // Find deal usage for this booking
         Optional<DealUsage> dealUsageOpt = dealUsageRepository.findByBooking(booking);
+        log.info("Looking for deal usage for booking {}: found={}, bookingId={}",
+                booking.getBookingId(), dealUsageOpt.isPresent(), booking.getBookingId());
         if (dealUsageOpt.isPresent()) {
             DealUsage dealUsage = dealUsageOpt.get();
+            log.info("Found deal usage: id={}, dealCode={}, discountAmount={}",
+                    dealUsage.getUsageId(), dealUsage.getDeal().getDealCode(), dealUsage.getDiscountAmount());
             response.setAppliedDealCode(dealUsage.getDeal().getDealCode());
             response.setDiscountPercentage(dealUsage.getDeal().getDiscountPercentage());
             response.setDiscountAmount(dealUsage.getDiscountAmount());
         } else {
+            log.warn("No deal usage found for booking {} - deal may not have been applied successfully", booking.getBookingId());
             response.setAppliedDealCode(null);
             response.setDiscountPercentage(null);
             response.setDiscountAmount(BigDecimal.ZERO);
@@ -703,6 +940,21 @@ public class BookingServiceImpl implements BookingService {
             if (p.getSeatId() != null) {
                 Seat seat = seatRepository.findById(p.getSeatId())
                         .orElseThrow(() -> new ResourceNotFoundException("Seat not found"));
+
+                // Kiểm tra seat có available không
+                if (seat.getStatus() != SeatStatus.AVAILABLE || seat.getBookedBy() != null) {
+                    throw new IllegalStateException("Seat " + seat.getSeatNumber() + " is not available for booking");
+                }
+
+                // Kiểm tra không có passenger nào đang reference đến seat này từ booking active
+                List<Passenger> existingPassengers = passengerRepository.findBySeat(seat);
+                boolean hasActivePassengers = existingPassengers.stream()
+                        .anyMatch(existingPassenger -> existingPassenger.getBooking() != null && 
+                                     existingPassenger.getBooking().getStatus() != BookingStatus.CANCELLED);
+                if (hasActivePassengers) {
+                    throw new IllegalStateException("Seat " + seat.getSeatNumber() + " is still referenced by an existing active passenger record");
+                }
+
                 seat.setStatus(SeatStatus.PENDING_PAYMENT);
                 seat.setBookedBy(passenger);
                 passenger.setSeat(seat);
@@ -1037,15 +1289,15 @@ public class BookingServiceImpl implements BookingService {
         if (paymentRequest.getPaymentStatus() == PaymentStatus.COMPLETED) {
             booking.setStatus(BookingStatus.CONFIRMED);
 
-            // Update seat status to BOOKED
+            // Update seat status to OCCUPIED
             for (Passenger passenger : booking.getPassengers()) {
                 if (passenger.getSeat() != null) {
-                    passenger.getSeat().setStatus(SeatStatus.BOOKED);
+                    passenger.getSeat().setStatus(SeatStatus.OCCUPIED);
                     seatRepository.save(passenger.getSeat());
                 }
             }
 
-            log.info("Booking {} confirmed and seats booked after successful payment", bookingId);
+            log.info("Booking {} confirmed and seats occupied after successful payment", bookingId);
         }
 
         Payment savedPayment = paymentRepository.save(payment);
@@ -1060,7 +1312,298 @@ public class BookingServiceImpl implements BookingService {
         return response;
     }
 
+    private BigDecimal calculateSeatTypeAmount(BookingRequest request, Booking booking) {
+        BigDecimal totalSeatTypeAmount = BigDecimal.ZERO;
 
+        for (int i = 0; i < request.getPassengers().size(); i++) {
+            PassengerSeatRequest passengerReq = request.getPassengers().get(i);
+            Passenger passenger = booking.getPassengers().get(i);
+
+            // Nếu có seatType được chọn và ghế đã được assign
+            if (passengerReq.getSeatType() != null && passenger.getSeat() != null) {
+                try {
+                    // Lấy giá seat type từ enum
+                    SeatTypePrice seatTypePrice = SeatTypePrice.fromSeatType(passengerReq.getSeatType());
+                    BigDecimal additionalPrice = seatTypePrice.getAdditionalPrice();
+
+                    totalSeatTypeAmount = totalSeatTypeAmount.add(additionalPrice);
+
+                    // Cập nhật loại ghế cho seat
+                    passenger.getSeat().setType(passengerReq.getSeatType());
+                    seatRepository.save(passenger.getSeat());
+
+                    log.debug("Applied seat type {} with additional price {} for passenger {}",
+                            passengerReq.getSeatType(), additionalPrice, passenger.getFirstName());
+                } catch (Exception e) {
+                    log.error("Error calculating seat type amount for passenger {}: {}",
+                            passenger.getFirstName(), e.getMessage());
+                }
+            }
+        }
+
+        return totalSeatTypeAmount;
+    }
+
+    private void populateSeatTypeInformation(BookingResponse response, Booking booking) {
+        BigDecimal totalSeatTypeAmount = BigDecimal.ZERO;
+        List<SeatTypePricingDetail> seatTypeDetails = new ArrayList<>();
+
+        for (Passenger passenger : booking.getPassengers()) {
+            if (passenger.getSeat() != null && passenger.getSeat().getType() != null) {
+                SeatTypePrice seatTypePrice = SeatTypePrice.fromSeatType(passenger.getSeat().getType());
+                BigDecimal additionalPrice = seatTypePrice.getAdditionalPrice();
+
+                totalSeatTypeAmount = totalSeatTypeAmount.add(additionalPrice);
+
+                seatTypeDetails.add(new SeatTypePricingDetail(
+                    passenger.getFirstName() + " " + passenger.getLastName(),
+                    passenger.getSeat().getSeatNumber(),
+                    passenger.getSeat().getType(),
+                    additionalPrice
+                ));
+            }
+        }
+
+        response.setSeatTypeAmount(totalSeatTypeAmount);
+        response.setSeatTypeDetails(seatTypeDetails);
+
+        log.debug("Populated seat type information: {} details, total amount: {}",
+                seatTypeDetails.size(), totalSeatTypeAmount);
+    }
+
+    private void sendHoldTimeWarningEmail(Booking booking, int minutesLeft) {
+        if (booking.getUserId() == null) {
+            log.debug("Skipping hold time warning email for guest booking {}", booking.getBookingId());
+            return;
+        }
+
+        try {
+            String email = booking.getUserId().getEmail();
+            String subject = "Cảnh báo: Thời gian giữ ghế sắp hết hạn";
+
+            String body = String.format(
+                "<h3>Xin chào %s</h3>" +
+                "<p>Thời gian giữ ghế cho đơn đặt vé <strong>%s</strong> của bạn sắp hết hạn.</p>" +
+                "<p><strong>Thời gian còn lại:</strong> %d phút</p>" +
+                "<p><strong>Chuyến bay:</strong> %s</p>" +
+                "<p><strong>Khởi hành:</strong> %s</p>" +
+                "<p>Vui lòng hoàn tất thanh toán trong thời gian còn lại để giữ ghế của bạn.</p>" +
+                "<p>Nếu không thanh toán, ghế sẽ được giải phóng tự động.</p>" +
+                "<p>Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.</p>",
+                booking.getUserId().getLastName(),
+                booking.getBookingCode(),
+                minutesLeft,
+                booking.getFlight().getFlightNumber(),
+                booking.getFlight().getDepartureTime().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+            );
+
+            emailService.sendEmail(email, subject, body);
+            log.info("Sent hold time warning email to {} for booking {} ({} minutes left)",
+                    email, booking.getBookingId(), minutesLeft);
+
+        } catch (Exception e) {
+            log.error("Failed to send hold time warning email for booking {}: {}",
+                    booking.getBookingId(), e.getMessage());
+        }
+    }
+
+    /**
+     * Scheduled job để xử lý các booking đã hết thời hạn thanh toán
+     * Chạy mỗi phút để check và cancel expired bookings
+     */
+    @Scheduled(fixedRate = 60000) // 60 seconds = 1 minute
+    @Transactional
+    public void processExpiredPayments() {
+        log.info("Checking for expired payments...");
+
+        LocalDateTime now = LocalDateTime.now();
+        List<Booking> expiredBookings = bookingRepository.findExpiredBookings(now, BookingStatus.PENDING);
+
+        if (expiredBookings.isEmpty()) {
+            log.debug("No expired bookings found");
+            return;
+        }
+
+        log.info("Found {} expired bookings to process", expiredBookings.size());
+
+        for (Booking booking : expiredBookings) {
+            try {
+                cancelExpiredBooking(booking);
+                log.info("Successfully cancelled expired booking: {}", booking.getBookingCode());
+            } catch (Exception e) {
+                log.error("Failed to cancel expired booking {}: {}", booking.getBookingId(), e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Hủy booking đã hết thời hạn thanh toán
+     */
+    private void cancelExpiredBooking(Booking booking) {
+        log.info("Cancelling expired booking: {} (timeout: {})",
+                booking.getBookingCode(), booking.getPaymentTimeout());
+
+        // 1. Cập nhật payment status thành EXPIRED
+        if (booking.getPayment() != null) {
+            booking.getPayment().setStatus(PaymentStatus.EXPIRED);
+            paymentRepository.save(booking.getPayment());
+            log.debug("Updated payment status to EXPIRED for booking {}", booking.getBookingCode());
+        }
+
+        // 2. Cập nhật booking status thành CANCELLED
+        booking.setStatus(BookingStatus.CANCELLED);
+        bookingRepository.save(booking);
+
+        // 3. Xóa passenger records và giải phóng ghế
+        int releasedSeats = 0;
+        List<Passenger> passengersToDelete = new ArrayList<>(booking.getPassengers());
+        for (Passenger passenger : passengersToDelete) {
+            if (passenger.getSeat() != null) {
+                passenger.getSeat().setStatus(SeatStatus.AVAILABLE);
+                passenger.getSeat().setBookedBy(null);
+                seatRepository.save(passenger.getSeat());
+                releasedSeats++;
+                log.debug("Released seat {} for expired booking {}", passenger.getSeat().getSeatNumber(), booking.getBookingCode());
+            }
+        }
+
+        // Xóa tất cả passengers của booking này
+        if (!passengersToDelete.isEmpty()) {
+            passengerRepository.deleteAll(passengersToDelete);
+            log.info("Deleted {} passenger records for expired booking {}", passengersToDelete.size(), booking.getBookingCode());
+        }
+
+        // 4. Cập nhật availableSeats của flight
+        if (releasedSeats > 0 && booking.getFlight() != null) {
+            Flight flight = booking.getFlight();
+            flight.setAvailableSeats(flight.getAvailableSeats() + releasedSeats);
+            flightRepository.save(flight);
+            log.info("Updated available seats for flight {}: +{} (expired booking {})",
+                    flight.getFlightNumber(), releasedSeats, booking.getBookingCode());
+        }
+
+        // 5. Gửi email thông báo cho user
+        if (booking.getUserId() != null) {
+            sendExpiredPaymentEmail(booking);
+        }
+
+        log.info("Successfully cancelled expired booking {} and released {} seats",
+                booking.getBookingCode(), releasedSeats);
+    }
+
+    /**
+     * Gửi email thông báo booking bị hủy do hết thời hạn thanh toán
+     */
+    private void sendExpiredPaymentEmail(Booking booking) {
+        try {
+            String email = booking.getUserId().getEmail();
+            String subject = "Thông báo: Booking đã bị hủy do hết thời hạn thanh toán";
+
+            String body = String.format(
+                "<h3>Xin chào %s</h3>" +
+                "<p>Mã đặt vé: <strong>%s</strong></p>" +
+                "<p>Booking của bạn đã bị <strong>HỦY TỰ ĐỘNG</strong> vì đã hết thời hạn thanh toán.</p>" +
+                "<p><strong>Thời hạn thanh toán:</strong> %s</p>" +
+                "<p><strong>Chuyến bay:</strong> %s</p>" +
+                "<p><strong>Số tiền:</strong> $%.2f</p>" +
+                "<p>Ghế đã được giải phóng và có thể được đặt lại bởi khách hàng khác.</p>" +
+                "<p>Nếu bạn vẫn muốn đặt vé, vui lòng tạo booking mới.</p>" +
+                "<p>Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.</p>",
+                booking.getUserId().getLastName(),
+                booking.getBookingCode(),
+                booking.getPaymentTimeout().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")),
+                booking.getFlight().getFlightNumber(),
+                booking.getTotalAmount()
+            );
+
+            emailService.sendEmail(email, subject, body);
+            log.info("Sent expired payment email to {} for booking {}", email, booking.getBookingCode());
+
+        } catch (Exception e) {
+            log.error("Failed to send expired payment email for booking {}: {}",
+                    booking.getBookingId(), e.getMessage());
+        }
+    }
+
+    @Override
+    public List<CheckinEligiblePassengerResponse> getCheckinEligiblePassengers(String bookingCode, String fullName) {
+        log.info("Getting check-in eligible passengers for booking: {} and passenger: {}", bookingCode, fullName);
+
+        // First verify booking exists and user has access
+        Optional<Booking> bookingOpt = bookingRepository.findByBookingCodeAndPassengerFullName(bookingCode, fullName);
+        if (bookingOpt.isEmpty()) {
+            throw new ResourceNotFoundException("Booking not found or access denied");
+        }
+
+        Booking booking = bookingOpt.get();
+
+        // Check if booking is paid (required for check-in)
+        boolean isPaid = booking.getPayment() != null &&
+                        "COMPLETED".equals(booking.getPayment().getStatus());
+
+        if (!isPaid) {
+            throw new IllegalStateException("Booking must be paid before check-in");
+        }
+
+        // Check if flight is eligible for check-in (not departed, within check-in window)
+        LocalDateTime now = LocalDateTime.now();
+        boolean canCheckIn = booking.getFlight().getDepartureTime().isAfter(now.plusHours(1)) &&
+                           booking.getFlight().getDepartureTime().isBefore(now.plusDays(1));
+
+        if (!canCheckIn) {
+            throw new IllegalStateException("Check-in not available for this flight at this time");
+        }
+
+        // Get all passengers and their check-in status
+        return booking.getPassengers().stream()
+                .map(passenger -> {
+                    CheckinEligiblePassengerResponse response = new CheckinEligiblePassengerResponse();
+                    response.setPassengerId(passenger.getPassengerId());
+                    response.setFirstName(passenger.getFirstName());
+                    response.setLastName(passenger.getLastName());
+                    response.setFullName(passenger.getFirstName() + " " + passenger.getLastName());
+                    response.setPassportNumber(passenger.getPassportNumber());
+                    response.setSeatNumber(passenger.getSeat() != null ? passenger.getSeat().getSeatNumber() : null);
+
+                    // Calculate ticket price per passenger based on passenger type
+                    BigDecimal ticketPrice = calculatePassengerTicketPrice(passenger, booking);
+                    response.setTicketPrice(ticketPrice);
+
+                    // Check if already checked in
+                    boolean alreadyCheckedIn = checkinRepository.existsByPassenger(passenger);
+                    response.setCheckedIn(alreadyCheckedIn);
+
+                    if (alreadyCheckedIn) {
+                        response.setCheckinStatus("ALREADY_CHECKED_IN");
+                    } else if (!isPaid) {
+                        response.setCheckinStatus("PAYMENT_PENDING");
+                    } else {
+                        response.setCheckinStatus("ELIGIBLE");
+                    }
+
+                    return response;
+                })
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    /**
+     * Tính giá vé cho từng passenger dựa trên loại passenger
+     * Trong thực tế nên có bảng giá riêng cho từng loại passenger
+     */
+    private BigDecimal calculatePassengerTicketPrice(Passenger passenger, Booking booking) {
+        if (booking.getTotalAmount() == null || booking.getPassengers().isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        // Tạm thời chia đều - trong thực tế nên có logic tính giá riêng:
+        // - ADULT: 100% giá cơ bản
+        // - CHILD: 75% giá cơ bản
+        // - INFANT: 10% giá cơ bản
+        return booking.getTotalAmount().divide(
+            BigDecimal.valueOf(booking.getPassengers().size()),
+            2, java.math.RoundingMode.HALF_UP
+        );
+    }
 
 }
 

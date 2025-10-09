@@ -2,7 +2,6 @@ package iuh.fit.airsky.dto.request;
 
 import lombok.Data;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 @Data
 public class CheckinRequest {
@@ -10,5 +9,4 @@ public class CheckinRequest {
     private Long passengerId;
     private String seatNumber;
     private BigDecimal ticketPrice;
-    private LocalDateTime issueDate;
 }
