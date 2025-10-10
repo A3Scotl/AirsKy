@@ -18,7 +18,10 @@ import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.layout.properties.UnitValue;
 import com.itextpdf.io.image.ImageData;
 import com.itextpdf.io.image.ImageDataFactory;
+import iuh.fit.airsky.dto.response.QRVerificationResponse;
+import iuh.fit.airsky.enums.CheckinStatus;
 import iuh.fit.airsky.model.CheckIn;
+import iuh.fit.airsky.repository.CheckinRepository;
 import iuh.fit.airsky.service.BoardingPassService;
 import iuh.fit.airsky.service.CloudinaryService;
 import lombok.extern.slf4j.Slf4j;
@@ -32,8 +35,15 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
+import java.util.Optional;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.PDFRenderer;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
 
 @Service
 @Slf4j
@@ -41,34 +51,34 @@ public class BoardingPassServiceImpl implements BoardingPassService {
 
     private final JavaMailSender mailSender;
     private final CloudinaryService cloudinaryService;
+    private final CheckinRepository checkinRepository;
 
     @Value("${app.boarding-pass.base-url:http://localhost:8080/api/v1/boarding-passes}")
     private String baseUrl;
 
-    public BoardingPassServiceImpl(JavaMailSender mailSender, CloudinaryService cloudinaryService) {
+    public BoardingPassServiceImpl(JavaMailSender mailSender, CloudinaryService cloudinaryService, CheckinRepository checkinRepository) {
         this.mailSender = mailSender;
         this.cloudinaryService = cloudinaryService;
+        this.checkinRepository = checkinRepository;
     }
 
     @Override
     public String generateBoardingPassPdf(CheckIn checkIn) {
         try {
             // Generate unique filename
-            String fileName = String.format("boarding-pass-%s-%s.pdf",
-                checkIn.getBooking().getBookingCode(),
-                checkIn.getPassenger().getPassengerId());
+            String fileName = "boarding-pass-" + checkIn.getBooking().getBookingCode() + "-" + checkIn.getPassenger().getPassengerId() + ".png";
 
-            // Generate PDF bytes
-            byte[] pdfBytes = generatePdfBoardingPass(checkIn);
+            // Generate boarding pass image directly
+            byte[] imageBytes = generateBoardingPassImage(checkIn);
 
-            // Upload to Cloudinary
-            String cloudinaryUrl = cloudinaryService.uploadPdfFile(pdfBytes, fileName);
+            // Upload to Cloudinary as image
+            String cloudinaryUrl = cloudinaryService.uploadImageFile(imageBytes, fileName);
 
-            log.info("Boarding pass PDF uploaded to Cloudinary: {}", cloudinaryUrl);
+            log.info("Boarding pass image uploaded to Cloudinary: {}", cloudinaryUrl);
             return cloudinaryUrl;
 
         } catch (Exception e) {
-            log.error("Error generating boarding pass PDF for check-in {}: {}", checkIn.getCheckInId(), e.getMessage(), e);
+            log.error("Error generating boarding pass for check-in {}: {}", checkIn.getCheckInId(), e.getMessage(), e);
             // Fallback to simple URL
             return generateSimpleBoardingPassUrl(checkIn);
         }
@@ -105,8 +115,140 @@ public class BoardingPassServiceImpl implements BoardingPassService {
     @Override
     public String generateAndSendBoardingPass(CheckIn checkIn) {
         String pdfUrl = generateBoardingPassPdf(checkIn);
-        sendBoardingPassEmail(checkIn, pdfUrl);
+        try {
+            sendBoardingPassEmail(checkIn, pdfUrl);
+        } catch (Exception e) {
+            log.warn("Failed to send boarding pass email for check-in {}: {}", checkIn.getCheckInId(), e.getMessage());
+            // Continue without failing the boarding pass generation
+        }
         return pdfUrl;
+    }
+
+    private byte[] generateBoardingPassImage(CheckIn checkIn) throws IOException {
+        try {
+            // Validate required data
+            if (checkIn == null || checkIn.getPassenger() == null || checkIn.getBooking() == null || 
+                checkIn.getBooking().getFlight() == null) {
+                throw new IllegalArgumentException("CheckIn data is incomplete for boarding pass generation");
+            }
+
+            // Create a buffered image for the boarding pass
+            int width = 800;
+            int height = 600;
+            BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            
+            // Get graphics context
+            java.awt.Graphics2D g2d = image.createGraphics();
+            
+            // Set rendering hints for better quality
+            g2d.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            
+            // Fill background
+            g2d.setColor(java.awt.Color.WHITE);
+            g2d.fillRect(0, 0, width, height);
+            
+            // Draw header
+            g2d.setColor(new java.awt.Color(102, 126, 234)); // Blue gradient color
+            g2d.fillRect(0, 0, width, 80);
+            
+            g2d.setColor(java.awt.Color.WHITE);
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 24));
+            g2d.drawString("✈ AIRSKY AIRLINES", 50, 35);
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 16));
+            g2d.drawString("BOARDING PASS", 50, 60);
+            
+            // Passenger info
+            g2d.setColor(java.awt.Color.BLACK);
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 16));
+            g2d.drawString("PASSENGER NAME", 50, 120);
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 14));
+            String passengerName = (checkIn.getPassenger().getFirstName() != null ? checkIn.getPassenger().getFirstName() : "") + " " + 
+                                  (checkIn.getPassenger().getLastName() != null ? checkIn.getPassenger().getLastName() : "");
+            g2d.drawString(passengerName.trim(), 50, 140);
+            
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 16));
+            g2d.drawString("BOOKING CODE", 50, 170);
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 14));
+            g2d.drawString(checkIn.getBooking().getBookingCode() != null ? checkIn.getBooking().getBookingCode() : "", 50, 190);
+            
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 16));
+            g2d.drawString("FLIGHT", 50, 220);
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 14));
+            g2d.drawString(checkIn.getBooking().getFlight().getFlightNumber() != null ? checkIn.getBooking().getFlight().getFlightNumber() : "", 50, 240);
+            
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 16));
+            g2d.drawString("ROUTE", 50, 270);
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 14));
+            String route = "";
+            if (checkIn.getBooking().getFlight().getDepartureAirport() != null && checkIn.getBooking().getFlight().getArrivalAirport() != null) {
+                route = (checkIn.getBooking().getFlight().getDepartureAirport().getAirportCode() != null ? checkIn.getBooking().getFlight().getDepartureAirport().getAirportCode() : "") + " → " + 
+                       (checkIn.getBooking().getFlight().getArrivalAirport().getAirportCode() != null ? checkIn.getBooking().getFlight().getArrivalAirport().getAirportCode() : "");
+            }
+            g2d.drawString(route, 50, 290);
+            
+            // Right side info
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 20));
+            g2d.drawString("SEAT", 500, 120);
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 24));
+            g2d.drawString(checkIn.getSeatNumber() != null ? checkIn.getSeatNumber() : "", 500, 150);
+            
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 16));
+            g2d.drawString("CLASS", 500, 180);
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 14));
+            String className = checkIn.getBooking().getTravelClass() != null && checkIn.getBooking().getTravelClass().getClassName() != null 
+                             ? checkIn.getBooking().getTravelClass().getClassName() : "";
+            g2d.drawString(className, 500, 200);
+            
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 16));
+            g2d.drawString("DEPARTURE", 500, 230);
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 14));
+            String departureTime = "";
+            if (checkIn.getBooking().getFlight().getDepartureTime() != null) {
+                departureTime = checkIn.getBooking().getFlight().getDepartureTime()
+                    .format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy"));
+            }
+            g2d.drawString(departureTime, 500, 250);
+            
+            // Generate and draw QR code
+            try {
+                BufferedImage qrCodeImage = generateQRCodeImage(checkIn);
+                g2d.drawImage(qrCodeImage, 480, 280, 180, 180, null); // Made QR code bigger: 180x180 instead of 150x150
+                
+                g2d.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 12));
+                g2d.drawString("Scan to verify", 520, 480);
+            } catch (Exception e) {
+                log.warn("Could not generate QR code for boarding pass: {}", e.getMessage());
+                g2d.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 12));
+                g2d.drawString("QR CODE", 550, 375);
+            }
+            
+            // Bottom info
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 14));
+            String price = checkIn.getTicketPrice() != null ? checkIn.getTicketPrice().intValue() + " VND" : "N/A";
+            g2d.drawString("PRICE: " + price, 50, 350);
+            String checkinTime = "";
+            if (checkIn.getCheckedAt() != null) {
+                checkinTime = checkIn.getCheckedAt().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy"));
+            }
+            g2d.drawString("CHECK-IN: " + checkinTime, 50, 380);
+            
+            // Footer
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.ITALIC, 12));
+            g2d.drawString("Thank you for choosing AirsKy Airlines • Safe travels!", 50, 550);
+            
+            g2d.dispose();
+            
+            // Convert to byte array
+            try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                ImageIO.write(image, "PNG", baos);
+                return baos.toByteArray();
+            }
+            
+        } catch (Exception e) {
+            log.error("Error generating boarding pass image: {}", e.getMessage(), e);
+            throw new IOException("Failed to generate boarding pass image", e);
+        }
     }
 
     private byte[] generatePdfBoardingPass(CheckIn checkIn) throws IOException {
@@ -197,7 +339,7 @@ public class BoardingPassServiceImpl implements BoardingPassService {
             flightTable.addCell(createInfoCell("AIRCRAFT", checkIn.getBooking().getFlight().getAircraft() != null ?
                 checkIn.getBooking().getFlight().getAircraft().getAircraftCode() : "TBA"));
             flightTable.addCell(createInfoCell("DURATION", checkIn.getBooking().getFlight().getDuration() + " minutes"));
-            flightTable.addCell(createInfoCell("TICKET PRICE", String.format("%.0f VND", checkIn.getTicketPrice())));
+            flightTable.addCell(createInfoCell("TICKET PRICE", checkIn.getTicketPrice().intValue() + " VND"));
             flightTable.addCell(createInfoCell("CHECK-IN TIME", checkIn.getCheckedAt()
                 .format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy"))));
 
@@ -237,17 +379,52 @@ public class BoardingPassServiceImpl implements BoardingPassService {
             .setTextAlignment(TextAlignment.CENTER);
     }
 
+    private BufferedImage generateQRCodeImage(CheckIn checkIn) throws WriterException, IOException {
+        // Validate required data
+        if (checkIn == null || checkIn.getBooking() == null || checkIn.getPassenger() == null || 
+            checkIn.getBooking().getFlight() == null) {
+            throw new IllegalArgumentException("CheckIn data is incomplete for QR code generation");
+        }
+
+        // Create QR code content as JSON and encode as Base64 for security
+        String jsonContent = String.format("""
+            {
+                "type": "BOARDING_PASS",
+                "bookingCode": "%s",
+                "passengerId": %d,
+                "checkInId": %d,
+                "flightNumber": "%s", 
+                "seatNumber": "%s",
+                "departureTime": "%s",
+                "route": "%s-%s",
+                "passengerName": "%s",
+                "timestamp": "%s"
+            }
+            """,
+            checkIn.getBooking().getBookingCode() != null ? checkIn.getBooking().getBookingCode() : "",
+            checkIn.getPassenger().getPassengerId() != null ? checkIn.getPassenger().getPassengerId() : 0L,
+            checkIn.getCheckInId() != null ? checkIn.getCheckInId() : 0L,
+            checkIn.getBooking().getFlight().getFlightNumber() != null ? checkIn.getBooking().getFlight().getFlightNumber() : "",
+            checkIn.getSeatNumber() != null ? checkIn.getSeatNumber() : "",
+            checkIn.getBooking().getFlight().getDepartureTime() != null ? checkIn.getBooking().getFlight().getDepartureTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) : "",
+            checkIn.getBooking().getFlight().getDepartureAirport() != null && checkIn.getBooking().getFlight().getDepartureAirport().getAirportCode() != null ? checkIn.getBooking().getFlight().getDepartureAirport().getAirportCode() : "",
+            checkIn.getBooking().getFlight().getArrivalAirport() != null && checkIn.getBooking().getFlight().getArrivalAirport().getAirportCode() != null ? checkIn.getBooking().getFlight().getArrivalAirport().getAirportCode() : "",
+            (checkIn.getPassenger().getFirstName() != null ? checkIn.getPassenger().getFirstName() : "") + " " + (checkIn.getPassenger().getLastName() != null ? checkIn.getPassenger().getLastName() : ""),
+            LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        );
+
+        // Encode JSON as Base64
+        String qrContent = Base64.getEncoder().encodeToString(jsonContent.getBytes());
+
+        QRCodeWriter qrCodeWriter = new QRCodeWriter();
+        BitMatrix bitMatrix = qrCodeWriter.encode(qrContent, BarcodeFormat.QR_CODE, 250, 250); // Increased size to 250x250
+
+        return MatrixToImageWriter.toBufferedImage(bitMatrix);
+    }
+
     private Image generateQRCode(CheckIn checkIn) throws WriterException, IOException {
         // Create QR code content with boarding pass information
-        String qrContent = String.format("BOARDINGPASS|%s|%s|%s|%s|%s|%s",
-            checkIn.getBooking().getBookingCode(),
-            checkIn.getPassenger().getPassengerId(),
-            checkIn.getBooking().getFlight().getFlightNumber(),
-            checkIn.getSeatNumber(),
-            checkIn.getBooking().getFlight().getDepartureTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
-            checkIn.getBooking().getFlight().getDepartureAirport().getAirportCode() + "-" +
-            checkIn.getBooking().getFlight().getArrivalAirport().getAirportCode()
-        );
+        String qrContent = "BOARDINGPASS|" + checkIn.getBooking().getBookingCode() + "|" + checkIn.getPassenger().getPassengerId() + "|" + checkIn.getBooking().getFlight().getFlightNumber() + "|" + checkIn.getSeatNumber() + "|" + checkIn.getBooking().getFlight().getDepartureTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + "|" + checkIn.getBooking().getFlight().getDepartureAirport().getAirportCode() + "-" + checkIn.getBooking().getFlight().getArrivalAirport().getAirportCode();
 
         QRCodeWriter qrCodeWriter = new QRCodeWriter();
         BitMatrix bitMatrix = qrCodeWriter.encode(qrContent, BarcodeFormat.QR_CODE, 200, 200);
@@ -262,7 +439,8 @@ public class BoardingPassServiceImpl implements BoardingPassService {
     }
 
     private String buildEmailContent(CheckIn checkIn, String pdfUrl) {
-        String passengerName = checkIn.getPassenger().getFirstName() + " " + checkIn.getPassenger().getLastName();
+        String passengerName = (checkIn.getPassenger().getFirstName() != null ? checkIn.getPassenger().getFirstName() : "") + " " + 
+                              (checkIn.getPassenger().getLastName() != null ? checkIn.getPassenger().getLastName() : "");
 
         return String.format("""
             <html>
@@ -275,7 +453,7 @@ public class BoardingPassServiceImpl implements BoardingPassService {
                 <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                     <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
                         <h3 style="margin-top: 0; color: #333;">📋 Flight Details</h3>
-                        <table style="width: 100%%; border-collapse: collapse;">
+                        <table style="width: 100%; border-collapse: collapse;">
                             <tr>
                                 <td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Passenger:</strong></td>
                                 <td style="padding: 8px 0; border-bottom: 1px solid #eee;">%s</td>
@@ -312,7 +490,7 @@ public class BoardingPassServiceImpl implements BoardingPassService {
                     </div>
 
                     <div style="text-align: center; margin: 30px 0;">
-                        <a href="%s" style="background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+                        <a href="%s" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                            color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px;
                            font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);">
                             📄 Download Boarding Pass PDF
@@ -355,22 +533,120 @@ public class BoardingPassServiceImpl implements BoardingPassService {
             </html>
             """,
             passengerName,
-            checkIn.getBooking().getBookingCode(),
-            checkIn.getBooking().getFlight().getFlightNumber(),
-            checkIn.getBooking().getFlight().getDepartureAirport().getCityName(),
-            checkIn.getBooking().getFlight().getArrivalAirport().getCityName(),
-            checkIn.getBooking().getFlight().getDepartureTime().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")),
-            checkIn.getSeatNumber(),
-            checkIn.getBooking().getTravelClass().getClassName(),
+            checkIn.getBooking().getBookingCode() != null ? checkIn.getBooking().getBookingCode() : "",
+            checkIn.getBooking().getFlight().getFlightNumber() != null ? checkIn.getBooking().getFlight().getFlightNumber() : "",
+            checkIn.getBooking().getFlight().getDepartureAirport() != null && checkIn.getBooking().getFlight().getDepartureAirport().getCityName() != null ? checkIn.getBooking().getFlight().getDepartureAirport().getCityName() : "",
+            checkIn.getBooking().getFlight().getArrivalAirport() != null && checkIn.getBooking().getFlight().getArrivalAirport().getCityName() != null ? checkIn.getBooking().getFlight().getArrivalAirport().getCityName() : "",
+            checkIn.getBooking().getFlight().getDepartureTime() != null ? checkIn.getBooking().getFlight().getDepartureTime().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")) : "",
+            checkIn.getSeatNumber() != null ? checkIn.getSeatNumber() : "",
+            checkIn.getBooking().getTravelClass() != null && checkIn.getBooking().getTravelClass().getClassName() != null ? checkIn.getBooking().getTravelClass().getClassName() : "",
             checkIn.getBooking().getFlight().getGate() != null ?
                 checkIn.getBooking().getFlight().getGate().getGateName() : "TBA",
-            pdfUrl
+            pdfUrl != null ? pdfUrl : ""
         );
     }
 
     private String generateSimpleBoardingPassUrl(CheckIn checkIn) {
-        return String.format("https://airsky.com/boarding-pass/%s/%s",
-            checkIn.getBooking().getBookingCode(),
-            checkIn.getPassenger().getPassengerId());
+        return baseUrl + "/" + checkIn.getBooking().getBookingCode() + "/" + checkIn.getPassenger().getPassengerId();
+    }
+
+    @Override
+    public QRVerificationResponse verifyQRCode(String qrCode) {
+        try {
+            // Decode Base64
+            String jsonContent = new String(Base64.getDecoder().decode(qrCode));
+            log.info("Decoded QR content: {}", jsonContent);
+
+            // Parse JSON manually (simple approach)
+            if (!jsonContent.contains("\"type\": \"BOARDING_PASS\"")) {
+                throw new IllegalArgumentException("Invalid QR code format");
+            }
+
+            // Extract booking code and passenger ID from JSON
+            String bookingCode = extractJsonValue(jsonContent, "bookingCode");
+            Long passengerId = Long.valueOf(extractJsonValue(jsonContent, "passengerId"));
+
+            return verifyBoardingPass(bookingCode, passengerId);
+
+        } catch (Exception e) {
+            log.error("Error verifying QR code: {}", e.getMessage());
+            return QRVerificationResponse.builder()
+                .valid(false)
+                .message("Invalid QR code format or content")
+                .build();
+        }
+    }
+
+    @Override
+    public QRVerificationResponse verifyBoardingPass(String bookingCode, Long passengerId) {
+        try {
+            // Find CheckIn record by booking code and passenger ID
+            Optional<CheckIn> checkInOpt = checkinRepository.findByBookingCodeAndPassengerId(bookingCode, passengerId);
+
+            if (checkInOpt.isEmpty()) {
+                return QRVerificationResponse.builder()
+                    .valid(false)
+                    .message("Boarding pass not found")
+                    .build();
+            }
+
+            CheckIn checkIn = checkInOpt.get();
+
+            // Verify that check-in is completed
+            if (checkIn.getStatus() != CheckinStatus.COMPLETED) {
+                return QRVerificationResponse.builder()
+                    .valid(false)
+                    .message("Check-in not completed")
+                    .build();
+            }
+
+            // Return verification response with details
+            return QRVerificationResponse.builder()
+                .valid(true)
+                .message("✅ Boarding pass verified successfully")
+                .bookingCode(checkIn.getBooking().getBookingCode())
+                .passengerId(checkIn.getPassenger().getPassengerId())
+                .passengerName(checkIn.getPassenger().getFirstName() + " " + checkIn.getPassenger().getLastName())
+                .flightNumber(checkIn.getBooking().getFlight().getFlightNumber())
+                .seatNumber(checkIn.getSeatNumber())
+                .route(checkIn.getBooking().getFlight().getDepartureAirport().getAirportCode() + " → " + 
+                      checkIn.getBooking().getFlight().getArrivalAirport().getAirportCode())
+                .departureTime(checkIn.getBooking().getFlight().getDepartureTime())
+                .checkedAt(checkIn.getCheckedAt())
+                .status("VERIFIED")
+                .build();
+
+        } catch (Exception e) {
+            log.error("Error verifying boarding pass: {}", e.getMessage());
+            return QRVerificationResponse.builder()
+                .valid(false)
+                .message("Error verifying boarding pass")
+                .build();
+        }
+    }
+
+    private String extractJsonValue(String json, String key) {
+        String searchPattern = "\"" + key + "\": ";
+        int startIndex = json.indexOf(searchPattern);
+        if (startIndex == -1) {
+            throw new IllegalArgumentException("Key not found: " + key);
+        }
+        
+        startIndex += searchPattern.length();
+        
+        // Handle string values (with quotes)
+        if (json.charAt(startIndex) == '"') {
+            startIndex++; // Skip opening quote
+            int endIndex = json.indexOf('"', startIndex);
+            return json.substring(startIndex, endIndex);
+        } 
+        // Handle numeric values (without quotes)
+        else {
+            int endIndex = json.indexOf(',', startIndex);
+            if (endIndex == -1) {
+                endIndex = json.indexOf('}', startIndex);
+            }
+            return json.substring(startIndex, endIndex).trim();
+        }
     }
 }

@@ -35,7 +35,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     @Query("SELECT b FROM Booking b WHERE b.flight.status = :flightStatus AND b.status = :bookingStatus")
     List<Booking> findBookingsByFlightStatusAndBookingStatus(FlightStatus flightStatus, BookingStatus bookingStatus);
 
-    @Query("SELECT b FROM Booking b JOIN b.passengers p LEFT JOIN FETCH b.userId LEFT JOIN FETCH b.flight LEFT JOIN FETCH b.travelClass LEFT JOIN FETCH b.payment WHERE b.bookingCode = :bookingCode AND CONCAT(LOWER(p.firstName), ' ', LOWER(p.lastName)) = LOWER(:fullName)")
+    @Query("SELECT b FROM Booking b JOIN b.passengers p LEFT JOIN FETCH b.userId LEFT JOIN FETCH b.flight LEFT JOIN FETCH b.travelClass LEFT JOIN FETCH b.payment LEFT JOIN FETCH b.passengers WHERE b.bookingCode = :bookingCode AND CONCAT(LOWER(p.firstName), ' ', LOWER(p.lastName)) = LOWER(:fullName)")
     Optional<Booking> findByBookingCodeAndPassengerFullName(@Param("bookingCode") String bookingCode, @Param("fullName") String fullName);
 
     // Method để fetch passengers riêng

@@ -1,6 +1,7 @@
 package iuh.fit.airsky.service.impl;
 import iuh.fit.airsky.dto.request.BookingAncillaryServiceRequest;
 import iuh.fit.airsky.dto.request.BookingRequest;
+import iuh.fit.airsky.dto.request.CheckinRequest;
 import iuh.fit.airsky.dto.request.FlightSegmentRequest;
 import iuh.fit.airsky.dto.request.PassengerSeatRequest;
 import iuh.fit.airsky.dto.request.PaymentRequest;
@@ -11,6 +12,7 @@ import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.dto.response.PassengerSeatResponse;
 import iuh.fit.airsky.dto.response.SeatTypePricingDetail;
 import iuh.fit.airsky.dto.response.CheckinEligiblePassengerResponse;
+import iuh.fit.airsky.dto.response.CheckinResponse;
 import iuh.fit.airsky.enums.BaggageType;
 import iuh.fit.airsky.enums.BaggagePackage;
 import iuh.fit.airsky.enums.BookingStatus;
@@ -19,6 +21,7 @@ import iuh.fit.airsky.enums.SeatStatus;
 import iuh.fit.airsky.enums.LoyaltyTier;
 import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.enums.SeatTypePrice;
+import iuh.fit.airsky.enums.CheckinStatus;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.BookingMapper;
 import iuh.fit.airsky.mapper.PassengerMapper;
@@ -46,6 +49,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -1175,6 +1179,7 @@ public class BookingServiceImpl implements BookingService {
                 .baggage(baggage) // có thể null nếu không chọn
                 .seatNumber(seatNumber)
                 .checkedAt(booking.getFlight().getDepartureTime())
+                .status(CheckinStatus.PENDING) // Set status to PENDING when booking is created
                 .build();
         checkIn = checkinRepository.save(checkIn);
         log.info("CheckIn created with ID: {} for passenger {}, baggage: {}", 
@@ -1226,6 +1231,20 @@ public class BookingServiceImpl implements BookingService {
                     // Baggage information is optional for guest booking lookup
                 }
                 populateAncillaryServicesInformation(response, booking);
+                populateSeatTypeInformation(response, booking);
+                response.setCheckinEligiblePassengers(getPassengersWithCheckinStatus(bookingCode, fullName));
+                
+                // Populate available seats for the travel class
+                if (booking.getTravelClass() != null && booking.getFlight() != null) {
+                    List<Seat> availableSeats = seatRepository.findAvailableSeatsByFlightIdAndTravelClassId(
+                        booking.getFlight().getFlightId(), 
+                        booking.getTravelClass().getId()
+                    );
+                    List<String> availableSeatNumbers = availableSeats.stream()
+                        .map(Seat::getSeatNumber)
+                        .collect(java.util.stream.Collectors.toList());
+                    response.setAvailableSeats(availableSeatNumbers);
+                }
                 return Optional.of(response);
             } catch (Exception e) {
                 log.warn("Could not fully populate booking response for lookup {}: {}", bookingCode, e.getMessage());
@@ -1539,7 +1558,7 @@ public class BookingServiceImpl implements BookingService {
 
         // Check if booking is paid (required for check-in)
         boolean isPaid = booking.getPayment() != null &&
-                        "COMPLETED".equals(booking.getPayment().getStatus());
+                        booking.getPayment().getStatus() == PaymentStatus.COMPLETED;
 
         if (!isPaid) {
             throw new IllegalStateException("Booking must be paid before check-in");
@@ -1569,16 +1588,78 @@ public class BookingServiceImpl implements BookingService {
                     BigDecimal ticketPrice = calculatePassengerTicketPrice(passenger, booking);
                     response.setTicketPrice(ticketPrice);
 
-                    // Check if already checked in
-                    boolean alreadyCheckedIn = checkinRepository.existsByPassenger(passenger);
+                    // Check if already checked in (COMPLETED status)
+                    boolean alreadyCheckedIn = checkinRepository.existsByPassengerAndCompleted(passenger);
                     response.setCheckedIn(alreadyCheckedIn);
 
-                    if (alreadyCheckedIn) {
-                        response.setCheckinStatus("ALREADY_CHECKED_IN");
+                    // Set checkin status based on booking status first
+                    if (booking.getStatus() == BookingStatus.CANCELLED) {
+                        response.setCheckinStatus(CheckinStatus.BOOKING_CANCELLED);
+                    } else if (alreadyCheckedIn) {
+                        response.setCheckinStatus(CheckinStatus.ALREADY_CHECKED_IN);
+                    } else if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.COMPLETED) {
+                        response.setCheckinStatus(CheckinStatus.BOOKING_NOT_CONFIRMED);
                     } else if (!isPaid) {
-                        response.setCheckinStatus("PAYMENT_PENDING");
+                        response.setCheckinStatus(CheckinStatus.PAYMENT_PENDING);
                     } else {
-                        response.setCheckinStatus("ELIGIBLE");
+                        response.setCheckinStatus(CheckinStatus.ELIGIBLE);
+                    }
+
+                    return response;
+                })
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    @Override
+    public List<CheckinEligiblePassengerResponse> getPassengersWithCheckinStatus(String bookingCode, String fullName) {
+        log.info("Getting all passengers with check-in status for booking: {} and passenger: {}", bookingCode, fullName);
+
+        // First verify booking exists and user has access
+        Optional<Booking> bookingOpt = bookingRepository.findByBookingCodeAndPassengerFullName(bookingCode, fullName);
+        if (bookingOpt.isEmpty()) {
+            throw new ResourceNotFoundException("Booking not found or access denied");
+        }
+
+        Booking booking = bookingOpt.get();
+
+        // Check if booking is paid
+        boolean isPaid = booking.getPayment() != null &&
+                        booking.getPayment().getStatus() == PaymentStatus.COMPLETED;
+
+        // Get all passengers and their check-in status
+        return booking.getPassengers().stream()
+                .map(passenger -> {
+                    CheckinEligiblePassengerResponse response = new CheckinEligiblePassengerResponse();
+                    response.setPassengerId(passenger.getPassengerId());
+                    response.setFirstName(passenger.getFirstName());
+                    response.setLastName(passenger.getLastName());
+                    response.setFullName(passenger.getFirstName() + " " + passenger.getLastName());
+                    response.setPassportNumber(passenger.getPassportNumber());
+                    response.setSeatNumber(passenger.getSeat() != null ? passenger.getSeat().getSeatNumber() : null);
+
+                    // Calculate ticket price per passenger based on passenger type
+                    BigDecimal ticketPrice = calculatePassengerTicketPrice(passenger, booking);
+                    response.setTicketPrice(ticketPrice);
+
+                    // Check if already checked in (COMPLETED status)
+                    boolean alreadyCheckedIn = checkinRepository.existsByPassengerAndCompleted(passenger);
+                    response.setCheckedIn(alreadyCheckedIn);
+
+                    // Set checkin status based on booking status first
+                    if (booking.getStatus() == BookingStatus.CANCELLED) {
+                        response.setCheckinStatus(CheckinStatus.BOOKING_CANCELLED);
+                    } else if (alreadyCheckedIn) {
+                        response.setCheckinStatus(CheckinStatus.ALREADY_CHECKED_IN);
+                    } else if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.COMPLETED) {
+                        response.setCheckinStatus(CheckinStatus.BOOKING_NOT_CONFIRMED);
+                    } else if (!isPaid) {
+                        response.setCheckinStatus(CheckinStatus.PAYMENT_PENDING);
+                    } else {
+                        // Check if flight is eligible for check-in
+                        LocalDateTime now = LocalDateTime.now();
+                        boolean canCheckIn = booking.getFlight().getDepartureTime().isAfter(now.plusHours(1)) &&
+                                           booking.getFlight().getDepartureTime().isBefore(now.plusDays(1));
+                        response.setCheckinStatus(canCheckIn ? CheckinStatus.ELIGIBLE : CheckinStatus.NOT_AVAILABLE);
                     }
 
                     return response;
@@ -1603,6 +1684,202 @@ public class BookingServiceImpl implements BookingService {
             BigDecimal.valueOf(booking.getPassengers().size()),
             2, java.math.RoundingMode.HALF_UP
         );
+    }
+
+    @Override
+    @Transactional
+    public CheckinResponse processCheckin(CheckinRequest request) {
+        log.info("Processing check-in for booking: {}, passenger: {}",
+                request.getBookingCode(), request.getPassengerFullName());
+
+        // Validate booking and passenger
+        Optional<Booking> bookingOpt = bookingRepository.findByBookingCodeAndPassengerFullName(
+                request.getBookingCode(), request.getPassengerFullName());
+        if (bookingOpt.isEmpty()) {
+            throw new ResourceNotFoundException("Booking not found or access denied");
+        }
+
+        Booking booking = bookingOpt.get();
+
+        // **CẬP NHẬT: Validate booking status - phải là CONFIRMED hoặc COMPLETED**
+        if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.COMPLETED) {
+            throw new IllegalStateException("Booking must be confirmed before check-in. Current status: " + booking.getStatus());
+        }
+
+        // Check if booking is paid (required for check-in)
+        boolean isPaid = booking.getPayment() != null &&
+                        booking.getPayment().getStatus() == PaymentStatus.COMPLETED;
+        if (!isPaid) {
+            throw new IllegalStateException("Booking must be paid before check-in");
+        }
+
+        // Check if flight is eligible for check-in (not departed, within check-in window)
+        LocalDateTime now = LocalDateTime.now();
+        boolean canCheckIn = booking.getFlight().getDepartureTime().isAfter(now.plusHours(1)) &&
+                           booking.getFlight().getDepartureTime().isBefore(now.plusDays(1));
+        if (!canCheckIn) {
+            throw new IllegalStateException("Check-in not available for this flight at this time");
+        }
+
+        Passenger passenger = booking.getPassengers().stream()
+                .filter(p -> p.getPassengerId().equals(request.getPassengerId()))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Passenger not found"));
+
+        // Check if passenger is already checked in (COMPLETED status)
+        boolean alreadyCheckedIn = checkinRepository.existsByPassengerAndCompleted(passenger);
+        if (alreadyCheckedIn) {
+            throw new IllegalStateException("Passenger is already checked in");
+        }
+
+        CheckinResponse response = new CheckinResponse();
+        response.setPassengerId(passenger.getPassengerId());
+        response.setPassengerName(passenger.getFirstName() + " " + passenger.getLastName());
+        response.setOldSeatNumber(passenger.getSeat() != null ? passenger.getSeat().getSeatNumber() : null);
+
+        BigDecimal totalCharge = BigDecimal.ZERO;
+
+        // Handle seat change if requested
+        if (request.getNewSeatNumber() != null && !request.getNewSeatNumber().equals(response.getOldSeatNumber())) {
+            BigDecimal seatCharge = handleSeatChange(booking, passenger, request.getNewSeatNumber());
+            response.setSeatChangeCharge(seatCharge);
+            response.setNewSeatNumber(request.getNewSeatNumber());
+            totalCharge = totalCharge.add(seatCharge);
+        }
+
+        // Handle ancillary services updates
+        if (request.getServicesToAdd() != null && !request.getServicesToAdd().isEmpty()) {
+            BigDecimal servicesCharge = handleAddAncillaryServices(booking, passenger, request.getServicesToAdd());
+            response.setServicesAddedCharge(servicesCharge);
+            totalCharge = totalCharge.add(servicesCharge);
+        }
+
+        if (request.getServiceIdsToRemove() != null && !request.getServiceIdsToRemove().isEmpty()) {
+            BigDecimal servicesRefund = handleRemoveAncillaryServices(booking, passenger, request.getServiceIdsToRemove());
+            response.setServicesRemovedRefund(servicesRefund);
+            totalCharge = totalCharge.add(servicesRefund); // Refund is negative
+        }
+
+        response.setTotalCharge(totalCharge);
+
+        // Update booking total amount
+        BigDecimal newTotal = booking.getTotalAmount().add(totalCharge);
+        booking.setTotalAmount(newTotal);
+        bookingRepository.save(booking);
+
+        response.setUpdatedTotalAmount(newTotal);
+        response.setStatus("SUCCESS");
+        response.setMessage("Check-in processed successfully");
+
+        // Update check-in status to COMPLETED
+        Optional<CheckIn> existingCheckIn = checkinRepository.findByBookingIdWithBaggage(booking.getBookingId()).stream()
+                .filter(ci -> ci.getPassenger().equals(passenger))
+                .findFirst();
+
+        if (existingCheckIn.isPresent()) {
+            CheckIn checkIn = existingCheckIn.get();
+            checkIn.setStatus(CheckinStatus.COMPLETED);
+            checkIn.setCheckedAt(LocalDateTime.now());
+            checkinRepository.save(checkIn);
+        }
+
+        return response;
+    }
+
+    private BigDecimal handleSeatChange(Booking booking, Passenger passenger, String newSeatNumber) {
+        // Find the new seat
+        Seat newSeat = seatRepository.findByFlightIdAndSeatNumberForUpdate(booking.getFlight().getFlightId(), newSeatNumber)
+                .orElseThrow(() -> new ResourceNotFoundException("Seat not found: " + newSeatNumber));
+
+        // Check if seat is available
+        if (!SeatStatus.AVAILABLE.equals(newSeat.getStatus())) {
+            throw new IllegalStateException("Seat is not available: " + newSeatNumber);
+        }
+
+        // Calculate price difference
+        BigDecimal oldSeatPrice = calculateSeatPrice(passenger.getSeat());
+        BigDecimal newSeatPrice = calculateSeatPrice(newSeat);
+        BigDecimal priceDifference = newSeatPrice.subtract(oldSeatPrice);
+
+        // Update passenger seat
+        passenger.setSeat(newSeat);
+        passengerRepository.save(passenger);
+
+        // Update seat status
+        if (passenger.getSeat() != null) {
+            passenger.getSeat().setStatus(SeatStatus.AVAILABLE);
+            seatRepository.save(passenger.getSeat());
+        }
+        newSeat.setStatus(SeatStatus.OCCUPIED);
+        seatRepository.save(newSeat);
+
+        return priceDifference;
+    }
+
+    private BigDecimal handleAddAncillaryServices(Booking booking, Passenger passenger,
+                                                 List<BookingAncillaryServiceRequest> servicesToAdd) {
+        BigDecimal totalCharge = BigDecimal.ZERO;
+
+        for (BookingAncillaryServiceRequest serviceRequest : servicesToAdd) {
+            AncillaryService service = ancillaryServiceRepository.findById(serviceRequest.getServiceId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Ancillary service not found: " + serviceRequest.getServiceId()));
+
+            // Check if service already exists for this passenger
+            List<BookingAncillaryService> existingServices = bookingAncillaryServiceRepository.findByBookingId(booking.getBookingId());
+            boolean alreadyExists = existingServices.stream()
+                    .anyMatch(bs -> bs.getAncillaryService().getServiceId().equals(serviceRequest.getServiceId()) &&
+                                   (bs.getPassenger() == null || bs.getPassenger().equals(passenger)));
+
+            if (alreadyExists) {
+                continue; // Skip if already exists
+            }
+
+            // Create new booking ancillary service
+            BookingAncillaryService bookingService = new BookingAncillaryService();
+            bookingService.setBooking(booking);
+            bookingService.setAncillaryService(service);
+            bookingService.setPassenger(passenger);
+            bookingService.setQuantity(serviceRequest.getQuantity());
+            bookingService.setUnitPrice(service.getPrice());
+            bookingService.setTotalPrice(service.getPrice().multiply(BigDecimal.valueOf(serviceRequest.getQuantity())));
+            bookingService.setNotes(serviceRequest.getNotes());
+
+            bookingAncillaryServiceRepository.save(bookingService);
+
+            totalCharge = totalCharge.add(bookingService.getTotalPrice());
+        }
+
+        return totalCharge;
+    }
+
+    private BigDecimal handleRemoveAncillaryServices(Booking booking, Passenger passenger,
+                                                   List<Long> serviceIdsToRemove) {
+        BigDecimal totalRefund = BigDecimal.ZERO;
+
+        List<BookingAncillaryService> existingServices = bookingAncillaryServiceRepository.findByBookingId(booking.getBookingId());
+
+        for (Long serviceId : serviceIdsToRemove) {
+            BookingAncillaryService bookingService = existingServices.stream()
+                    .filter(bs -> bs.getAncillaryService().getServiceId().equals(serviceId) &&
+                                (bs.getPassenger() == null || bs.getPassenger().equals(passenger)))
+                    .findFirst()
+                    .orElse(null);
+
+            if (bookingService != null) {
+                totalRefund = totalRefund.add(bookingService.getTotalPrice());
+                bookingAncillaryServiceRepository.delete(bookingService);
+            }
+        }
+
+        return totalRefund.negate(); // Return as negative for refund
+    }
+
+    private BigDecimal calculateSeatPrice(Seat seat) {
+        if (seat == null) return BigDecimal.ZERO;
+
+        // Use the predefined seat type pricing from enum
+        SeatTypePrice seatTypePrice = SeatTypePrice.fromSeatType(seat.getType());
+        return seatTypePrice.getAdditionalPrice();
     }
 
 }
