@@ -1,4 +1,3 @@
-// PaymentServiceImpl.java
 package iuh.fit.airsky.service.impl;
 
 import com.paypal.api.payments.*;
@@ -28,18 +27,18 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -58,6 +57,20 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Value("${paypal.cancel-url}")
     private String cancelUrl;
+
+
+    @Value("${sepay.api-key:}")
+    private String sepayApiKey;
+
+
+    @Value("${sepay.qr.account:}")
+    private String sepayAccount;
+
+    @Value("${sepay.qr.bank:}")
+    private String sepayBank;
+
+    @Value("${sepay.qr.template:compact}")
+    private String sepayQrTemplate;
 
     @Override
     @Transactional
@@ -115,7 +128,9 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public List<PaymentResponse> findByBookingId(Long bookingId) {
-        return List.of();
+        log.info("Finding payments for booking id: {}", bookingId);
+        Optional<Payment> payments = paymentRepository.findByBooking_BookingId(bookingId);
+        return payments.stream().map(paymentMapper::toResponseDTO).collect(Collectors.toList());
     }
 
     @Override
@@ -176,10 +191,14 @@ public class PaymentServiceImpl implements PaymentService {
 
     private PaymentResponse processPayment(Payment payment, Booking booking) {
         try {
-            if (payment.getPaymentMethod() == PaymentMethod.PAYPAL) {
-                return processPayPalPayment(payment, booking);
+            switch (payment.getPaymentMethod()) {
+                case PAYPAL:
+                    return processPayPalPayment(payment, booking);
+                case BANK_TRANSFER:
+                    return processSepayPayment(payment, booking);
+                default:
+                    return processRegularPayment(booking, payment);
             }
-            return processRegularPayment(booking, payment);
         } catch (Exception e) {
             log.error("Payment processing failed: {}", e.getMessage(), e);
             throw new PaymentProcessingException("Payment processing failed: " + e.getMessage(), e);
@@ -190,6 +209,44 @@ public class PaymentServiceImpl implements PaymentService {
         // Implementation for other payment methods
         throw new UnsupportedOperationException("Regular payment processing not implemented");
     }
+    @Transactional
+    @Override
+    public boolean checkSepayTransaction(String bookingCode) {
+        try {
+            String url = "https://my.sepay.vn/userapi/transactions/list";
+            String apiKey = "Bearer " + sepayApiKey; // cấu hình trong application.yml
+
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", apiKey);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                List<Map<String, Object>> transactions =
+                        (List<Map<String, Object>>) response.getBody().get("transactions");
+
+                for (Map<String, Object> tx : transactions) {
+                    String content = tx.get("transaction_content").toString();
+                    if (content.contains(bookingCode)) {
+                        Double amount = Double.parseDouble(tx.get("amount_in").toString());
+                        log.info("✅ Found transaction for booking {} with amount {}", bookingCode, amount);
+
+                        updateSepayPaymentStatus("PAYBOOKING" + bookingCode, "SUCCESS", amount);
+                        return true;
+                    }
+                }
+            }
+
+            log.info(" No transaction found for booking {}", bookingCode);
+            return false;
+        } catch (Exception e) {
+            log.error("Error checking SePay transaction: {}", e.getMessage(), e);
+            return false;
+        }
+    }
+
 
     private PaymentResponse processPayPalPayment(Payment payment, Booking booking) throws PayPalRESTException {
         if (payment.getTransactionId() != null && payment.getStatus() == PaymentStatus.PENDING) {
@@ -205,6 +262,66 @@ public class PaymentServiceImpl implements PaymentService {
         return buildPaymentResponse(payment);
     }
 
+    /**
+     * SEPAY: create QR url via qr.sepay.vn (no external API call required)
+     */
+    private PaymentResponse processSepayPayment(Payment payment, Booking booking) {
+        log.info("Creating SePay QR for booking {}", booking.getBookingId());
+
+        try {
+
+
+            // build description (use order code or booking code)
+            String orderCode = String.format("PAYBOOKING%s", booking.getBookingCode());
+            String description = orderCode;
+            String encodedDescription = URLEncoder.encode(description, StandardCharsets.UTF_8);
+
+            // amount as integer (VND) - ensure no decimals
+            BigDecimal amount = booking.getTotalAmount().setScale(0, RoundingMode.HALF_UP);
+            String amountStr = amount.toPlainString();
+
+            // account & bank from config (ensure you set these in application.yml)
+            if (sepayAccount == null || sepayAccount.isBlank() || sepayBank == null || sepayBank.isBlank()) {
+                log.warn("SePay account/bank not configured (sepay.qr.account/sepay.qr.bank). Falling back to payment without QR.");
+            }
+
+            // Build QR url (per docs)
+            String qrUrl = String.format(
+                    "https://qr.sepay.vn/img?acc=%s&bank=%s&amount=%s&des=%s&template=%s&download=false",
+                    URLEncoder.encode(Optional.ofNullable(sepayAccount).orElse(""), StandardCharsets.UTF_8),
+                    URLEncoder.encode(Optional.ofNullable(sepayBank).orElse(""), StandardCharsets.UTF_8),
+                    URLEncoder.encode(amountStr, StandardCharsets.UTF_8),
+                    encodedDescription,
+                    URLEncoder.encode(Optional.ofNullable(sepayQrTemplate).orElse("compact"), StandardCharsets.UTF_8)
+            );
+
+            // Save transaction/order code & QR url into Payment
+            payment.setTransactionId(orderCode);
+            payment.setStatus(PaymentStatus.PENDING);
+            payment.setPaymentDate(LocalDateTime.now());
+            // reuse paypalApprovalUrl field to store the checkout/qr url
+            payment.setPaypalApprovalUrl(qrUrl);
+
+            paymentRepository.save(payment);
+
+            // build response
+            PaymentResponse response = paymentMapper.toResponseDTO(payment);
+            response.setPaypalApprovalUrl(qrUrl); // return qr url to frontend
+            return response;
+
+        } catch (Exception e) {
+            log.error("Error creating SePay QR: {}", e.getMessage(), e);
+            throw new PaymentProcessingException("Failed to create SePay payment", e);
+        }
+    }
+    private void updateBookingStatus(Booking booking) {
+        if (booking.getStatus() == BookingStatus.PENDING) {
+            booking.setStatus(BookingStatus.CONFIRMED);
+            updatePassengerSeats(booking);
+            bookingRepository.save(booking);
+            log.info("Updated booking {} status to CONFIRMED", booking.getBookingId());
+        }
+    }
     private com.paypal.api.payments.Payment createPayPalPayment(Booking booking) throws PayPalRESTException {
         Amount amount = new Amount()
                 .setCurrency("USD")
@@ -239,6 +356,9 @@ public class PaymentServiceImpl implements PaymentService {
         PaymentResponse response = paymentMapper.toResponseDTO(payment);
         if (payment.getPaymentMethod() == PaymentMethod.PAYPAL) {
             response.setPaypalApprovalUrl(payment.getPaypalApprovalUrl());
+        } else if (payment.getPaymentMethod() == PaymentMethod.BANK_TRANSFER) {
+            // Return the QR/check-out URL for BANK_TRANSFER
+            response.setPaypalApprovalUrl(payment.getPaypalApprovalUrl());
         }
         return response;
     }
@@ -271,12 +391,44 @@ public class PaymentServiceImpl implements PaymentService {
         return paymentMapper.toResponseDTO(payment);
     }
 
-    private void updateBookingStatus(Booking booking) {
-        if (booking.getStatus() == BookingStatus.PENDING) {
-            booking.setStatus(BookingStatus.CONFIRMED);
-            updatePassengerSeats(booking);
-            bookingRepository.save(booking);
-            log.info("Updated booking {} status to CONFIRMED", booking.getBookingId());
+    @Transactional
+    @Override
+    public void updateSepayPaymentStatus(String orderCode, String status, Double amount) {
+        log.info("Updating SePay payment with order_code: {}, status: {}, amount: {}", orderCode, status, amount);
+
+        Optional<Payment> opt = paymentRepository.findByTransactionId(orderCode);
+        if (opt.isEmpty()) {
+            log.warn("No payment found for orderCode {}", orderCode);
+            return;
+        }
+
+        Payment payment = opt.get();
+
+        // Optional: verify amount (if amount provided)
+        if (amount != null) {
+            try {
+                double expected = payment.getAmount() != null ? payment.getAmount().doubleValue() : 0.0;
+                if (Double.compare(expected, amount) != 0) {
+                    log.warn("Amount mismatch for payment {}: expected {}, received {}", payment.getPaymentId(), expected, amount);
+                    // You may choose to still accept or ignore — here we just log and continue
+                }
+            } catch (Exception ex) {
+                log.warn("Failed to compare amounts for payment {}", payment.getPaymentId(), ex);
+            }
+        }
+
+        if ("PAID".equalsIgnoreCase(status) || "SUCCESS".equalsIgnoreCase(status) || "IN".equalsIgnoreCase(status)) {
+            payment.setStatus(PaymentStatus.COMPLETED);
+            payment.setPaymentDate(LocalDateTime.now());
+            paymentRepository.save(payment);
+            updateBookingStatus(payment.getBooking());
+            log.info("Payment {} marked as COMPLETED via SePay webhook", payment.getPaymentId());
+        } else if ("FAILED".equalsIgnoreCase(status) || "CANCELLED".equalsIgnoreCase(status) || "OUT".equalsIgnoreCase(status)) {
+            payment.setStatus(PaymentStatus.FAILED);
+            paymentRepository.save(payment);
+            log.info("Payment {} marked as FAILED via SePay webhook", payment.getPaymentId());
+        } else {
+            log.info("Ignoring SePay webhook with unrecognized status: {}", status);
         }
     }
 
@@ -294,7 +446,7 @@ public class PaymentServiceImpl implements PaymentService {
                 passenger.getSeat().setStatus(SeatStatus.OCCUPIED);
                 seatRepository.save(passenger.getSeat());
                 log.debug("Updated seat {} status to OCCUPIED for passenger {}",
-                    passenger.getSeat().getSeatNumber(), passenger.getFirstName());
+                        passenger.getSeat().getSeatNumber(), passenger.getFirstName());
             }
         }
     }
@@ -332,7 +484,7 @@ public class PaymentServiceImpl implements PaymentService {
             }
         } else {
             log.info("Payment {} for booking {} is not completed (status: {}), no refund needed",
-                payment.getPaymentId(), booking.getBookingId(), payment.getStatus());
+                    payment.getPaymentId(), booking.getBookingId(), payment.getStatus());
         }
     }
 
@@ -341,16 +493,16 @@ public class PaymentServiceImpl implements PaymentService {
             String email = booking.getUserId().getEmail();
             String subject = "Thông báo: Hoàn tiền booking đã hủy";
             String body = String.format(
-                "<h3>Xin chào %s</h3>" +
-                "<p>Mã đặt vé: <strong>%s</strong></p>" +
-                "<p>Booking của bạn đã được hoàn tiền vì: <strong>%s</strong></p>" +
-                "<p>Số tiền đã hoàn: $%.2f</p>" +
-                "<p>Quy trình hoàn tiền có thể mất 3-5 ngày làm việc tùy thuộc vào phương thức thanh toán.</p>" +
-                "<p>Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.</p>",
-                booking.getUserId().getLastName(),
-                booking.getBookingCode(),
-                reason,
-                booking.getTotalAmount()
+                    "<h3>Xin chào %s</h3>" +
+                            "<p>Mã đặt vé: <strong>%s</strong></p>" +
+                            "<p>Booking của bạn đã được hoàn tiền vì: <strong>%s</strong></p>" +
+                            "<p>Số tiền đã hoàn: $%.2f</p>" +
+                            "<p>Quy trình hoàn tiền có thể mất 3-5 ngày làm việc tùy thuộc vào phương thức thanh toán.</p>" +
+                            "<p>Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.</p>",
+                    booking.getUserId().getLastName(),
+                    booking.getBookingCode(),
+                    reason,
+                    booking.getTotalAmount()
             );
 
             emailService.sendEmail(email, subject, body);

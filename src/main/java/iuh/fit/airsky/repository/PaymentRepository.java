@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,4 +27,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     List<Payment> findByBooking_BookingIdOrderByPaymentDateDesc(Long bookingId);
 
     Optional<Payment> findByTransactionIdAndBooking_BookingId(String transactionId, Long bookingId);
+
+    Optional<Payment> findByTransactionId(String orderCode);
 }

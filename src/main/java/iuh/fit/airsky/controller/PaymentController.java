@@ -20,6 +20,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -123,6 +124,31 @@ public class PaymentController {
             );
         }
     }
+    @GetMapping("/sepay/check/{bookingCode}")
+    public ResponseEntity<Map<String, Object>> checkSepayPayment(@PathVariable String bookingCode) {
+        log.info("Checking SePay transaction for bookingCode: {}", bookingCode);
+        try {
+            boolean success = paymentService.checkSepayTransaction(bookingCode);
+            if (success) {
+                return ResponseEntity.ok(Map.of(
+                        "success", true,
+                        "message", "Payment found and updated successfully"
+                ));
+            } else {
+                return ResponseEntity.ok(Map.of(
+                        "success", false,
+                        "message", "No transaction found for this booking code"
+                ));
+            }
+        } catch (Exception e) {
+            log.error("Error checking SePay transaction: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "success", false,
+                    "message", "Error checking SePay transaction"
+            ));
+        }
+    }
+
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<PaymentResponse>> getPayment(

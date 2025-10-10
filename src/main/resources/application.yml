@@ -79,7 +79,7 @@ logging:
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
 
-# PayPal Configuration
+
 # PayPal Configuration
 paypal:
   client-id: ${PAYPAL_CLIENT_ID:}
@@ -87,6 +87,14 @@ paypal:
   mode: ${PAYPAL_MODE:sandbox} # or 'live' for production
   success-url: http://localhost:5173/payment-success
   cancel-url: http://localhost:5173/payment-cancel
+
+# sepay Configuration
+sepay:
+  api-key: FRT7YMJW2CP268P567ULDTN1XZBYI3QQGYP8USUF1HV3WCFUGJ0XMLGLRMMSEWDP
+  qr:
+    account: "0964133949"     # số tài khoản nhận tiền
+    bank: "MBBank"               # mã ngân hàng
+    template: "compact"
 
 # Application URL
 app:

@@ -5,6 +5,7 @@ import iuh.fit.airsky.dto.request.PaymentRequest;
 import iuh.fit.airsky.dto.response.PaymentResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -39,6 +40,12 @@ public interface PaymentService {
      * Delete a payment
      */
     void delete(Long id);
+
+
+    @Transactional
+    boolean checkSepayTransaction(String bookingCode);
+
+    void updateSepayPaymentStatus(String orderCode, String status, Double amount);
 
     /**
      * Process refund for cancelled booking
