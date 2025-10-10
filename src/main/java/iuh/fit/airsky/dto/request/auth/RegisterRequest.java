@@ -19,6 +19,8 @@ public class RegisterRequest {
     private String lastName;
     @NotBlank
     private String phone;
+    // Optional: allow admin to specify role
+    private Role role;
     public UserRequest toUserRequest() {
         UserRequest req = new UserRequest();
         req.setFirstName(firstName);
@@ -26,8 +28,9 @@ public class RegisterRequest {
         req.setEmail(email);
         req.setPassword(password);
         req.setPhone(phone);
-        req.setRole(Role.CUSTOMER);       // default CUSTOMER
-        req.setVerified(false);       // default chưa xác thực
+        // Use provided role if present, else default to CUSTOMER
+        req.setRole(role != null ? role : Role.CUSTOMER);
+        req.setIsVerified(false);
         return req;
     }
 

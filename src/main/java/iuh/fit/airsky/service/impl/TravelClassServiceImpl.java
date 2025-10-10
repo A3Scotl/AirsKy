@@ -35,7 +35,7 @@ public class TravelClassServiceImpl implements TravelClassService {
         TravelClass travelClass = travelClassMapper.toEntity(request);
         travelClass.setCreatedAt(LocalDateTime.now());
         TravelClass saved = travelClassRepository.save(travelClass);
-        log.info("Travel class created with ID: {}", saved.getClassId());
+        log.info("Travel class created with ID: {}", saved.getId());
         return travelClassMapper.toResponseDTO(saved);
     }
 
@@ -51,7 +51,7 @@ public class TravelClassServiceImpl implements TravelClassService {
         travelClass.setChangeable(request.isChangeable());
         travelClass.setCancellationFee(request.getCancellationFee());
         TravelClass updated = travelClassRepository.save(travelClass);
-        log.info("Travel class updated with ID: {}", updated.getClassId());
+        log.info("Travel class updated with ID: {}", updated.getId());
         return travelClassMapper.toResponseDTO(updated);
     }
 

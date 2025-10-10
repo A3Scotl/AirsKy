@@ -14,8 +14,8 @@ import java.util.List;
 @Data
 public class BookingRequest {
     private Long userId;
-    private Long flightId;
-    private Long classId;
+    // Thay đổi: sử dụng flightSegments thay vì flightId và classId đơn lẻ
+    private List<FlightSegmentRequest> flightSegments;
     private LocalDateTime bookingDate;
     private LocalDateTime holdTime;
     private BigDecimal totalAmount;
@@ -23,5 +23,7 @@ public class BookingRequest {
     private List<PassengerSeatRequest> passengers;
     private PaymentMethod paymentMethod;
     private CheckInType checkInType = CheckInType.OFFLINE;
+    private String dealCode; // Mã giảm giá (tùy chọn)
+    private List<BookingAncillaryServiceRequest> ancillaryServices; // Dịch vụ đi kèm
 
 }

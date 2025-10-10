@@ -30,7 +30,7 @@ public class Seat extends BaseFullSoftDeleteEntity {
     private Flight flight;
 
     @ManyToOne
-    @JoinColumn(name = "class_id")
+    @JoinColumn(name = "travel_class_id")
     private TravelClass travelClass;
 
     @Enumerated(EnumType.STRING)

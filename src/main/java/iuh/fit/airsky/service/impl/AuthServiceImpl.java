@@ -3,6 +3,7 @@ package iuh.fit.airsky.service.impl;
 import iuh.fit.airsky.dto.request.auth.*;
 import iuh.fit.airsky.dto.response.AuthResponse;
 import iuh.fit.airsky.dto.response.UserResponse;
+import iuh.fit.airsky.enums.AuthProvider;
 import iuh.fit.airsky.enums.Role;
 import iuh.fit.airsky.exception.AuthException;
 import iuh.fit.airsky.mapper.UserMapper;
@@ -17,6 +18,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,10 +75,27 @@ public class AuthServiceImpl implements AuthService {
         User user = userMapper.toEntity(request.toUserRequest());
         user.setEmail(request.getEmail().toLowerCase());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setRole(Role.CUSTOMER);
+
+        // Determine role: only admin can set role other than CUSTOMER
+        Role roleToSet = Role.CUSTOMER;
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAdmin = false;
+        if (authentication != null && authentication.isAuthenticated() && authentication.getAuthorities() != null) {
+            for (GrantedAuthority authority : authentication.getAuthorities()) {
+                if (authority.getAuthority().equals("ROLE_ADMIN")) {
+                    isAdmin = true;
+                    break;
+                }
+            }
+        }
+        if (isAdmin && request.getRole() != null) {
+            roleToSet = request.getRole();
+        }
+        user.setRole(roleToSet);
         user.setVerified(false);
         user.setActive(true);
         user.setDeleted(false);
+        user.setAuthProvider(AuthProvider.LOCAL);
 
         userRepository.save(user);
         otpService.createAndSendOtp(user.getEmail());

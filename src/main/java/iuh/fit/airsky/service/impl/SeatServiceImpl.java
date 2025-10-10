@@ -6,6 +6,7 @@ import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.SeatMapper;
 import iuh.fit.airsky.model.*;
 import iuh.fit.airsky.repository.AircraftRepository;
+import iuh.fit.airsky.repository.FlightRepository;
 import iuh.fit.airsky.repository.PassengerRepository;
 import iuh.fit.airsky.repository.SeatRepository;
 import iuh.fit.airsky.repository.TravelClassRepository;
@@ -30,6 +31,7 @@ public class SeatServiceImpl implements SeatService {
     private final TravelClassRepository travelClassRepository;
     private final PassengerRepository passengerRepository;
     private final AircraftRepository aircraftRepository;
+    private final FlightRepository flightRepository;
     // Lock map theo flightId
     private final ConcurrentHashMap<Long, Object> flightLocks = new ConcurrentHashMap<>();
 
@@ -69,23 +71,39 @@ public class SeatServiceImpl implements SeatService {
     }
     
     private List<Seat> generateAndSaveSeats(Long flightId) {
-        // Get the full flight with aircraft relationship
-        Flight fullFlight = aircraftRepository.findFlightWithAircraftById(flightId)
+        // Get flight with aircraft and travel classes in one query
+        Flight flight = flightRepository.findByIdWithAircraftAndTravelClasses(flightId)
                 .orElseThrow(() -> new ResourceNotFoundException("Flight not found with id: " + flightId));
 
         // Verify aircraft exists
-        if (fullFlight.getAircraft() == null) {
+        if (flight.getAircraft() == null) {
             throw new IllegalStateException("No aircraft assigned to flight " + flightId);
         }
 
-        // Get travel classes
+        // Verify FlightTravelClasses exist
+        if (flight.getFlightTravelClasses() == null || flight.getFlightTravelClasses().isEmpty()) {
+            throw new IllegalStateException("No flight travel classes found for flight " + flightId + 
+                    ". Make sure travel classes are created first.");
+        }
+
+        // Get all travel classes for reference
         List<TravelClass> travelClasses = travelClassRepository.findAll();
         if (travelClasses.isEmpty()) {
             throw new IllegalStateException("No travel classes found");
         }
 
+        log.info("Generating seats for flight {} with {} travel classes", 
+                flightId, flight.getFlightTravelClasses().size());
+        
+        // Log capacity information for debugging
+        for (var ftc : flight.getFlightTravelClasses()) {
+            log.info("Travel class: {} - Capacity: {}", 
+                    ftc.getTravelClass().getClassName(), ftc.getCapacity());
+        }
+
         // Generate and save seats in batch
-        List<Seat> seats = SeatGeneratorUtil.generateSeats(fullFlight, fullFlight.getAircraft(), travelClasses);
+        List<Seat> seats = SeatGeneratorUtil.generateSeats(flight, flight.getAircraft(), travelClasses);
+        log.info("Generated {} seats total for flight {}", seats.size(), flightId);
         return seatRepository.saveAll(seats);
     }
     
@@ -94,6 +112,7 @@ public class SeatServiceImpl implements SeatService {
                 .map(seatMapper::toResponseDTO)
                 .toList();
     }
+
     @Override
     @Transactional(readOnly = true)
     public List<SeatResponse> getSeatsByFlightIdAndTravelClassId(Long flightId, Long travelClassId) {
@@ -161,7 +180,7 @@ public class SeatServiceImpl implements SeatService {
                     .orElseThrow(() -> new RuntimeException("Passenger not found"));
 
             seat.setBookedBy(passenger);
-            seat.setStatus(SeatStatus.BOOKED);
+            seat.setStatus(SeatStatus.PENDING_PAYMENT); // Đặt trạng thái chờ thanh toán thay vì BOOKED ngay lập tức
 
 
             seatRepository.save(seat);

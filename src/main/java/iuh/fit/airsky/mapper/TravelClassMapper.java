@@ -8,7 +8,7 @@ import org.mapstruct.Mapping;
 
 @Mapper(componentModel = "spring")
 public interface TravelClassMapper {
-    @Mapping(target = "classId", ignore = true)
+    @Mapping(target = "id", ignore = true)
     TravelClass toEntity(TravelClassRequest dto);
 
     TravelClassResponse toResponseDTO(TravelClass entity);

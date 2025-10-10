@@ -19,8 +19,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Payment extends BaseAuditOnlyEntity {
-
+public class Payment {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long paymentId;
@@ -29,15 +28,26 @@ public class Payment extends BaseAuditOnlyEntity {
     private BigDecimal amount;
 
     private LocalDateTime paymentDate;
-    @Enumerated(EnumType.STRING)
-    private PaymentMethod paymentMethod;  //CREDIT_CARD,PAYPAL,BANK_TRANSFER
 
     @Enumerated(EnumType.STRING)
-    private PaymentStatus status;  //  PAID,PENDING,REFUNDED
+    private PaymentMethod paymentMethod;
 
-    @OneToOne
+    @Enumerated(EnumType.STRING)
+    private PaymentStatus status;
+
+    @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "booking_id", nullable = false)
     private Booking booking;
+
+    @Column(unique = true)
+    private String transactionId;
+
+    private String payerId;
+
+    @Column(columnDefinition = "TEXT")
+    private String paypalApprovalUrl;
+
+
 
 
 }

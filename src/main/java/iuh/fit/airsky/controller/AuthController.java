@@ -119,7 +119,7 @@ public class AuthController {
     }
 
     @GetMapping("/profile/me")
-    @PreAuthorize("hasAnyRole('ADMIN','CUSTOMER')")
+    @PreAuthorize("hasAnyRole('ADMIN','CUSTOMER', 'BUSINESS' , 'MANAGER_FLIGHT' , 'STAFF')")
     public ResponseEntity<ApiResponse<UserResponse>> getUserProfile() {
         try {
             String email = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -194,6 +194,18 @@ public class AuthController {
                     ex.getMessage(),
                     "/api/v1/auth/google-login"
             );
+        }
+    }
+
+    @PostMapping("/admin/register")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<AuthResponse>> adminRegister(@Valid @RequestBody RegisterRequest request) {
+        try {
+            AuthResponse response = authService.register(request);
+            return ApiResponseUtil.buildResponse(true, "Admin created user successfully.", response, "/api/v1/auth/admin/register");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Admin registration failed", ex.getMessage(), "/api/v1/auth/admin/register");
         }
     }
 

@@ -17,7 +17,7 @@ public class TravelClass extends BaseAuditOnlyEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long classId;
+    private Long id;
 
     @Column(name = "class_name", length = 50)
     private String className;

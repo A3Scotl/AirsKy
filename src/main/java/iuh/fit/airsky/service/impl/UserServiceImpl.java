@@ -13,8 +13,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import iuh.fit.airsky.dto.response.BookingResponse;
+import iuh.fit.airsky.repository.BookingRepository;
+import iuh.fit.airsky.mapper.BookingMapper;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -23,12 +27,16 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;
-    private final BCryptPasswordEncoder passwordEncoder; // Inject trong config Spring Security
+    private final BCryptPasswordEncoder passwordEncoder;
+    private final BookingRepository bookingRepository;
+    private final BookingMapper bookingMapper;
 
-    public UserServiceImpl(UserRepository userRepository, UserMapper userMapper, BCryptPasswordEncoder passwordEncoder) {
+    public UserServiceImpl(UserRepository userRepository, UserMapper userMapper, BCryptPasswordEncoder passwordEncoder, BookingRepository bookingRepository, BookingMapper bookingMapper) {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
+        this.bookingRepository = bookingRepository;
+        this.bookingMapper = bookingMapper;
     }
 
 
@@ -73,8 +81,12 @@ public class UserServiceImpl implements UserService {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
         }
 
-        user.setVerified(request.isVerified());
-        user.setActive(request.isActive());
+        if (request.getIsVerified() != null) {
+            user.setVerified(request.getIsVerified());
+        }
+        if (request.getActive() != null) {
+            user.setActive(request.getActive());
+        }
         User updated = userRepository.save(user);
         log.info("User updated with ID: {}", updated.getId());
         return userMapper.toResponseDTO(updated);
@@ -124,5 +136,13 @@ public class UserServiceImpl implements UserService {
         boolean newActive = !user.isActive();
         userRepository.updateActiveById(id, newActive);
         log.info("User active status toggled to {} for ID: {}", newActive, id);
+    }
+
+    @Override
+    public List<BookingResponse> getBookingsByUserId(Long userId) {
+        log.info("Getting bookings for user with ID: {}", userId);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id " + userId));
+        return bookingMapper.toResponseDTOList(bookingRepository.findByUserId(user));
     }
 }

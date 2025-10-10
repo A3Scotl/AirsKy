@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 
 @Data
 public class TravelClassResponse {
-    private Long classId;
+    private Long id;
     private String className;
     private String benefits;
     private BigDecimal priceMultiplier;

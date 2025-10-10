@@ -22,6 +22,11 @@ public class AircraftServiceImpl implements AircraftService {
 
     @Override
     public AircraftResponse createAircraft(AircraftRequest request) {
+        // Basic validation for seat layout format
+        if (request.getSeatLayout() != null && !request.getSeatLayout().matches("^\\d+(-\\d+)+$")) {
+            throw new IllegalArgumentException("Invalid seat layout format. Expected format like '3-3', '3-2-3', etc.");
+        }
+
         Aircraft aircraft = aircraftMapper.toEntity(request);
         aircraftRepository.save(aircraft);
         return aircraftMapper.toResponseDTO(aircraft);

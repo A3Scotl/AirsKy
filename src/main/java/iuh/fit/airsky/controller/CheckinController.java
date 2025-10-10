@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/checkins")
+@RequestMapping("/api/v1/checkins")
 @RequiredArgsConstructor
 @Slf4j
 public class CheckinController {

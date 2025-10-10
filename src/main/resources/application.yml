@@ -78,3 +78,27 @@ logging:
     iuh.fit.airsky.service.impl: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+
+# PayPal Configuration
+paypal:
+  client-id: ${PAYPAL_CLIENT_ID:}
+  client-secret: ${PAYPAL_CLIENT_SECRET:}
+  mode: ${PAYPAL_MODE:sandbox} # or 'live' for production
+  success-url: http://localhost:5173/payment-success
+  cancel-url: http://localhost:5173/payment-cancel
+
+# sepay Configuration
+sepay:
+  api-key: FRT7YMJW2CP268P567ULDTN1XZBYI3QQGYP8USUF1HV3WCFUGJ0XMLGLRMMSEWDP
+  qr:
+    account: "0964133949"     # số tài khoản nhận tiền
+    bank: "MBBank"               # mã ngân hàng
+    template: "compact"
+
+# Application URL
+app:
+  url: ${APP_URL:http://localhost:8080}
+  boarding-pass:
+    storage-path: ${BOARDING_PASS_STORAGE_PATH:boarding-passes}
+    base-url: ${BOARDING_PASS_BASE_URL:http://localhost:8080/api/v1/boarding-passes}

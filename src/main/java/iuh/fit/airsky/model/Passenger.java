@@ -2,6 +2,7 @@ package iuh.fit.airsky.model;
 
 import iuh.fit.airsky.enums.BaggagePackage;
 import iuh.fit.airsky.enums.PassengerType;
+import iuh.fit.airsky.enums.Gender;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -46,7 +47,18 @@ public class Passenger {
     @JoinColumn(name = "seat_id")
     private Seat seat;
 
+    // Thêm các trường mới (không bắt buộc)
+    @Column(length = 100)
+    private String email;
+
+    @Column(length = 15)
+    private String phone;
+
+    @Enumerated(EnumType.STRING)
+    private Gender gender;
+
     // Chỉ lưu tạm thời trong quá trình booking (không map DB)
     @Transient
     private BaggagePackage tempBaggagePackage;
 }
+

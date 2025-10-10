@@ -39,7 +39,7 @@ public class AircraftController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER', 'STAFF', 'BUSINESS')")
     public ResponseEntity<ApiResponse<List<AircraftResponse>>> getAllAircrafts() {
         List<AircraftResponse> response = aircraftService.getAllAircrafts();
         return ApiResponseUtil.buildResponse(true, "Aircrafts retrieved successfully", response, "/api/v1/aircrafts");
