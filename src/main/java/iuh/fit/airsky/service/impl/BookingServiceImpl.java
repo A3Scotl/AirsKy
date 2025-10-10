@@ -4,13 +4,7 @@ import iuh.fit.airsky.dto.request.BookingRequest;
 import iuh.fit.airsky.dto.request.FlightSegmentRequest;
 import iuh.fit.airsky.dto.request.PassengerSeatRequest;
 import iuh.fit.airsky.dto.request.PaymentRequest;
-import iuh.fit.airsky.dto.response.BaggageResponse;
-import iuh.fit.airsky.dto.response.BookingAncillaryServiceResponse;
-import iuh.fit.airsky.dto.response.BookingResponse;
-import iuh.fit.airsky.dto.response.PageResponse;
-import iuh.fit.airsky.dto.response.PassengerSeatResponse;
-import iuh.fit.airsky.dto.response.SeatTypePricingDetail;
-import iuh.fit.airsky.dto.response.CheckinEligiblePassengerResponse;
+import iuh.fit.airsky.dto.response.*;
 import iuh.fit.airsky.enums.BaggageType;
 import iuh.fit.airsky.enums.BaggagePackage;
 import iuh.fit.airsky.enums.BookingStatus;
@@ -70,6 +64,7 @@ public class BookingServiceImpl implements BookingService {
     private final AncillaryServiceRepository ancillaryServiceRepository;
     private final BookingAncillaryServiceRepository bookingAncillaryServiceRepository;
     private final FlightTravelClassRepository flightTravelClassRepository;
+
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -293,14 +288,26 @@ public class BookingServiceImpl implements BookingService {
 
         // Tạo thanh toán với final amount
         log.info("Creating payment with amount: {}", finalAmount);
-        Payment payment = createPayment(finalAmount, request, savedBooking);
-        savedBooking.setPayment(payment);
-        savedBooking.setTotalAmount(finalAmount); // Cập nhật total amount sau deal
+        PaymentRequest pr = new PaymentRequest();
+
+        pr.setBookingId(booking.getBookingId());
+        pr.setTotalAmount(finalAmount);
+        pr.setPaymentMethod(request.getPaymentMethod());
+        pr.setPaymentStatus(PaymentStatus.PENDING);
+
+        PaymentResponse payment = paymentService.createPayment(pr);
+
+        Payment paymentEntity = paymentRepository.findById(payment.getPaymentId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
+
+        savedBooking.setPayment(paymentEntity);
+
+        savedBooking.setTotalAmount(finalAmount);
         
         // Cập nhật lại payment amount nếu có deal được áp dụng
         if (request.getDealCode() != null && !request.getDealCode().trim().isEmpty()) {
-            payment.setAmount(finalAmount);
-            paymentRepository.save(payment);
+            paymentEntity.setAmount(finalAmount);
+            paymentRepository.save(paymentEntity);
         }
 
         // Create ancillary services records
@@ -1141,14 +1148,7 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
-    private Payment createPayment(BigDecimal amount, BookingRequest request, Booking booking) {
-        Payment payment = new Payment();
-        payment.setBooking(booking);
-        payment.setAmount(amount);
-        payment.setPaymentMethod(request.getPaymentMethod());
-        payment.setStatus(PaymentStatus.PENDING);
-        return paymentRepository.saveAndFlush(payment);
-    }
+
 
     private void createCheckIn(Booking booking, Passenger passenger, BookingRequest request) {
         Baggage baggage = null;
