@@ -341,9 +341,19 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
     private com.paypal.api.payments.Payment createPayPalPayment(Booking booking) throws PayPalRESTException {
+        // Ensure totalAmount is not null and properly formatted
+        BigDecimal totalAmount = booking.getTotalAmount();
+        if (totalAmount == null || totalAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new PaymentProcessingException("Invalid booking total amount: " + totalAmount);
+        }
+
+        // Format to exactly 2 decimal places as required by PayPal
+        BigDecimal scaledAmount = totalAmount.setScale(2, RoundingMode.HALF_UP);
+        String formattedTotal = scaledAmount.toString();
+
         Amount amount = new Amount()
                 .setCurrency("USD")
-                .setTotal(String.format("%.2f", booking.getTotalAmount().setScale(2, RoundingMode.HALF_UP)));
+                .setTotal(formattedTotal);
 
         Transaction transaction = new Transaction();
         transaction.setAmount(amount);
