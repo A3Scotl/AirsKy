@@ -25,6 +25,7 @@ import iuh.fit.airsky.service.EmailService;
 import iuh.fit.airsky.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -45,6 +46,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
+    @Autowired
+    private EmailTemplateGenerator emailTemplateGenerator;
     private final PaymentRepository paymentRepository;
     private final PaymentMapper paymentMapper;
     private final BookingRepository bookingRepository;
@@ -317,9 +320,24 @@ public class PaymentServiceImpl implements PaymentService {
     private void updateBookingStatus(Booking booking) {
         if (booking.getStatus() == BookingStatus.PENDING) {
             booking.setStatus(BookingStatus.CONFIRMED);
-            updatePassengerSeats(booking);
+
+
             bookingRepository.save(booking);
             log.info("Updated booking {} status to CONFIRMED", booking.getBookingId());
+            log.info("Sending confirmation email...");
+            try {
+                String email = booking.getUserId().getEmail();
+                String subject = "Xác Nhận Đặt Vé Thành Công - Mã: " + booking.getBookingCode();
+
+                // Render template HTML với dữ liệu từ savedBooking
+                String htmlBody = emailTemplateGenerator.generateEmailTemplate(booking);
+
+                emailService.sendEmail(email, subject, htmlBody);  // EmailServiceImpl hỗ trợ HTML qua setText(body, true)
+                log.info("Confirmation email sent to: {}", email);
+            } catch (Exception e) {
+                log.error("Failed to send confirmation email: {}", e.getMessage());
+                // Không throw để tránh rollback
+            }
         }
     }
     private com.paypal.api.payments.Payment createPayPalPayment(Booking booking) throws PayPalRESTException {

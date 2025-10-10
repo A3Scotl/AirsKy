@@ -34,6 +34,7 @@ import iuh.fit.airsky.service.EmailService;
 import iuh.fit.airsky.service.PaymentService;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Hibernate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -51,10 +52,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
-
+import iuh.fit.airsky.service.impl.EmailTemplateGenerator;
 @Service
 @Slf4j
 public class BookingServiceImpl implements BookingService {
+
 
     private final BookingRepository bookingRepository;
     private final BookingMapper bookingMapper;
@@ -342,27 +344,10 @@ public class BookingServiceImpl implements BookingService {
         bookingRepository.save(savedBooking);
 
         // Gửi email xác nhận nếu có userId
-        if (savedBooking.getUserId() != null) {
-            log.info("Sending confirmation email...");
-            try {
-                String email = savedBooking.getUserId().getEmail(); // lấy email từ user
-                String subject = "Xác nhận đặt vé thành công";
-                String body = "<h3>Xin chào " + savedBooking.getUserId().getLastName() + "</h3>"
-                        + "<p>Bạn đã đặt vé thành công cho chuyến bay: " + flight.getFlightNumber() + "</p>"
-                        + "<p>Mã đặt vé: " + savedBooking.getBookingCode() + "</p>"
-                        + "<p>Khởi hành: " + flight.getDepartureTime() + "</p>"
-                        + "<p>Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.</p>";
 
-                emailService.sendEmail(email, subject, body);
-                log.info("Confirmation email sent to: {}", email);
-            } catch (Exception e) {
-                log.error("Failed to send confirmation email: {}", e.getMessage());
-                // Không throw exception để không rollback transaction vì booking đã thành công
-            }
-        }
 
         log.info("Booking creation completed successfully for bookingId: {}", savedBooking.getBookingId());
-        
+
         // Force flush to ensure all changes are persisted before reload
         entityManager.flush();
         
@@ -388,7 +373,7 @@ public class BookingServiceImpl implements BookingService {
         
         log.info("Booking {} has {} checkIns", reloadedBooking.getBookingId(), 
                 reloadedBooking.getCheckIns() != null ? reloadedBooking.getCheckIns().size() : 0);
-        
+
         BookingResponse response = bookingMapper.toResponseDTO(reloadedBooking);
         populateDealInformation(response, reloadedBooking);
         populateBaggageInformation(response, reloadedBooking);
@@ -672,12 +657,12 @@ public class BookingServiceImpl implements BookingService {
                     continue;
                 }
 
-                // Cảnh báo sớm khi còn 10 phút nữa hết holdTime
-                if (booking.getHoldTime() != null &&
-                    Duration.between(booking.getHoldTime(), now).toMinutes() <= 20 &&
-                    Duration.between(booking.getHoldTime(), now).toMinutes() > 19) {
-                    sendHoldTimeWarningEmail(booking, 10);
-                }
+//                // Cảnh báo sớm khi còn 10 phút nữa hết holdTime
+//                if (booking.getHoldTime() != null &&
+//                    Duration.between(booking.getHoldTime(), now).toMinutes() <= 20 &&
+//                    Duration.between(booking.getHoldTime(), now).toMinutes() > 19) {
+////                    sendHoldTimeWarningEmail(booking, 10);
+//                }
 
                 // Kiểm tra thời hạn thanh toán (45 phút tổng)
                 if (booking.getPaymentTimeout() != null && now.isAfter(booking.getPaymentTimeout())) {

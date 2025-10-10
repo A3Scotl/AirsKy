@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Xác Nhận Đặt Vé - AirSky Airlines</title>
+    <style>
+        body {
+            font-family: "Segoe UI", Arial, sans-serif;
+            background-color: #f4f6fb;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+        .container {
+            max-width: 850px;
+            background: #fff;
+            margin: 20px auto;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .header {
+            background: #0e66dc;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+        .logo {
+            font-size: 26px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        .booking-bar {
+            background: #002f96;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .booking-bar img {
+            width: 90px;
+            height: 90px;
+            border: 2px solid white;
+            border-radius: 6px;
+        }
+        .section {
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .section h3 {
+            background: #0e66dc;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-top: 0;
+            font-size: 16px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            font-size: 14px;
+        }
+        th {
+            background: #f2f2f2;
+        }
+        .insurance {
+            background: #e9f4ff;
+            border-left: 4px solid #0e66dc;
+        }
+        .invoice {
+            background: #f5fff5;
+            border-left: 4px solid #0e66dc;
+        }
+        .footer {
+            background: #0e66dc;
+            color: #fff;
+            text-align: center;
+            padding: 15px;
+            font-size: 14px;
+        }
+        .footer a { color: white; text-decoration: none; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- Header -->
+    <div class="header">
+        <div class="logo">AIRSKY AIRLINES</div>
+        <p>Xác Nhận Đặt Vé Thành Công</p>
+    </div>
+
+    <!-- Booking code + QR -->
+    <div class="booking-bar">
+        <div>MÃ ĐẶT CHỖ: ${bookingCode}</div>
+        <div style="text-align:center;">
+            <img src="${qrCode}" alt="QR Code" width="150" height="150" style="border:1px solid #ccc; padding:4px; border-radius:4px;">
+
+        </div>
+    </div>
+
+    <!-- Booking Info -->
+    <div class="section">
+        <h3>1. Thông Tin Đặt Chỗ</h3>
+        <p>Trạng thái đặt chỗ: <strong>ĐÃ XÁC NHẬN</strong></p>
+        <p>Ngày đặt: ${bookingDate}</p>
+        <p>Tên hành khách chính: ${passengerName}</p>
+        <p>Số điện thoại: ${phone}</p>
+        <p>Email: ${email}</p>
+    </div>
+
+    <!-- Flight Info -->
+    <div class="section">
+        <h3>2. Thông Tin Chuyến Bay</h3>
+        <table>
+            <tr>
+                <th>Chuyến Bay</th>
+                <th>Ngày</th>
+                <th>Loại Vé</th>
+                <th>Khởi Hành</th>
+                <th>Đến</th>
+            </tr>
+            <tr>
+                <td>${flightNumber}</td>
+                <td>${flightDate}</td>
+                <td>${travelClass}</td>
+                <td>${departureTime} - ${departureAirport}</td>
+                <td>${arrivalTime} - ${arrivalAirport}</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Passenger Info -->
+    <div class="section">
+        <h3>3. Thông Tin Hành Khách</h3>
+        <table>
+            <tr><th>Tên Hành Khách</th><th>Số Ghế</th></tr>
+            <#list passengers as p>
+            <tr>
+                <td>${p.firstName} ${p.lastName}</td>
+                <td>${p.seatNumber!""}</td>
+            </tr>
+        </#list>
+        </table>
+    </div>
+
+    <!-- Insurance -->
+    <div class="section insurance">
+        <h3>4. Chương Trình Bảo Hiểm</h3>
+        <p>AirSky trân trọng dành tặng quý hành khách các chương trình bảo hiểm khi bay cùng AirSky:</p>
+        <ul>
+            <li>Bảo hiểm “Bay An Toàn” cho các chuyến bay nội địa Việt Nam.</li>
+            <li>Bảo hiểm “Flight Care” cho hạng vé SkyBoss và Deluxe.</li>
+        </ul>
+        <p>Chương trình bảo hiểm với nhiều quyền lợi cùng sự hỗ trợ tốt nhất, mang lại sự an tâm tuyệt đối cho hành khách.</p>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+        <h3>5. Giá Vé & Thanh Toán</h3>
+        <table>
+            <tr>
+                <th>Ngày Thanh Toán</th>
+                <th>Phương Thức</th>
+                <th>Tổng Số Tiền</th>
+            </tr>
+            <tr>
+                <td>${paymentDate}</td>
+                <td>${paymentMethod}</td>
+                <td><strong>${totalAmount} VND</strong></td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Invoice -->
+    <div class="section invoice">
+        <h3>6. Hóa Đơn</h3>
+        <p><strong>Công Ty Cổ Phần Hàng Không AirSky</strong><br/>
+            Địa chỉ: Số 123 Nguyễn Văn Trỗi, Quận Phú Nhuận, TP. Hồ Chí Minh<br/>
+            Mã số thuế: 0312345678</p>
+    </div>
+
+    <!-- Conditions -->
+    <div class="section">
+        <h3>7. Điều Lệ Vận Chuyển</h3>
+        <p>Vui lòng đọc và kiểm tra điều lệ vận chuyển trước mỗi chuyến bay tại
+            <a href="http://airsky.com/terms">airsky.com/terms</a>.</p>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>Cảm ơn bạn đã chọn AirSky Airlines. Chúc chuyến bay an lành!</p>
+        <p><a href="http://airsky.com">airsky.com</a></p>
+    </div>
+</div>
+</body>
+</html>
