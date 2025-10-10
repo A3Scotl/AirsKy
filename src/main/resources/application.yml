@@ -85,8 +85,8 @@ paypal:
   client-id: ${PAYPAL_CLIENT_ID:}
   client-secret: ${PAYPAL_CLIENT_SECRET:}
   mode: ${PAYPAL_MODE:sandbox} # or 'live' for production
-  success-url: http://localhost:5173/api/v1/payments/success
-  cancel-url: http://localhost:5173/api/v1/payments/cancel
+  success-url: http://localhost:5173/payment-success
+  cancel-url: http://localhost:5173/payment-cancel
 
 # Application URL
 app:
