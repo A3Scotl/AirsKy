@@ -1,6 +1,7 @@
 package iuh.fit.airsky.model;
 
 import iuh.fit.airsky.base.BaseFullSoftDeleteEntity;
+import iuh.fit.airsky.enums.CheckinStatus;
 import iuh.fit.airsky.enums.CheckInType;
 import iuh.fit.airsky.enums.SeatStatus;
 import jakarta.persistence.*;
@@ -45,6 +46,10 @@ public class CheckIn extends BaseFullSoftDeleteEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "check_in_type", length = 10)
     private CheckInType checkInType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20)
+    private CheckinStatus status;
 
     private String boardingPassUrl;
 

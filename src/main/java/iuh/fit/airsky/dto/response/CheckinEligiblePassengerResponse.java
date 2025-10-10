@@ -1,5 +1,6 @@
 package iuh.fit.airsky.dto.response;
 
+import iuh.fit.airsky.enums.CheckinStatus;
 import lombok.Data;
 import java.math.BigDecimal;
 
@@ -13,5 +14,5 @@ public class CheckinEligiblePassengerResponse {
     private String seatNumber;
     private BigDecimal ticketPrice;
     private boolean isCheckedIn;
-    private String checkinStatus; // "ELIGIBLE", "ALREADY_CHECKED_IN", "PAYMENT_PENDING"
+    private CheckinStatus checkinStatus;
 }

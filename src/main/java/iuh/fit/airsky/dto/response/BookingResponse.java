@@ -27,7 +27,7 @@ public class BookingResponse {
     private String appliedDealCode;
     private BigDecimal discountPercentage;
     private BigDecimal discountAmount;
-    
+
     // Ancillary services
     private List<BookingAncillaryServiceResponse> ancillaryServices;
     private BigDecimal ancillaryServicesAmount;
@@ -35,4 +35,10 @@ public class BookingResponse {
     // Seat type pricing details
     private BigDecimal seatTypeAmount;
     private List<SeatTypePricingDetail> seatTypeDetails;
+
+    // Enhanced: Check-in eligibility for passengers
+    private List<CheckinEligiblePassengerResponse> checkinEligiblePassengers;
+
+    // Enhanced: Available seats for current travel class
+    private List<String> availableSeats;
 }

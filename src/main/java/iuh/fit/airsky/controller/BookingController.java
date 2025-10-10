@@ -2,10 +2,12 @@ package iuh.fit.airsky.controller;
 
 import iuh.fit.airsky.dto.request.BookingRequest;
 import iuh.fit.airsky.dto.request.PaymentRequest;
+import iuh.fit.airsky.dto.request.CheckinRequest;
 import iuh.fit.airsky.dto.response.BookingResponse;
 import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.dto.response.CheckinEligiblePassengerResponse;
+import iuh.fit.airsky.dto.response.CheckinResponse;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.service.BookingService;
 import iuh.fit.airsky.util.ApiResponseUtil;
@@ -129,6 +131,21 @@ public class BookingController {
         }
     }
 
+    @GetMapping("/passengers-checkin-status")
+    public ResponseEntity<ApiResponse<List<CheckinEligiblePassengerResponse>>> getPassengersWithCheckinStatus(
+            @RequestParam String bookingCode,
+            @RequestParam String fullName) {
+        try {
+            List<CheckinEligiblePassengerResponse> passengers = bookingService.getPassengersWithCheckinStatus(bookingCode, fullName);
+            return ApiResponseUtil.buildResponse(true, "Passengers with check-in status retrieved", passengers, "/api/v1/bookings/passengers-checkin-status");
+        } catch (ResourceNotFoundException ex) {
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), "RESOURCE_NOT_FOUND", "/api/v1/bookings/passengers-checkin-status");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to get passengers with check-in status", ex.getMessage(), "/api/v1/bookings/passengers-checkin-status");
+        }
+    }
+
     @PostMapping("/{bookingId}/guest-payment")
     public ResponseEntity<ApiResponse<BookingResponse>> processGuestPayment(
             @PathVariable Long bookingId,
@@ -143,6 +160,21 @@ public class BookingController {
         } catch (Exception ex) {
             ex.printStackTrace();
             return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Payment processing failed", ex.getMessage(), "/api/v1/bookings/" + bookingId + "/guest-payment");
+        }
+    }
+
+    @PutMapping("/checkin")
+    public ResponseEntity<ApiResponse<CheckinResponse>> processCheckin(@Valid @RequestBody CheckinRequest request) {
+        try {
+            CheckinResponse response = bookingService.processCheckin(request);
+            return ApiResponseUtil.buildResponse(true, "Check-in processed successfully", response, "/api/v1/bookings/checkin");
+        } catch (ResourceNotFoundException ex) {
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), "RESOURCE_NOT_FOUND", "/api/v1/bookings/checkin");
+        } catch (IllegalStateException ex) {
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), "INVALID_STATE", "/api/v1/bookings/checkin");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Check-in processing failed", ex.getMessage(), "/api/v1/bookings/checkin");
         }
     }
 }

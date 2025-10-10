@@ -63,4 +63,18 @@ public class CloudinaryService {
             throw new RuntimeException("Failed to read PDF file", e);
         }
     }
+
+    public String uploadImageFile(byte[] imageBytes, String fileName) {
+        try {
+            Map<String, Object> uploadResult = cloudinary.uploader().upload(imageBytes, ObjectUtils.asMap(
+                    "folder", "airsky/boarding-passes",
+                    "resource_type", "image",
+                    "public_id", fileName.replace(".png", ""),
+                    "format", "png"
+            ));
+            return uploadResult.get("secure_url").toString();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to upload image to Cloudinary", e);
+        }
+    }
 }
