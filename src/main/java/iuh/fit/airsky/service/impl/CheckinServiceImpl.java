@@ -15,7 +15,7 @@ import iuh.fit.airsky.repository.CheckinRepository;
 import iuh.fit.airsky.repository.PassengerRepository;
 import iuh.fit.airsky.service.BoardingPassService;
 import iuh.fit.airsky.service.CheckinService;
-import iuh.fit.airsky.service.NotificationService; // Giả sử bạn đã tạo service này
+import iuh.fit.airsky.service.NotificationService; 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

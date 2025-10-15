@@ -1,10 +1,10 @@
 package iuh.fit.airsky.service.impl;
 
 import com.paypal.api.payments.*;
-import com.paypal.base.rest.APIContext;
 import com.paypal.api.payments.Links;
 import com.paypal.api.payments.Transaction;
 import com.paypal.base.rest.PayPalRESTException;
+import com.paypal.base.rest.APIContext;
 import iuh.fit.airsky.dto.request.PaymentRequest;
 import iuh.fit.airsky.dto.response.PaymentResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
@@ -12,6 +12,7 @@ import iuh.fit.airsky.enums.BookingStatus;
 import iuh.fit.airsky.enums.PaymentMethod;
 import iuh.fit.airsky.enums.PaymentStatus;
 import iuh.fit.airsky.enums.SeatStatus;
+import iuh.fit.airsky.event.BookingConfirmedEvent;
 import iuh.fit.airsky.exception.PaymentProcessingException;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.PaymentMapper;
@@ -24,18 +25,18 @@ import iuh.fit.airsky.repository.PaymentRepository;
 import iuh.fit.airsky.repository.PassengerSeatAssignmentRepository;
 import iuh.fit.airsky.repository.SeatRepository;
 import iuh.fit.airsky.service.EmailService;
-import iuh.fit.airsky.service.NotificationService; // Giả sử bạn đã tạo service này
+import iuh.fit.airsky.service.NotificationService; 
 import iuh.fit.airsky.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
@@ -50,8 +51,6 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
-    @Autowired
-    private EmailTemplateGenerator emailTemplateGenerator;
     private final PaymentRepository paymentRepository;
     private final PaymentMapper paymentMapper;
     private final BookingRepository bookingRepository;
@@ -59,7 +58,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final SeatRepository seatRepository;
     private final EmailService emailService;
     private final APIContext paypalApiContext;
-    private final NotificationService notificationService; // Thêm NotificationService
+    private final NotificationService notificationService; 
+    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${paypal.success-url}")
     private String successUrl;
@@ -114,7 +114,7 @@ public class PaymentServiceImpl implements PaymentService {
             com.paypal.api.payments.Payment executedPayment =
                     paypalPayment.execute(paypalApiContext, paymentExecution);
 
-            return processSuccessfulPayment(payment, payerId, executedPayment);
+            return processSuccessfulPayPalPayment(payment, payerId, executedPayment);
 
         } catch (PayPalRESTException ex) {
             handlePaymentFailure(payment);
@@ -164,56 +164,27 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("Looking for existing payment for booking {} with current total: {}", booking.getBookingId(), booking.getTotalAmount());
 
         Payment existingPayment = paymentRepository.findByBooking_BookingId(booking.getBookingId())
-                .orElse(null);
+                .orElseGet(() -> createNewPayment(booking, paymentMethod));
 
-        if (existingPayment != null) {
-            log.info("Found existing payment {} with status {}, amount: {}, booking total: {}",
-                existingPayment.getPaymentId(), existingPayment.getStatus(),
-                existingPayment.getAmount(), booking.getTotalAmount());
-
-            // Đảm bảo booking được load đầy đủ
-            if (existingPayment.getBooking() == null || existingPayment.getBooking().getTotalAmount() == null) {
-                existingPayment.setBooking(booking);
-                log.info("Set booking reference for payment {}", existingPayment.getPaymentId());
-            } else {
-                log.info("Payment {} already has booking reference with total: {}", existingPayment.getPaymentId(), existingPayment.getBooking().getTotalAmount());
-            }
-            return handleExistingPayment(existingPayment, paymentMethod);
-        } else {
-            log.info("No existing payment found for booking {}, creating new payment", booking.getBookingId());
-            return createNewPayment(booking, paymentMethod);
-        }
+        return handleExistingPayment(existingPayment, booking, paymentMethod);
     }
 
-    private Payment handleExistingPayment(Payment existingPayment, PaymentMethod newPaymentMethod) {
+    private Payment handleExistingPayment(Payment existingPayment, Booking booking, PaymentMethod newPaymentMethod) {
         switch (existingPayment.getStatus()) {
             case COMPLETED:
-                // Kiểm tra xem có additional charges không
-                BigDecimal currentBookingTotal = existingPayment.getBooking().getTotalAmount();
-                BigDecimal existingPaymentAmount = existingPayment.getAmount();
-
-                log.info("Checking payment {}: booking total={}, payment amount={}, comparison={}",
-                    existingPayment.getPaymentId(), currentBookingTotal, existingPaymentAmount,
-                    currentBookingTotal.compareTo(existingPaymentAmount));
-
-                if (currentBookingTotal.compareTo(existingPaymentAmount) > 0) {
-                    // Có additional charges - update payment cũ
-                    log.info("Updating completed payment {} for additional charges. Old amount: {}, New amount: {}",
-                        existingPayment.getPaymentId(), existingPaymentAmount, currentBookingTotal);
-
-                    existingPayment.setAmount(currentBookingTotal);
-                    existingPayment.setStatus(PaymentStatus.PENDING);
-                    existingPayment.setPaymentMethod(newPaymentMethod);
-                    existingPayment.setPaymentDate(LocalDateTime.now()); // Reset payment date
-                    return paymentRepository.save(existingPayment);
+                // Nếu đã thanh toán xong, nhưng tổng tiền booking lại lớn hơn,
+                // nghĩa là có phí phát sinh. Tạo một thanh toán mới cho khoản chênh lệch.
+                BigDecimal additionalAmount = booking.getTotalAmount().subtract(existingPayment.getAmount());
+                if (additionalAmount.compareTo(BigDecimal.ZERO) > 0) {
+                    log.info("Booking {} has additional charges of {}. Creating a new payment.", booking.getBookingId(), additionalAmount);
+                    return createNewPaymentForAmount(booking, newPaymentMethod, additionalAmount);
                 } else {
-                    log.warn("Payment {} is completed and no additional charges found. Booking total: {}, Payment amount: {}",
-                        existingPayment.getPaymentId(), currentBookingTotal, existingPaymentAmount);
+                    log.warn("Payment for booking {} is already completed and no additional charges found.", booking.getBookingId());
                     throw new PaymentProcessingException("Payment for this booking is already completed");
                 }
             case PENDING:
                 // Update amount nếu booking total thay đổi
-                BigDecimal bookingTotal = existingPayment.getBooking().getTotalAmount();
+                BigDecimal bookingTotal = booking.getTotalAmount();
                 if (existingPayment.getAmount().compareTo(bookingTotal) != 0) {
                     log.info("Updating pending payment {} amount from {} to {}",
                         existingPayment.getPaymentId(), existingPayment.getAmount(), bookingTotal);
@@ -230,7 +201,7 @@ public class PaymentServiceImpl implements PaymentService {
                 // Reset payment cho failed/refunded
                 existingPayment.setStatus(PaymentStatus.PENDING);
                 existingPayment.setPaymentMethod(newPaymentMethod);
-                existingPayment.setAmount(existingPayment.getBooking().getTotalAmount());
+                existingPayment.setAmount(booking.getTotalAmount());
                 existingPayment.setPaymentDate(LocalDateTime.now());
                 return paymentRepository.save(existingPayment);
             default:
@@ -246,6 +217,16 @@ public class PaymentServiceImpl implements PaymentService {
         payment.setPaymentMethod(paymentMethod);
         payment.setStatus(PaymentStatus.PENDING);
         payment.setAmount(booking.getTotalAmount());
+        payment.setPaymentDate(LocalDateTime.now());
+        return paymentRepository.save(payment);
+    }
+    
+    private Payment createNewPaymentForAmount(Booking booking, PaymentMethod paymentMethod, BigDecimal amount) {
+        Payment payment = new Payment();
+        payment.setBooking(booking);
+        payment.setPaymentMethod(paymentMethod);
+        payment.setStatus(PaymentStatus.PENDING);
+        payment.setAmount(amount);
         payment.setPaymentDate(LocalDateTime.now());
         return paymentRepository.save(payment);
     }
@@ -292,7 +273,7 @@ public class PaymentServiceImpl implements PaymentService {
                     String content = tx.get("transaction_content").toString();
                     if (content.contains(bookingCode)) {
                         Double amount = Double.parseDouble(tx.get("amount_in").toString());
-                        log.info("✅ Found transaction for booking {} with amount {}", bookingCode, amount);
+                        log.info("Found transaction for booking {} with amount {}", bookingCode, amount);
 
                         updateSepayPaymentStatus("PAYBOOKING" + bookingCode, "SUCCESS", amount);
                         return true;
@@ -317,7 +298,7 @@ public class PaymentServiceImpl implements PaymentService {
         com.paypal.api.payments.Payment paypalPayment = createPayPalPayment(booking);
 
         payment.setTransactionId(paypalPayment.getId());
-        payment.setPaypalApprovalUrl(getApprovalUrl(paypalPayment));
+        payment.setCheckoutUrl(getApprovalUrl(paypalPayment));
         paymentRepository.save(payment);
 
         return buildPaymentResponse(payment);
@@ -360,14 +341,14 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setTransactionId(orderCode);
             payment.setStatus(PaymentStatus.PENDING);
             payment.setPaymentDate(LocalDateTime.now());
-            // reuse paypalApprovalUrl field to store the checkout/qr url
-            payment.setPaypalApprovalUrl(qrUrl);
+            // Lưu URL của QR code vào trường checkoutUrl
+            payment.setCheckoutUrl(qrUrl);
 
             paymentRepository.save(payment);
 
             // build response
             PaymentResponse response = paymentMapper.toResponseDTO(payment);
-            response.setPaypalApprovalUrl(qrUrl); // return qr url to frontend
+            response.setCheckoutUrl(qrUrl); // return qr url to frontend
             return response;
 
         } catch (Exception e) {
@@ -376,41 +357,6 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
-    // This method will be triggered after the main transaction commits successfully.
-    @TransactionalEventListener
-    public void handleBookingConfirmation(Booking booking) {
-        log.info("Transaction committed. Sending confirmation email for booking {}", booking.getBookingId());
-        try {
-            String email = booking.getUserId().getEmail();
-            String subject = "Xác Nhận Đặt Vé Thành Công - Mã: " + booking.getBookingCode();
-
-            // Render template HTML với dữ liệu từ booking
-            String htmlBody = emailTemplateGenerator.generateEmailTemplate(booking);
-
-            emailService.sendEmail(email, subject, htmlBody);
-            log.info("Confirmation email sent to: {}", email);
-        } catch (Exception e) {
-            log.error("Failed to send confirmation email after transaction commit for booking {}: {}", booking.getBookingId(), e.getMessage());
-            // Do not re-throw, as the main transaction is already complete.
-        }
-    }
-
-    private void updateBookingStatus(Booking booking) {
-        if (booking.getStatus() == BookingStatus.PENDING) {
-            booking.setStatus(BookingStatus.CONFIRMED);
-            updatePassengerSeats(booking);
-            bookingRepository.save(booking);
-            log.info("Updated booking {} status to CONFIRMED", booking.getBookingId());
-            handleBookingConfirmation(booking); // This will be handled by the TransactionalEventListener
-
-            // GỬI THÔNG BÁO SOCKET
-            if (booking.getUserId() != null) {
-                String message = String.format("Đặt vé %s của bạn đã được xác nhận thành công!", booking.getBookingCode());
-                // Gửi thông báo đến user cụ thể
-                notificationService.sendNotificationToUser(booking.getUserId().getId(), "BOOKING_CONFIRMED", message);
-            }
-        }
-    }
     private com.paypal.api.payments.Payment createPayPalPayment(Booking booking) throws PayPalRESTException {
         // Ensure totalAmount is not null and properly formatted
         BigDecimal totalAmount = booking.getTotalAmount();
@@ -453,11 +399,9 @@ public class PaymentServiceImpl implements PaymentService {
 
     private PaymentResponse buildPaymentResponse(Payment payment) {
         PaymentResponse response = paymentMapper.toResponseDTO(payment);
-        if (payment.getPaymentMethod() == PaymentMethod.PAYPAL) {
-            response.setPaypalApprovalUrl(payment.getPaypalApprovalUrl());
-        } else if (payment.getPaymentMethod() == PaymentMethod.BANK_TRANSFER) {
-            // Return the QR/check-out URL for BANK_TRANSFER
-            response.setPaypalApprovalUrl(payment.getPaypalApprovalUrl());
+        // Trả về checkoutUrl cho cả PayPal và SePay
+        if (payment.getPaymentMethod() == PaymentMethod.PAYPAL || payment.getPaymentMethod() == PaymentMethod.BANK_TRANSFER) {
+            response.setCheckoutUrl(payment.getCheckoutUrl());
         }
         return response;
     }
@@ -470,30 +414,16 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
-    private PaymentResponse processSuccessfulPayment(Payment payment, String payerId,
+    private PaymentResponse processSuccessfulPayPalPayment(Payment payment, String payerId,
                                                      com.paypal.api.payments.Payment executedPayment) {
 
         if (!"approved".equalsIgnoreCase(executedPayment.getState())) {
             handlePaymentFailure(payment);
             throw new PaymentProcessingException("Payment not approved. Status: " + executedPayment.getState());
         }
-
-        payment.setStatus(PaymentStatus.COMPLETED);
         payment.setPayerId(payerId);
-        payment.setPaymentDate(LocalDateTime.now());
-
-        paymentRepository.save(payment);
-
-        // Only update booking status for initial payment, not additional payments
-        Booking booking = payment.getBooking();
-        if (booking.getStatus() == BookingStatus.PENDING) {
-            updateBookingStatus(booking);
-        } else {
-            log.info("Additional payment {} completed for booking {}", payment.getPaymentId(), booking.getBookingId());
-        }
-
-        log.info("Payment {} completed successfully", payment.getPaymentId());
-        return paymentMapper.toResponseDTO(payment);
+        
+        return processSuccessfulPayment(payment);
     }
 
     @Transactional
@@ -523,18 +453,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         if ("PAID".equalsIgnoreCase(status) || "SUCCESS".equalsIgnoreCase(status) || "IN".equalsIgnoreCase(status)) {
-            payment.setStatus(PaymentStatus.COMPLETED);
-            payment.setPaymentDate(LocalDateTime.now());
-            paymentRepository.save(payment);
-
-            // Only update booking status for initial payment, not additional payments
-            if (payment.getBooking().getStatus() == BookingStatus.PENDING) {
-                updateBookingStatus(payment.getBooking());
-            } else {
-                log.info("Additional payment {} completed for booking {} via SePay", payment.getPaymentId(), payment.getBooking().getBookingId());
-            }
-
-            log.info("Payment {} marked as COMPLETED via SePay webhook", payment.getPaymentId());
+            processSuccessfulPayment(payment);
         } else if ("FAILED".equalsIgnoreCase(status) || "CANCELLED".equalsIgnoreCase(status) || "OUT".equalsIgnoreCase(status)) {
             payment.setStatus(PaymentStatus.FAILED);
             paymentRepository.save(payment);
@@ -542,6 +461,29 @@ public class PaymentServiceImpl implements PaymentService {
         } else {
             log.info("Ignoring SePay webhook with unrecognized status: {}", status);
         }
+    }
+
+    @Transactional
+    private PaymentResponse processSuccessfulPayment(Payment payment) {
+        payment.setStatus(PaymentStatus.COMPLETED);
+        payment.setPaymentDate(LocalDateTime.now());
+        paymentRepository.save(payment);
+
+        Booking booking = payment.getBooking();
+        
+        // Chỉ cập nhật trạng thái booking nếu nó đang PENDING
+        if (booking.getStatus() == BookingStatus.PENDING) {
+            booking.setStatus(BookingStatus.CONFIRMED);
+            updatePassengerSeats(booking);
+            bookingRepository.save(booking);
+            log.info("Updated booking {} status to CONFIRMED", booking.getBookingId());
+            // Phát sự kiện BookingConfirmedEvent để các listener khác xử lý (gửi email, socket,...)
+            eventPublisher.publishEvent(new BookingConfirmedEvent(this, booking));
+        } else {
+            log.info("Additional payment {} completed for already confirmed booking {}", payment.getPaymentId(), booking.getBookingId());
+        }
+
+        return paymentMapper.toResponseDTO(payment);
     }
 
     private void handlePaymentFailure(Payment payment ) {

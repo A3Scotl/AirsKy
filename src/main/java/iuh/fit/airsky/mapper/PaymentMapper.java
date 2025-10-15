@@ -13,6 +13,7 @@ public interface PaymentMapper {
     Payment toEntity(PaymentRequest dto);
 
     @Mapping(source = "booking.bookingId", target = "bookingId")
+    @Mapping(source = "checkoutUrl", target = "checkoutUrl")
     PaymentResponse toResponseDTO(Payment entity);
 
 }

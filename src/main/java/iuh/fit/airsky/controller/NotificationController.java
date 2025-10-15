@@ -11,6 +11,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,6 +26,7 @@ public class NotificationController {
     private final NotificationService notificationService;
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<NotificationResponse>> createNotification(@RequestBody NotificationRequest request) {
         log.info("Creating notification: {}", request);
         NotificationResponse response = notificationService.createNotification(request);
@@ -33,6 +35,7 @@ public class NotificationController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<NotificationResponse>> updateNotification(@PathVariable Long id, @RequestBody NotificationRequest request) {
         log.info("Updating notification with ID: {}", id);
         NotificationResponse response = notificationService.updateNotification(id, request);
@@ -41,6 +44,7 @@ public class NotificationController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<NotificationResponse>> getNotificationById(@PathVariable Long id) {
         log.info("Getting notification by ID: {}", id);
         Optional<NotificationResponse> response = notificationService.findById(id);
@@ -54,6 +58,7 @@ public class NotificationController {
     }
 
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<PageResponse<NotificationResponse>>> getAllNotifications(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
@@ -65,6 +70,7 @@ public class NotificationController {
     }
 
     @GetMapping("/user/{userId}")
+    @PreAuthorize("hasRole('ADMIN') or #userId == authentication.principal.id")
     public ResponseEntity<ApiResponse<PageResponse<NotificationResponse>>> getNotificationsByUserId(
             @PathVariable Long userId,
             @RequestParam(defaultValue = "0") int page,
@@ -77,6 +83,7 @@ public class NotificationController {
     }
 
     @GetMapping("/user/{userId}/unread")
+    @PreAuthorize("isAuthenticated() and #userId == authentication.principal.id")
     public ResponseEntity<ApiResponse<List<NotificationResponse>>> getUnreadNotificationsByUserId(@PathVariable Long userId) {
         log.info("Getting unread notifications for user ID: {}", userId);
         List<NotificationResponse> response = notificationService.findUnreadByUserId(userId);
@@ -85,6 +92,7 @@ public class NotificationController {
     }
 
     @PutMapping("/user/{userId}/mark-read")
+    @PreAuthorize("isAuthenticated() and #userId == authentication.principal.id")
     public ResponseEntity<ApiResponse<Void>> markNotificationsAsRead(@PathVariable Long userId, @RequestBody List<Long> notificationIds) {
         log.info("Marking notifications as read for user ID: {} with IDs: {}", userId, notificationIds);
         notificationService.markAsRead(userId, notificationIds);
@@ -93,6 +101,7 @@ public class NotificationController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteNotification(@PathVariable Long id) {
         log.info("Deleting notification with ID: {}", id);
         notificationService.softDelete(id);

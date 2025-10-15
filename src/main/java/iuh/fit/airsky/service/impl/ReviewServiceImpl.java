@@ -60,25 +60,36 @@ public class ReviewServiceImpl implements ReviewService {
         Flight flight = flightRepository.findById(request.getFlightId())
                 .orElseThrow(() -> new ResourceNotFoundException("Flight not found"));
 
-        // Check if user already reviewed this booking (chỉ check nếu đây là review thực sự)
-        if (request.getRating() != null && reviewRepository.existsByBookingIdAndUserId(request.getBookingId(), request.getUserId())) {
-            throw new IllegalArgumentException("User has already reviewed this booking");
-        }
-
-        Review review = reviewMapper.toEntity(request);
-        review.setUser(user);
-        review.setBooking(booking);
-        review.setFlight(flight);
+        // Tìm review request đã có hoặc tạo mới
+        // Điều này ngăn việc tạo nhiều review request cho cùng một booking
+        Review review = reviewRepository.findByBookingIdAndUserId(request.getBookingId(), request.getUserId())
+                .orElseGet(() -> {
+                    Review newReview = new Review();
+                    newReview.setUser(user);
+                    newReview.setBooking(booking);
+                    newReview.setFlight(flight);
+                    newReview.setStatus(Review.ReviewStatus.PENDING);
+                    newReview.setRetryCount(0);
+                    newReview.setRating(0); 
+                    newReview.setIsApproved(false);
+                    newReview.setEligibleAt(request.getEligibleAt() != null ? request.getEligibleAt() : LocalDateTime.now());
+                    return newReview;
+                });
 
         // Nếu có rating thì đây là review thực sự, ngược lại là review request
         if (request.getRating() != null) {
+            // User đang submit review
+            if (review.getStatus() == Review.ReviewStatus.COMPLETED) {
+                throw new IllegalArgumentException("User has already reviewed this booking");
+            }
+            review.setRating(request.getRating());
+            review.setComment(request.getComment());
             review.setReviewDate(request.getReviewDate() != null ? request.getReviewDate() : LocalDateTime.now());
             review.setStatus(Review.ReviewStatus.COMPLETED); // Review thực sự
+            review.setIsApproved(request.getIsApproved() != null ? request.getIsApproved() : false);
         } else {
-            // Review request tự động tạo
-            review.setEligibleAt(request.getEligibleAt() != null ? request.getEligibleAt() : LocalDateTime.now());
-            review.setStatus(review.getStatus() != null ? review.getStatus() : Review.ReviewStatus.PENDING);
-            review.setRetryCount(0);
+            // Đây là trường hợp tạo review request tự động từ scheduler
+            // Không cần làm gì thêm vì đã xử lý ở orElseGet
         }
 
         Review savedReview = reviewRepository.save(review);

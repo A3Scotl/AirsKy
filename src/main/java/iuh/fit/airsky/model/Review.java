@@ -37,7 +37,7 @@ public class Review extends BaseFullSoftDeleteEntity {
     @JoinColumn(name = "flight_id", nullable = false)
     private Flight flight;
 
-    @Column(nullable = false)
+    @Column
     private Integer rating;  // 1 to 5
 
     @Column(length = 1000)
@@ -48,7 +48,7 @@ public class Review extends BaseFullSoftDeleteEntity {
     @Builder.Default
     private Boolean isApproved = false;
 
-    @Column(nullable = false)
+    @Column
     private LocalDateTime eligibleAt; // Thời điểm đủ điều kiện để review
 
     @Column(nullable = false)

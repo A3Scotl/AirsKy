@@ -161,6 +161,9 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
     List<Flight> findFlightsByDepartureTimeBeforeAndStatus(@Param("departureTime") LocalDateTime departureTime,
                                                            @Param("status") FlightStatus status);
 
+    @Query("SELECT f FROM Flight f WHERE f.departureTime BETWEEN :startTime AND :endTime AND f.status = :status")
+    List<Flight> findFlightsByDepartureTimeBetweenAndStatus(@Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime, @Param("status") FlightStatus status);
+
     @Query("SELECT f FROM Flight f LEFT JOIN FETCH f.aircraft LEFT JOIN FETCH f.flightTravelClasses ftc LEFT JOIN FETCH ftc.travelClass WHERE f.flightId = :flightId")
     Optional<Flight> findByIdWithAircraftAndTravelClasses(@Param("flightId") Long flightId);
 }

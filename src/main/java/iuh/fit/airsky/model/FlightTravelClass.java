@@ -1,5 +1,6 @@
 package iuh.fit.airsky.model;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import iuh.fit.airsky.base.BaseAuditOnlyEntity;
 import jakarta.persistence.*;
 import lombok.*;
@@ -20,6 +21,7 @@ public class FlightTravelClass extends BaseAuditOnlyEntity {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
+@JsonBackReference
     @JoinColumn(name = "flight_id", nullable = false)
     private Flight flight;
 

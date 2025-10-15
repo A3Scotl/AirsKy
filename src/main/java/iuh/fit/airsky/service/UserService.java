@@ -25,4 +25,5 @@ public interface UserService {
 
     // Lấy danh sách booking theo userId
     List<BookingResponse> getBookingsByUserId(Long userId);
+    void updateUserRole(Long userId, String role);
 }

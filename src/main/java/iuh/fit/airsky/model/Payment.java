@@ -46,7 +46,7 @@ public class Payment {
     private String payerId;
 
     @Column(columnDefinition = "TEXT")
-    private String paypalApprovalUrl;
+    private String checkoutUrl;
 
 
 
