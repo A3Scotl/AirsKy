@@ -31,6 +31,7 @@ public class DealUsage extends BaseAuditOnlyEntity {
     @JoinColumn(name = "deal_id", nullable = false)
     private Deal deal;
 
+    // có thể null
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = true)
     private User user;

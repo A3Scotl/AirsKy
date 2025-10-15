@@ -1,6 +1,7 @@
 package iuh.fit.airsky.model;
 
 import iuh.fit.airsky.base.BaseAuditOnlyEntity;
+import iuh.fit.airsky.enums.LoyaltyTier;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -73,4 +74,16 @@ public class Deal extends BaseAuditOnlyEntity {
 
     @Builder.Default
     private Integer usagePerUser = 1;
+
+    @Builder.Default
+    @Column(name = "is_guest_only")
+    private Boolean isGuestOnly = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "required_loyalty_tier")
+    private LoyaltyTier requiredLoyaltyTier;
+
+    @Builder.Default
+    @Column(name = "is_loyalty_exclusive")
+    private Boolean isLoyaltyExclusive = false;
 }

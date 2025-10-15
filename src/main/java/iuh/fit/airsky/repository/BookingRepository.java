@@ -35,11 +35,14 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     @Query("SELECT b FROM Booking b WHERE b.flight.status = :flightStatus AND b.status = :bookingStatus")
     List<Booking> findBookingsByFlightStatusAndBookingStatus(FlightStatus flightStatus, BookingStatus bookingStatus);
 
-    @Query("SELECT b FROM Booking b JOIN b.passengers p LEFT JOIN FETCH b.userId LEFT JOIN FETCH b.flight LEFT JOIN FETCH b.travelClass LEFT JOIN FETCH b.payment LEFT JOIN FETCH b.passengers WHERE b.bookingCode = :bookingCode AND CONCAT(LOWER(p.firstName), ' ', LOWER(p.lastName)) = LOWER(:fullName)")
+    @Query("SELECT b FROM Booking b JOIN b.passengers p WHERE b.bookingCode = :bookingCode AND CONCAT(p.firstName, ' ', p.lastName) = :fullName")
     Optional<Booking> findByBookingCodeAndPassengerFullName(@Param("bookingCode") String bookingCode, @Param("fullName") String fullName);
 
+    @Query("SELECT b FROM Booking b JOIN b.passengers p WHERE b.bookingCode = :bookingCode AND p.passengerId = :passengerId")
+    Optional<Booking> findByBookingCodeAndPassengerId(@Param("bookingCode") String bookingCode, @Param("passengerId") Long passengerId);
+
     // Method để fetch passengers riêng
-    @Query("SELECT b FROM Booking b LEFT JOIN FETCH b.passengers p LEFT JOIN FETCH p.seat WHERE b.bookingId = :bookingId")
+    @Query("SELECT b FROM Booking b LEFT JOIN FETCH b.passengers p LEFT JOIN FETCH p.seatAssignments sa LEFT JOIN FETCH sa.seat WHERE b.bookingId = :bookingId")
     Optional<Booking> findByIdWithPassengers(@Param("bookingId") Long bookingId);
 
     // Method để fetch flight segments riêng  
@@ -53,5 +56,9 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     // Method để tìm các booking đã hết thời hạn thanh toán
     @Query("SELECT b FROM Booking b LEFT JOIN FETCH b.userId LEFT JOIN FETCH b.flight LEFT JOIN FETCH b.payment WHERE b.paymentTimeout < :now AND b.status = :status")
     List<Booking> findExpiredBookings(@Param("now") java.time.LocalDateTime now, @Param("status") BookingStatus status);
+
+    // Method để đếm số booking hoàn thành theo user
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.userId.id = :userId AND b.status = :status")
+    Long countCompletedBookingsByUser(@Param("userId") Long userId, @Param("status") BookingStatus status);
 
 }

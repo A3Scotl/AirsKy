@@ -24,4 +24,23 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     @Query("SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END FROM Review r WHERE r.booking.bookingId = :bookingId AND r.user.id = :userId")
     boolean existsByBookingIdAndUserId(@Param("bookingId") Long bookingId, @Param("userId") Long userId);
+
+
+    @Query("SELECT DISTINCT b.bookingId, b.userId.id, fs.flight.flightId " +
+           "FROM Booking b " +
+           "JOIN b.flightSegments fs " +
+           "WHERE fs.flight.arrivalTime < CURRENT_TIMESTAMP " +
+           "AND fs.flight.status = 'DEPARTED' " +
+           "AND b.status = 'CONFIRMED' " +
+           "AND b.userId.id IS NOT NULL " +
+           "AND NOT EXISTS (SELECT r FROM Review r WHERE r.booking.bookingId = b.bookingId)")
+    List<Object[]> findCompletedBookingsWithoutReviewRequests();
+
+    @Query("SELECT r FROM Review r WHERE r.status = 'PENDING'")
+    List<Review> findPendingReviewRequests();
+
+    List<Review> findByStatus(Review.ReviewStatus status);
+
+    @Query("SELECT r FROM Review r WHERE r.user.id = :userId AND r.status = :status")
+    List<Review> findByUserIdAndStatus(@Param("userId") Long userId, @Param("status") Review.ReviewStatus status);
 }

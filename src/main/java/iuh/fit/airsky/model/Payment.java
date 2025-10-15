@@ -33,6 +33,7 @@ public class Payment {
     private PaymentMethod paymentMethod;
 
     @Enumerated(EnumType.STRING)
+    @Column(length = 20)
     private PaymentStatus status;
 
     @OneToOne(fetch = FetchType.LAZY)

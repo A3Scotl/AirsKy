@@ -1,13 +1,10 @@
 package iuh.fit.airsky.service.impl;
-
 import iuh.fit.airsky.dto.request.BookingAncillaryServiceRequest;
 import iuh.fit.airsky.dto.request.BookingRequest;
 import iuh.fit.airsky.dto.request.CheckinRequest;
 import iuh.fit.airsky.dto.request.FlightSegmentRequest;
 import iuh.fit.airsky.dto.request.PassengerSeatRequest;
 import iuh.fit.airsky.dto.request.PaymentRequest;
-import iuh.fit.airsky.dto.request.SeatChangeCalculationRequest;
-import iuh.fit.airsky.dto.request.UpdateBookingTotalRequest;
 import iuh.fit.airsky.dto.response.BaggageResponse;
 import iuh.fit.airsky.dto.response.BookingAncillaryServiceResponse;
 import iuh.fit.airsky.dto.response.BookingResponse;
@@ -17,15 +14,12 @@ import iuh.fit.airsky.dto.response.PaymentResponse;
 import iuh.fit.airsky.dto.response.SeatTypePricingDetail;
 import iuh.fit.airsky.dto.response.CheckinEligiblePassengerResponse;
 import iuh.fit.airsky.dto.response.CheckinResponse;
-import iuh.fit.airsky.dto.response.SeatChangeCalculationResponse;
-import iuh.fit.airsky.dto.response.UpdateBookingTotalResponse;
 import iuh.fit.airsky.enums.BaggageType;
 import iuh.fit.airsky.enums.BaggagePackage;
 import iuh.fit.airsky.enums.BookingStatus;
 import iuh.fit.airsky.enums.PaymentStatus;
 import iuh.fit.airsky.enums.SeatStatus;
 import iuh.fit.airsky.enums.LoyaltyTier;
-import iuh.fit.airsky.enums.PaymentMethod;
 import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.enums.SeatTypePrice;
 import iuh.fit.airsky.enums.SeatTypes;
@@ -38,9 +32,9 @@ import iuh.fit.airsky.repository.*;
 import iuh.fit.airsky.service.BookingService;
 import iuh.fit.airsky.service.DealService;
 import iuh.fit.airsky.service.EmailService;
-import iuh.fit.airsky.service.LoyaltyService;
 import iuh.fit.airsky.service.PaymentService;
-import iuh.fit.airsky.service.BoardingPassService;
+import iuh.fit.airsky.service.LoyaltyService;
+import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -50,7 +44,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -80,7 +73,6 @@ public class BookingServiceImpl implements BookingService {
     private final EmailService emailService;
     private final DealService dealService;
     private final PaymentService paymentService;
-    private final BoardingPassService boardingPassService;
     private final LoyaltyService loyaltyService;
     private final DealUsageRepository dealUsageRepository;
     private final PassengerRepository passengerRepository;
@@ -108,7 +100,6 @@ public class BookingServiceImpl implements BookingService {
             EmailService emailService,
             DealService dealService,
             PaymentService paymentService,
-            BoardingPassService boardingPassService,
             LoyaltyService loyaltyService,
             DealUsageRepository dealUsageRepository,
             PassengerRepository passengerRepository,
@@ -131,7 +122,6 @@ public class BookingServiceImpl implements BookingService {
         this.emailService = emailService;
         this.dealService = dealService;
         this.paymentService = paymentService;
-        this.boardingPassService = boardingPassService;
         this.loyaltyService = loyaltyService;
         this.dealUsageRepository = dealUsageRepository;
         this.passengerRepository = passengerRepository;
@@ -241,7 +231,6 @@ public class BookingServiceImpl implements BookingService {
         // Save booking first to avoid transient object issues
         log.info("Saving booking...");
         Booking savedBooking = bookingRepository.save(booking);
-        bookingRepository.flush(); // Ensure booking is persisted before applying deal
         log.info("Booking saved with id: {}", savedBooking.getBookingId());
 
         // Now create flight segments after booking is saved
@@ -291,74 +280,30 @@ public class BookingServiceImpl implements BookingService {
                 baseAmount, baggageAmount, seatTypeAmount, ancillaryServicesAmount, finalAmount);
 
         if (request.getDealCode() != null && !request.getDealCode().trim().isEmpty()) {
-            log.info("Applying deal: '{}' (length: {}) with orderAmount: {} for userId: {}", 
-                    request.getDealCode(), request.getDealCode().length(), finalAmount, request.getUserId());
-            
-            // Check if deal is eligible for the user before applying
+            log.info("Applying deal: {} with orderAmount: {}", request.getDealCode(), finalAmount);
             try {
-                boolean isEligible = dealService.canUserUseDeal(request.getDealCode(), request.getUserId());
-                if (!isEligible) {
-                    log.warn("Deal {} is not eligible for userId: {}, skipping deal application", request.getDealCode(), request.getUserId());
-                } else {
-                    log.info("Deal {} is eligible for userId: {}, proceeding with application", request.getDealCode(), request.getUserId());
-                    log.info("About to call dealService.applyDeal with booking ID: {}", savedBooking.getBookingId());
-                    var dealUsage = dealService.applyDeal(request.getDealCode(), request.getUserId(), savedBooking, finalAmount);
-                    log.info("dealService.applyDeal returned successfully: usageId={}, discount={}", 
-                            dealUsage.getUsageId(), dealUsage.getDiscountAmount());
-                    BigDecimal oldFinalAmount = finalAmount;
-                    finalAmount = dealUsage.getFinalAmount();
-                    log.info("Applied deal {} to booking {}, discount: {}, amount changed: {} -> {}",
-                            request.getDealCode(), savedBooking.getBookingId(), dealUsage.getDiscountAmount(), oldFinalAmount, finalAmount);
-                }
+                var dealUsage = dealService.applyDeal(request.getDealCode(), request.getUserId(), savedBooking.getBookingId(), finalAmount);
+                BigDecimal oldFinalAmount = finalAmount;
+                finalAmount = dealUsage.getFinalAmount();
+                log.info("Applied deal {} to booking {}, discount: {}, amount changed: {} -> {}",
+                        request.getDealCode(), savedBooking.getBookingId(), dealUsage.getDiscountAmount(), oldFinalAmount, finalAmount);
             } catch (Exception e) {
                 log.error("Failed to apply deal {} for booking {}: {}", request.getDealCode(), savedBooking.getBookingId(), e.getMessage(), e);
-                log.error("Exception details: ", e);
                 // Tiếp tục với amount gốc nếu deal thất bại
             }
         } else {
-            log.info("No deal code provided in request (dealCode: '{}', isNull: {}, trimmed: '{}', userId: {})", 
-                    request.getDealCode(), request.getDealCode() == null, 
-                    request.getDealCode() != null ? request.getDealCode().trim() : "N/A", request.getUserId());
+            log.info("No deal code provided in request");
         }
 
-        // Áp dụng tier discount tự động cho authenticated users
-        BigDecimal tierDiscountAmount = BigDecimal.ZERO;
-        if (request.getUserId() != null) {
-            try {
-                User user = userRepository.findById(request.getUserId())
-                        .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại với ID: " + request.getUserId()));
-
-                LoyaltyTier userTier = user.getLoyaltyTier() != null ? user.getLoyaltyTier() : LoyaltyTier.STANDARD;
-                BigDecimal tierDiscountRate = userTier.getDiscountRate();
-
-                if (tierDiscountRate.compareTo(BigDecimal.ZERO) > 0) {
-                    tierDiscountAmount = finalAmount.multiply(tierDiscountRate);
-                    BigDecimal oldFinalAmount = finalAmount;
-                    finalAmount = finalAmount.subtract(tierDiscountAmount);
-
-                    log.info("Applied tier discount for user {} (tier: {}): discount rate {}%, discount amount: {}, amount changed: {} -> {}",
-                            request.getUserId(), userTier, tierDiscountRate.multiply(BigDecimal.valueOf(100)), tierDiscountAmount, oldFinalAmount, finalAmount);
-                } else {
-                    log.info("No tier discount applied for user {} (tier: {} has 0% discount rate)", request.getUserId(), userTier);
-                }
-            } catch (Exception e) {
-                log.error("Failed to apply tier discount for user {}: {}", request.getUserId(), e.getMessage());
-                // Tiếp tục với amount hiện tại nếu tier discount thất bại
-            }
-        } else {
-            log.info("No tier discount applied (guest user)");
-        }
-
-        // NOTE: Tích điểm loyalty chỉ được trao khi booking hoàn thành (CONFIRMED)
-        // không phải khi tạo booking (PENDING). Points sẽ được trao trong completeBooking()
+        // Tích điểm loyalty cho user nếu có userId
         if (savedBooking.getUserId() != null) {
-            log.info("User {} detected for booking {}, loyalty points will be awarded upon completion", 
-                    savedBooking.getUserId().getId(), savedBooking.getBookingId());
+            log.info("Accumulating loyalty points...");
+            User user = savedBooking.getUserId();
+            accumulateLoyaltyPoints(user, finalAmount);
         }
 
         // Tạo thanh toán với final amount
-        log.info("Creating payment with amount: {} (after deal discount: {}, tier discount: {})", 
-                finalAmount, request.getDealCode() != null ? "applied" : "none", tierDiscountAmount);
+        log.info("Creating payment with amount: {}", finalAmount);
         PaymentRequest pr = new PaymentRequest();
 
         pr.setBookingId(booking.getBookingId());
@@ -375,12 +320,10 @@ public class BookingServiceImpl implements BookingService {
 
         savedBooking.setTotalAmount(finalAmount);
         
-        // Cập nhật lại payment amount nếu có deal hoặc tier discount được áp dụng
-        if ((request.getDealCode() != null && !request.getDealCode().trim().isEmpty()) || tierDiscountAmount.compareTo(BigDecimal.ZERO) > 0) {
+        // Cập nhật lại payment amount nếu có deal được áp dụng
+        if (request.getDealCode() != null && !request.getDealCode().trim().isEmpty()) {
             paymentEntity.setAmount(finalAmount);
             paymentRepository.save(paymentEntity);
-            log.info("Updated payment amount to {} (deal applied: {}, tier discount: {})", 
-                    finalAmount, request.getDealCode() != null, tierDiscountAmount);
         }
 
         // Create ancillary services records
@@ -676,16 +619,6 @@ public class BookingServiceImpl implements BookingService {
                 log.debug("Updated seat {} status to OCCUPIED for completed booking {}",
                         passenger.getSeat().getSeatNumber(), bookingId);
             }
-
-            // Also update PassengerSeatAssignment status to OCCUPIED
-            for (PassengerSeatAssignment assignment : passenger.getSeatAssignments()) {
-                if (assignment.getStatus() == SeatStatus.PENDING_PAYMENT) {
-                    assignment.setStatus(SeatStatus.OCCUPIED);
-                    passengerSeatAssignmentRepository.save(assignment);
-                    log.debug("Updated seat assignment status to OCCUPIED for passenger {} seat {}",
-                            passenger.getFirstName(), assignment.getSeat().getSeatNumber());
-                }
-            }
         }
 
         Booking savedBooking = bookingRepository.save(booking);
@@ -801,11 +734,10 @@ public class BookingServiceImpl implements BookingService {
             if (passenger.getSeat() != null) {
                 // Reset seat về AVAILABLE và xóa bookedBy
                 passenger.getSeat().setStatus(SeatStatus.AVAILABLE);
-                passenger.getSeat().setBookedByUser(null);
-                passenger.getSeat().setBookedByPassenger(null);
+                passenger.getSeat().setBookedBy(null);
                 seatRepository.save(passenger.getSeat());
 
-                // Clear passenger seat reference for consistency
+                // Xóa seat reference từ passenger để ghế có thể được book lại
                 passenger.setSeat(null);
                 passengerRepository.save(passenger);
 
@@ -956,16 +888,6 @@ public class BookingServiceImpl implements BookingService {
         Optional<DealUsage> dealUsageOpt = dealUsageRepository.findByBooking(booking);
         log.info("Looking for deal usage for booking {}: found={}, bookingId={}",
                 booking.getBookingId(), dealUsageOpt.isPresent(), booking.getBookingId());
-
-        // If not found, try to refresh the booking entity and search again
-        if (!dealUsageOpt.isPresent()) {
-            log.info("DealUsage not found initially, refreshing booking entity...");
-            booking = bookingRepository.findById(booking.getBookingId()).orElse(booking);
-            dealUsageOpt = dealUsageRepository.findByBooking(booking);
-            log.info("After refresh - Looking for deal usage for booking {}: found={}",
-                    booking.getBookingId(), dealUsageOpt.isPresent());
-        }
-
         if (dealUsageOpt.isPresent()) {
             DealUsage dealUsage = dealUsageOpt.get();
             log.info("Found deal usage: id={}, dealCode={}, discountAmount={}",
@@ -1098,23 +1020,13 @@ public class BookingServiceImpl implements BookingService {
                         .status(SeatStatus.PENDING_PAYMENT)
                         .build();
 
-                // Update seat status to PENDING_PAYMENT to prevent double booking
-                seat.setStatus(SeatStatus.PENDING_PAYMENT);
-                // Set bookedBy to the user who made the booking (if authenticated) or passenger
-                if (savedBooking.getUserId() != null) {
-                    seat.setBookedByUser(savedBooking.getUserId());
-                } else {
-                    seat.setBookedByPassenger(passenger);
-                }
-
                 // Set seat type for this assignment (from seat assignment or fallback to passenger level)
                 SeatTypes assignmentSeatType = seatReq.getSeatType() != null ?
                         seatReq.getSeatType() : passengerReq.getSeatType();
                 if (assignmentSeatType != null) {
                     seat.setType(assignmentSeatType);
+                    seatRepository.save(seat);
                 }
-
-                seatRepository.save(seat);
 
                 passengerSeatAssignmentRepository.save(assignment);
                 passenger.getSeatAssignments().add(assignment);
@@ -1275,12 +1187,15 @@ public class BookingServiceImpl implements BookingService {
                 .collect(java.util.stream.Collectors.toList());
     }
 
-    @Deprecated
     private void accumulateLoyaltyPoints(User user, BigDecimal amount) {
-        // DEPRECATED: This method should not be used for booking creation
-        // Loyalty points should only be awarded when booking is completed (CONFIRMED status)
-        // Use awardLoyaltyPointsForCompletedBooking() instead
-        log.warn("DEPRECATED METHOD CALLED: accumulateLoyaltyPoints() - should use awardLoyaltyPointsForCompletedBooking()");
+        // Simple loyalty points calculation: 1 point per 1000 VND
+        int points = amount.divide(BigDecimal.valueOf(1000)).intValue();
+        if (points > 0) {
+            Integer currentPoints = user.getLoyaltyPoints() != null ? user.getLoyaltyPoints() : 0;
+            user.setLoyaltyPoints(currentPoints + points);
+            userRepository.save(user);
+            log.info("Accumulated {} loyalty points for user {}", points, user.getEmail());
+        }
     }
 
 
@@ -1332,34 +1247,21 @@ public class BookingServiceImpl implements BookingService {
 
     private void awardLoyaltyPointsForCompletedBooking(Booking booking) {
         User user = booking.getUserId();
-        if (user == null) {
-            log.debug("Skipping loyalty points for guest booking: {}", booking.getBookingId());
-            return;
-        }
-
         BigDecimal bookingAmount = booking.getTotalAmount();
 
-        // Base points: 1 point per 1000 VND (cải thiện từ rate quá thấp)
-        int basePoints = bookingAmount.divide(BigDecimal.valueOf(1000)).intValue();
+        // Award points based on booking amount: 1 point per 1000 VND for completed bookings
+        int points = bookingAmount.divide(BigDecimal.valueOf(1000)).intValue();
 
-        // Tier multiplier bonus
-        LoyaltyTier userTier = user.getLoyaltyTier() != null ? user.getLoyaltyTier() : LoyaltyTier.STANDARD;
-        double tierMultiplier = getTierPointsMultiplier(userTier);
-
-        // Booking type bonus (domestic vs international)
-        int bookingBonus = calculateBookingTypeBonus(booking);
-
-        // Total points calculation
-        int totalPoints = (int) Math.round(basePoints * tierMultiplier) + bookingBonus;
+        // Bonus points for completed bookings (additional 10% bonus)
+        int bonusPoints = points / 10;
+        int totalPoints = points + bonusPoints;
 
         if (totalPoints > 0) {
             Integer currentPoints = user.getLoyaltyPoints() != null ? user.getLoyaltyPoints() : 0;
             user.setLoyaltyPoints(currentPoints + totalPoints);
             userRepository.save(user);
-
-            log.info("Awarded {} loyalty points ({} base * {}x tier + {} bonus) for completed booking {} to {} ({})",
-                    totalPoints, basePoints, tierMultiplier, bookingBonus, booking.getBookingId(),
-                    user.getEmail(), userTier);
+            log.info("Awarded {} loyalty points ({} base + {} bonus) for completed booking {} to user {}",
+                    totalPoints, points, bonusPoints, booking.getBookingId(), user.getEmail());
 
             // Check for tier upgrade after awarding points
             try {
@@ -1367,36 +1269,9 @@ public class BookingServiceImpl implements BookingService {
             } catch (Exception e) {
                 log.error("Failed to check tier upgrade for user {} after completing booking {}: {}",
                         user.getId(), booking.getBookingId(), e.getMessage());
+                // Don't fail the booking completion if tier upgrade check fails
             }
         }
-    }
-
-    /**
-     * Tính multiplier cho tier
-     */
-    private double getTierPointsMultiplier(LoyaltyTier tier) {
-        switch (tier) {
-            case STANDARD: return 1.0;
-            case SILVER: return 1.2;    // +20% bonus
-            case GOLD: return 1.5;      // +50% bonus
-            case PLATINUM: return 2.0;  // +100% bonus
-            default: return 1.0;
-        }
-    }
-
-    /**
-     * Tính bonus theo loại booking
-     */
-    private int calculateBookingTypeBonus(Booking booking) {
-        // Bonus cho international flights
-        boolean isInternational = !booking.getFlight().getDepartureAirport().getCountry().getCountryCode()
-                .equals(booking.getFlight().getArrivalAirport().getCountry().getCountryCode());
-
-        if (isInternational) {
-            return 50; // Bonus 50 points cho international
-        }
-
-        return 10; // Bonus 10 points cho domestic
     }
 
     @Override
@@ -1457,289 +1332,6 @@ public class BookingServiceImpl implements BookingService {
         }
 
         return Optional.empty();
-    }
-
-    @Override
-    public BookingResponse processPaymentForGuestBooking(Long bookingId, PaymentRequest paymentRequest) {
-        log.info("Processing payment for guest booking: {}", bookingId);
-
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy booking với id: " + bookingId));
-
-        // Validate booking status - only allow payment for PENDING bookings
-        if (booking.getStatus() != BookingStatus.PENDING) {
-            throw new IllegalStateException("Chỉ có thể thanh toán booking ở trạng thái PENDING");
-        }
-
-        // Create or update payment
-        Payment payment;
-        if (booking.getPayment() != null) {
-            payment = booking.getPayment();
-            payment.setAmount(paymentRequest.getTotalAmount());
-            payment.setPaymentMethod(paymentRequest.getPaymentMethod());
-            payment.setStatus(paymentRequest.getPaymentStatus());
-            payment.setPaymentDate(paymentRequest.getPaymentDate());
-        } else {
-            payment = new Payment();
-            payment.setBooking(booking);
-            payment.setAmount(paymentRequest.getTotalAmount());
-            payment.setPaymentMethod(paymentRequest.getPaymentMethod());
-            payment.setStatus(paymentRequest.getPaymentStatus());
-            payment.setPaymentDate(paymentRequest.getPaymentDate());
-            booking.setPayment(payment);
-        }
-
-        // If payment is successful, update booking status
-        if (paymentRequest.getPaymentStatus() == PaymentStatus.COMPLETED) {
-            booking.setStatus(BookingStatus.CONFIRMED);
-
-            // Update seat status to OCCUPIED
-            for (Passenger passenger : booking.getPassengers()) {
-                if (passenger.getSeat() != null) {
-                    passenger.getSeat().setStatus(SeatStatus.OCCUPIED);
-                    seatRepository.save(passenger.getSeat());
-                }
-
-                // Also update PassengerSeatAssignment status to OCCUPIED
-                for (PassengerSeatAssignment assignment : passenger.getSeatAssignments()) {
-                    if (assignment.getStatus() == SeatStatus.PENDING_PAYMENT) {
-                        assignment.setStatus(SeatStatus.OCCUPIED);
-                        passengerSeatAssignmentRepository.save(assignment);
-                        log.debug("Updated seat assignment status to OCCUPIED for passenger {} seat {}",
-                                passenger.getFirstName(), assignment.getSeat().getSeatNumber());
-                    }
-                }
-            }
-
-            log.info("Booking {} confirmed and seats occupied after successful payment", bookingId);
-        }
-
-        Payment savedPayment = paymentRepository.save(payment);
-        Booking savedBooking = bookingRepository.save(booking);
-
-        log.info("Payment processed successfully for guest booking: {}", bookingId);
-
-        BookingResponse response = bookingMapper.toResponseDTO(savedBooking);
-        populateDealInformation(response, savedBooking);
-        populateBaggageInformation(response, savedBooking);
-        populateAncillaryServicesInformation(response, savedBooking);
-        return response;
-    }
-
-    private BigDecimal calculateSeatTypeAmount(BookingRequest request, Booking booking) {
-        BigDecimal totalSeatTypeAmount = BigDecimal.ZERO;
-
-        for (int i = 0; i < request.getPassengers().size(); i++) {
-            PassengerSeatRequest passengerReq = request.getPassengers().get(i);
-            Passenger passenger = booking.getPassengers().get(i);
-
-            // Tính seat type amount cho từng seat assignment
-            for (PassengerSeatAssignment assignment : passenger.getSeatAssignments()) {
-                Seat seat = assignment.getSeat();
-                if (seat != null && seat.getType() != null) {
-                    try {
-                        // Lấy giá seat type từ enum
-                        SeatTypePrice seatTypePrice = SeatTypePrice.fromSeatType(seat.getType());
-                        BigDecimal additionalPrice = seatTypePrice.getAdditionalPrice();
-
-                        totalSeatTypeAmount = totalSeatTypeAmount.add(additionalPrice);
-
-                        log.debug("Applied seat type {} with additional price {} for passenger {} (segment {})",
-                                seat.getType(), additionalPrice, passenger.getFirstName(), assignment.getFlightSegment().getSegmentOrder());
-                    } catch (Exception e) {
-                        log.error("Error calculating seat type amount for passenger {}: {}",
-                                passenger.getFirstName(), e.getMessage());
-                    }
-                }
-            }
-        }
-
-        return totalSeatTypeAmount;
-    }
-
-    private void populateSeatTypeInformation(BookingResponse response, Booking booking) {
-        BigDecimal totalSeatTypeAmount = BigDecimal.ZERO;
-        List<SeatTypePricingDetail> seatTypeDetails = new ArrayList<>();
-
-        for (Passenger passenger : booking.getPassengers()) {
-            // Iterate qua tất cả seat assignments của passenger
-            for (PassengerSeatAssignment assignment : passenger.getSeatAssignments()) {
-                Seat seat = assignment.getSeat();
-                if (seat != null && seat.getType() != null) {
-                    SeatTypePrice seatTypePrice = SeatTypePrice.fromSeatType(seat.getType());
-                    BigDecimal additionalPrice = seatTypePrice.getAdditionalPrice();
-
-                    totalSeatTypeAmount = totalSeatTypeAmount.add(additionalPrice);
-
-                    seatTypeDetails.add(new SeatTypePricingDetail(
-                        passenger.getFirstName() + " " + passenger.getLastName(),
-                        seat.getSeatNumber(),
-                        seat.getType(),
-                        additionalPrice
-                    ));
-                }
-            }
-        }
-
-        response.setSeatTypeAmount(totalSeatTypeAmount);
-        response.setSeatTypeDetails(seatTypeDetails);
-
-        log.debug("Populated seat type information: {} details, total amount: {}",
-                seatTypeDetails.size(), totalSeatTypeAmount);
-    }
-
-    private void sendHoldTimeWarningEmail(Booking booking, int minutesLeft) {
-        if (booking.getUserId() == null) {
-            log.debug("Skipping hold time warning email for guest booking {}", booking.getBookingId());
-            return;
-        }
-
-        try {
-            String email = booking.getUserId().getEmail();
-            String subject = "Cảnh báo: Thời gian giữ ghế sắp hết hạn";
-
-            String body = String.format(
-                "<h3>Xin chào %s</h3>" +
-                "<p>Thời gian giữ ghế cho đơn đặt vé <strong>%s</strong> của bạn sắp hết hạn.</p>" +
-                "<p><strong>Thời gian còn lại:</strong> %d phút</p>" +
-                "<p><strong>Chuyến bay:</strong> %s</p>" +
-                "<p><strong>Khởi hành:</strong> %s</p>" +
-                "<p>Vui lòng hoàn tất thanh toán trong thời gian còn lại để giữ ghế của bạn.</p>" +
-                "<p>Nếu không thanh toán, ghế sẽ được giải phóng tự động.</p>" +
-                "<p>Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.</p>",
-                booking.getUserId().getLastName(),
-                booking.getBookingCode(),
-                minutesLeft,
-                booking.getFlight().getFlightNumber(),
-                booking.getFlight().getDepartureTime().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
-            );
-
-            emailService.sendEmail(email, subject, body);
-            log.info("Sent hold time warning email to {} for booking {} ({} minutes left)",
-                    email, booking.getBookingId(), minutesLeft);
-
-        } catch (Exception e) {
-            log.error("Failed to send hold time warning email for booking {}: {}",
-                    booking.getBookingId(), e.getMessage());
-        }
-    }
-
-    /**
-     * Scheduled job để xử lý các booking đã hết thời hạn thanh toán
-     * Chạy mỗi phút để check và cancel expired bookings
-     */
-    @Scheduled(fixedRate = 60000) // 60 seconds = 1 minute
-    @Transactional
-    public void processExpiredPayments() {
-        log.info("Checking for expired payments...");
-
-        LocalDateTime now = LocalDateTime.now();
-        List<Booking> expiredBookings = bookingRepository.findExpiredBookings(now, BookingStatus.PENDING);
-
-        if (expiredBookings.isEmpty()) {
-            log.debug("No expired bookings found");
-            return;
-        }
-
-        log.info("Found {} expired bookings to process", expiredBookings.size());
-
-        for (Booking booking : expiredBookings) {
-            try {
-                cancelExpiredBooking(booking);
-                log.info("Successfully cancelled expired booking: {}", booking.getBookingCode());
-            } catch (Exception e) {
-                log.error("Failed to cancel expired booking {}: {}", booking.getBookingId(), e.getMessage());
-            }
-        }
-    }
-
-    /**
-     * Hủy booking đã hết thời hạn thanh toán
-     */
-    private void cancelExpiredBooking(Booking booking) {
-        log.info("Cancelling expired booking: {} (timeout: {})",
-                booking.getBookingCode(), booking.getPaymentTimeout());
-
-        // 1. Cập nhật payment status thành EXPIRED
-        if (booking.getPayment() != null) {
-            booking.getPayment().setStatus(PaymentStatus.EXPIRED);
-            paymentRepository.save(booking.getPayment());
-            log.debug("Updated payment status to EXPIRED for booking {}", booking.getBookingCode());
-        }
-
-        // 2. Cập nhật booking status thành CANCELLED
-        booking.setStatus(BookingStatus.CANCELLED);
-        bookingRepository.save(booking);
-
-        // 3. Xóa passenger seat references và giải phóng ghế
-        int releasedSeats = 0;
-        List<Passenger> passengersToUpdate = new ArrayList<>(booking.getPassengers());
-        for (Passenger passenger : passengersToUpdate) {
-            if (passenger.getSeat() != null) {
-                passenger.getSeat().setStatus(SeatStatus.AVAILABLE);
-                passenger.getSeat().setBookedByUser(null);
-                passenger.getSeat().setBookedByPassenger(null);
-                seatRepository.save(passenger.getSeat());
-
-                // Xóa seat reference từ passenger để ghế có thể được book lại
-                passenger.setSeat(null);
-                passengerRepository.save(passenger);
-
-                releasedSeats++;
-                log.debug("Released seat and cleared seat reference for passenger {} in expired booking {}", passenger.getFirstName(), booking.getBookingCode());
-            }
-        }
-
-        // 4. Cập nhật availableSeats của flight
-        if (releasedSeats > 0 && booking.getFlight() != null) {
-            Flight flight = booking.getFlight();
-            flight.setAvailableSeats(flight.getAvailableSeats() + releasedSeats);
-            flightRepository.save(flight);
-            log.info("Updated available seats for flight {}: +{} (expired booking {})",
-                    flight.getFlightNumber(), releasedSeats, booking.getBookingCode());
-        }
-
-        // 5. Gửi email thông báo cho user
-        if (booking.getUserId() != null) {
-            sendExpiredPaymentEmail(booking);
-        }
-
-        log.info("Successfully cancelled expired booking {} and released {} seats",
-                booking.getBookingCode(), releasedSeats);
-    }
-
-    /**
-     * Gửi email thông báo booking bị hủy do hết thời hạn thanh toán
-     */
-    private void sendExpiredPaymentEmail(Booking booking) {
-        try {
-            String email = booking.getUserId().getEmail();
-            String subject = "Thông báo: Booking đã bị hủy do hết thời hạn thanh toán";
-
-            String body = String.format(
-                "<h3>Xin chào %s</h3>" +
-                "<p>Mã đặt vé: <strong>%s</strong></p>" +
-                "<p>Booking của bạn đã bị <strong>HỦY TỰ ĐỘNG</strong> vì đã hết thời hạn thanh toán.</p>" +
-                "<p><strong>Thời hạn thanh toán:</strong> %s</p>" +
-                "<p><strong>Chuyến bay:</strong> %s</p>" +
-                "<p><strong>Số tiền:</strong> $%.2f</p>" +
-                "<p>Ghế đã được giải phóng và có thể được đặt lại bởi khách hàng khác.</p>" +
-                "<p>Nếu bạn vẫn muốn đặt vé, vui lòng tạo booking mới.</p>" +
-                "<p>Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.</p>",
-                booking.getUserId().getLastName(),
-                booking.getBookingCode(),
-                booking.getPaymentTimeout().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")),
-                booking.getFlight().getFlightNumber(),
-                booking.getTotalAmount()
-            );
-
-            emailService.sendEmail(email, subject, body);
-            log.info("Sent expired payment email to {} for booking {}", email, booking.getBookingCode());
-
-        } catch (Exception e) {
-            log.error("Failed to send expired payment email for booking {}: {}",
-                    booking.getBookingId(), e.getMessage());
-        }
     }
 
     @Override
@@ -1905,36 +1497,17 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional
     public CheckinResponse processCheckin(CheckinRequest request) {
-        log.info("Processing check-in for booking: {}, passengerId: {}, passengerName: {}",
-                request.getBookingCode(), request.getPassengerId(), request.getPassengerFullName());
+        log.info("Processing check-in for booking: {}, passenger: {}",
+                request.getBookingCode(), request.getPassengerFullName());
 
-        // Validate booking and passenger - Ưu tiên dùng passengerId
-        Optional<Booking> bookingOpt;
-        if (request.getPassengerId() != null) {
-            // Tìm booking theo passengerId (chính xác hơn)
-            bookingOpt = bookingRepository.findByBookingCodeAndPassengerId(
-                    request.getBookingCode(), request.getPassengerId());
-        } else if (request.getPassengerFullName() != null) {
-            // Fallback: dùng tên (backward compatibility)
-            bookingOpt = bookingRepository.findByBookingCodeAndPassengerFullName(
-                    request.getBookingCode(), request.getPassengerFullName());
-        } else {
-            throw new IllegalArgumentException("Either passengerId or passengerFullName must be provided");
-        }
-
+        // Validate booking and passenger
+        Optional<Booking> bookingOpt = bookingRepository.findByBookingCodeAndPassengerFullName(
+                request.getBookingCode(), request.getPassengerFullName());
         if (bookingOpt.isEmpty()) {
             throw new ResourceNotFoundException("Booking not found or access denied");
         }
 
         Booking booking = bookingOpt.get();
-
-        // Fetch all relationships using findById
-        booking = bookingRepository.findById(booking.getBookingId()).orElse(booking);
-
-        // Fetch passengers if not loaded
-        if (booking.getPassengers() == null || booking.getPassengers().isEmpty()) {
-            booking = bookingRepository.findByIdWithPassengers(booking.getBookingId()).orElse(booking);
-        }
 
         // **CẬP NHẬT: Validate booking status - phải là CONFIRMED hoặc COMPLETED**
         if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.COMPLETED) {
@@ -1970,250 +1543,83 @@ public class BookingServiceImpl implements BookingService {
         CheckinResponse response = new CheckinResponse();
         response.setPassengerId(passenger.getPassengerId());
         response.setPassengerName(passenger.getFirstName() + " " + passenger.getLastName());
-        response.setBookingId(booking.getBookingId());
         response.setOldSeatNumber(passenger.getSeat() != null ? passenger.getSeat().getSeatNumber() : null);
-        response.setSeatNumber(passenger.getSeat() != null ? passenger.getSeat().getSeatNumber() : null);
-        response.setSeatType(passenger.getSeat() != null ? passenger.getSeat().getType().toString() : null);
-        response.setTicketPrice(calculatePassengerTicketPrice(passenger, booking));
 
         BigDecimal totalCharge = BigDecimal.ZERO;
-        BigDecimal seatCharge = BigDecimal.ZERO;
-        BigDecimal servicesCharge = BigDecimal.ZERO;
 
-        // Handle seat change if requested - Seat changes are always free/completed
-        Long newSeatId = null;
-        if (request.getNewSeatId() != null) {
-            newSeatId = request.getNewSeatId();
-        } else if (request.getNewSeatNumber() != null) {
-            // Fallback: tìm seat theo seat number (backward compatibility)
-            List<Seat> seats = seatRepository.findByFlightIdAndSeatNumber(booking.getFlight().getFlightId(), request.getNewSeatNumber());
-            if (!seats.isEmpty()) {
-                newSeatId = seats.get(0).getSeatId(); // Lấy seat đầu tiên
-            }
+        // Handle seat change if requested
+        if (request.getNewSeatNumber() != null && !request.getNewSeatNumber().equals(response.getOldSeatNumber())) {
+            BigDecimal seatCharge = handleSeatChange(booking, passenger, request.getNewSeatNumber());
+            response.setSeatChangeCharge(seatCharge);
+            response.setNewSeatNumber(request.getNewSeatNumber());
+            totalCharge = totalCharge.add(seatCharge);
         }
 
-        if (newSeatId != null) {
-            // Kiểm tra xem có phải là seat change thực sự không
-            Seat currentSeat = passenger.getSeat();
-            if (currentSeat == null || !currentSeat.getSeatId().equals(newSeatId)) {
-                seatCharge = handleSeatChange(booking, passenger, newSeatId);
-                response.setSeatChangeCharge(seatCharge);
-                response.setNewSeatNumber(passenger.getSeat() != null ? passenger.getSeat().getSeatNumber() : null);
-                totalCharge = totalCharge.add(seatCharge);
-
-                // Update response with new seat info after seat change
-                response.setSeatNumber(passenger.getSeat() != null ? passenger.getSeat().getSeatNumber() : null);
-                response.setSeatType(passenger.getSeat() != null ? passenger.getSeat().getType().toString() : null);
-            }
-        }
-
-        // Handle ancillary services updates - Only add new services, no removal
+        // Handle ancillary services updates
         if (request.getServicesToAdd() != null && !request.getServicesToAdd().isEmpty()) {
-            BigDecimal addCharge = handleAddAncillaryServices(booking, passenger, request.getServicesToAdd());
-            response.setServicesAddedCharge(addCharge);
-            servicesCharge = servicesCharge.add(addCharge);
-            totalCharge = totalCharge.add(addCharge);
+            BigDecimal servicesCharge = handleAddAncillaryServices(booking, passenger, request.getServicesToAdd());
+            response.setServicesAddedCharge(servicesCharge);
+            totalCharge = totalCharge.add(servicesCharge);
+        }
+
+        if (request.getServiceIdsToRemove() != null && !request.getServiceIdsToRemove().isEmpty()) {
+            BigDecimal servicesRefund = handleRemoveAncillaryServices(booking, passenger, request.getServiceIdsToRemove());
+            response.setServicesRemovedRefund(servicesRefund);
+            totalCharge = totalCharge.add(servicesRefund); // Refund is negative
         }
 
         response.setTotalCharge(totalCharge);
 
-        // Check if payment is required - only when totalCharge > 0
-        if (totalCharge.compareTo(BigDecimal.ZERO) > 0) {
-            // Payment required for additional charges
-            log.info("Payment required for booking {}: totalCharge={}", booking.getBookingId(), totalCharge);
+        // Update booking total amount
+        BigDecimal newTotal = booking.getTotalAmount().add(totalCharge);
+        booking.setTotalAmount(newTotal);
+        bookingRepository.save(booking);
 
-            // Update existing payment amount instead of creating new payment
-            if (booking.getPayment() != null) {
-                Payment existingPayment = booking.getPayment();
+        response.setUpdatedTotalAmount(newTotal);
+        response.setStatus("SUCCESS");
+        response.setMessage("Check-in processed successfully");
 
-                // Check if payment is already completed and amount matches booking total
-                BigDecimal currentBookingTotal = booking.getTotalAmount().add(totalCharge);
-                if (existingPayment.getStatus() == PaymentStatus.COMPLETED &&
-                    existingPayment.getAmount().compareTo(currentBookingTotal) >= 0) {
-                    // Payment already covers the additional charges
-                    log.info("Payment {} already completed and covers additional charges. Current amount: {}, Required: {}",
-                            existingPayment.getPaymentId(), existingPayment.getAmount(), currentBookingTotal);
-
-                    // Just update booking total, don't change payment status
-                    booking.setTotalAmount(currentBookingTotal);
-                    bookingRepository.save(booking);
-
-                    response.setUpdatedTotalAmount(currentBookingTotal);
-                    response.setStatus("SUCCESS");
-                    response.setMessage("Check-in processed successfully. Additional charges already paid.");
-                    response.setPaymentRequired(false);
-                } else {
-                    // Need additional payment
-                    BigDecimal oldAmount = existingPayment.getAmount();
-                    BigDecimal newAmount = currentBookingTotal;
-
-                    existingPayment.setAmount(newAmount);
-                    existingPayment.setStatus(PaymentStatus.PENDING); // Reset to pending for additional payment
-                    paymentRepository.save(existingPayment);
-
-                    log.info("Updated existing payment {} for booking {}: {} -> {} (status: {} -> PENDING)",
-                            existingPayment.getPaymentId(), booking.getBookingId(), oldAmount, newAmount, existingPayment.getStatus());
-
-                    // Update booking total
-                    booking.setTotalAmount(currentBookingTotal);
-                    bookingRepository.save(booking);
-
-                    response.setUpdatedTotalAmount(currentBookingTotal);
-                    response.setStatus("PAYMENT_PENDING");
-                    response.setMessage("Check-in processed. Payment required for additional charges.");
-                    response.setPaymentRequired(true);
-                }
-            } else {
-                // Fallback: create new payment if none exists (should not happen in normal flow)
-                PaymentMethod paymentMethod = request.getPaymentMethod() != null ?
-                        request.getPaymentMethod() : PaymentMethod.BANK_TRANSFER;
-
-                Payment newPayment = new Payment();
-                newPayment.setBooking(booking);
-                newPayment.setAmount(booking.getTotalAmount().add(totalCharge));
-                newPayment.setPaymentMethod(paymentMethod);
-                newPayment.setStatus(PaymentStatus.PENDING);
-                newPayment.setPaymentDate(LocalDateTime.now());
-                paymentRepository.save(newPayment);
-
-                // Update booking total
-                BigDecimal newTotal = booking.getTotalAmount().add(totalCharge);
-                booking.setTotalAmount(newTotal);
-                bookingRepository.save(booking);
-
-                log.warn("Created new payment {} for booking {} with additional amount {} (no existing payment found)",
-                        newPayment.getPaymentId(), booking.getBookingId(), totalCharge);
-
-                response.setUpdatedTotalAmount(newTotal);
-                response.setStatus("PAYMENT_PENDING");
-                response.setMessage("Check-in processed. Payment required for additional charges.");
-                response.setPaymentRequired(true);
-            }
-
-        } else {
-            // No payment required - update booking total if there were changes
-            if (totalCharge.compareTo(BigDecimal.ZERO) != 0) {
-                BigDecimal newTotal = booking.getTotalAmount().add(totalCharge);
-                booking.setTotalAmount(newTotal);
-                bookingRepository.save(booking);
-                response.setUpdatedTotalAmount(newTotal);
-            } else {
-                response.setUpdatedTotalAmount(booking.getTotalAmount());
-            }
-
-            response.setStatus("SUCCESS");
-            response.setMessage("Check-in processed successfully");
-            response.setPaymentRequired(false);
-        }
-
-        // Update check-in status
-        boolean paymentRequired = totalCharge.compareTo(BigDecimal.ZERO) > 0;
+        // Update check-in status to COMPLETED
         Optional<CheckIn> existingCheckIn = checkinRepository.findByBookingIdWithBaggage(booking.getBookingId()).stream()
                 .filter(ci -> ci.getPassenger().equals(passenger))
                 .findFirst();
 
-        CheckIn checkIn;
         if (existingCheckIn.isPresent()) {
-            checkIn = existingCheckIn.get();
-            checkIn.setStatus(paymentRequired ? CheckinStatus.PAYMENT_PENDING : CheckinStatus.COMPLETED);
+            CheckIn checkIn = existingCheckIn.get();
+            checkIn.setStatus(CheckinStatus.COMPLETED);
             checkIn.setCheckedAt(LocalDateTime.now());
             checkinRepository.save(checkIn);
-        } else {
-            // Create new check-in record
-            checkIn = new CheckIn();
-            checkIn.setBooking(booking);
-            checkIn.setPassenger(passenger);
-            checkIn.setStatus(paymentRequired ? CheckinStatus.PAYMENT_PENDING : CheckinStatus.COMPLETED);
-            checkIn.setCheckedAt(LocalDateTime.now());
-            checkIn.setActive(true);
-            checkinRepository.save(checkIn);
-        }
-
-        // Populate response with check-in details
-        response.setCheckinId(checkIn.getCheckInId());
-        response.setIssueDate(checkIn.getCheckedAt());
-        response.setCreatedAt(checkIn.getCreatedAt());
-        response.setUpdatedAt(checkIn.getUpdatedAt());
-        response.setActive(checkIn.isActive());
-        response.setDeleted(checkIn.isDeleted());
-        response.setDeletedAt(checkIn.getDeletedAt());
-
-        // Set boarding pass URL if check-in is completed
-        if (checkIn.getStatus() == CheckinStatus.COMPLETED) {
-            try {
-                // Generate boarding pass using BoardingPassService
-                String boardingPassUrl = boardingPassService.generateAndSendBoardingPass(checkIn);
-                if (boardingPassUrl != null && !boardingPassUrl.isEmpty()) {
-                    checkIn.setBoardingPassUrl(boardingPassUrl);
-                    checkinRepository.save(checkIn);
-                    response.setBoardingPassUrl(boardingPassUrl);
-                }
-            } catch (Exception e) {
-                log.error("Failed to generate boarding pass for check-in {}: {}", checkIn.getCheckInId(), e.getMessage());
-                // Continue without boarding pass - checkin is still successful
-            }
         }
 
         return response;
     }
 
-    private BigDecimal handleSeatChange(Booking booking, Passenger passenger, Long newSeatId) {
-        // Find the new seat by ID (chính xác hơn)
-        Seat newSeat = seatRepository.findById(newSeatId)
-                .orElseThrow(() -> new ResourceNotFoundException("Seat not found with ID: " + newSeatId));
-
-        // Verify seat belongs to the correct flight
-        if (!newSeat.getFlight().getFlightId().equals(booking.getFlight().getFlightId())) {
-            throw new IllegalArgumentException("Seat " + newSeatId + " does not belong to flight " + booking.getFlight().getFlightId());
-        }
-
-        log.info("Selected seat for change: id={}, number={}, status={}, type={}",
-                newSeat.getSeatId(), newSeat.getSeatNumber(), newSeat.getStatus(), newSeat.getType());
+    private BigDecimal handleSeatChange(Booking booking, Passenger passenger, String newSeatNumber) {
+        // Find the new seat
+        Seat newSeat = seatRepository.findByFlightIdAndSeatNumberForUpdate(booking.getFlight().getFlightId(), newSeatNumber)
+                .orElseThrow(() -> new ResourceNotFoundException("Seat not found: " + newSeatNumber));
 
         // Check if seat is available
         if (!SeatStatus.AVAILABLE.equals(newSeat.getStatus())) {
-            log.error("Seat {} is not available. Status: {}, bookedBy: {}",
-                    newSeat.getSeatId(), newSeat.getStatus(),
-                    newSeat.getBookedByPassenger() != null ? newSeat.getBookedByPassenger().getPassengerId() : "null");
-            throw new IllegalStateException("Seat is not available: " + newSeat.getSeatId());
+            throw new IllegalStateException("Seat is not available: " + newSeatNumber);
         }
 
-        // Lưu ghế cũ để xử lý
-        Seat oldSeat = passenger.getSeat();
-
         // Calculate price difference
-        BigDecimal oldSeatPrice = calculateSeatPrice(oldSeat);
+        BigDecimal oldSeatPrice = calculateSeatPrice(passenger.getSeat());
         BigDecimal newSeatPrice = calculateSeatPrice(newSeat);
         BigDecimal priceDifference = newSeatPrice.subtract(oldSeatPrice);
 
-        log.info("Seat change calculation: oldSeat={}, type={}, price={}, newSeat={}, type={}, price={}, difference={}",
-                oldSeat != null ? oldSeat.getSeatNumber() : "none",
-                oldSeat != null ? oldSeat.getType() : "none",
-                oldSeatPrice,
-                newSeat.getSeatNumber(),
-                newSeat.getType(),
-                newSeatPrice,
-                priceDifference);
-
-        // Xóa ghế cũ: set AVAILABLE và remove passenger
-        if (oldSeat != null) {
-            oldSeat.setStatus(SeatStatus.AVAILABLE);
-            oldSeat.setBookedByPassenger(null);
-            seatRepository.save(oldSeat);
-        }
-
-        // Cập nhật ghế mới cho passenger
+        // Update passenger seat
         passenger.setSeat(newSeat);
         passengerRepository.save(passenger);
 
-        // Set ghế mới thành OCCUPIED và assign passenger
+        // Update seat status
+        if (passenger.getSeat() != null) {
+            passenger.getSeat().setStatus(SeatStatus.AVAILABLE);
+            seatRepository.save(passenger.getSeat());
+        }
         newSeat.setStatus(SeatStatus.OCCUPIED);
-        newSeat.setBookedByPassenger(passenger);
         seatRepository.save(newSeat);
-
-        log.info("Seat changed for passenger {}: {} -> {}, price difference: {}",
-                passenger.getPassengerId(), oldSeat != null ? oldSeat.getSeatNumber() : "none",
-                newSeat.getSeatNumber(), priceDifference);
 
         return priceDifference;
     }
@@ -2273,7 +1679,7 @@ public class BookingServiceImpl implements BookingService {
             }
         }
 
-        return totalRefund.negate(); 
+        return totalRefund.negate(); // Return as negative for refund
     }
 
     private BigDecimal calculateSeatPrice(Seat seat) {
@@ -2284,192 +1690,4 @@ public class BookingServiceImpl implements BookingService {
         return seatTypePrice.getAdditionalPrice();
     }
 
-    @Override
-    @Transactional
-    public SeatChangeCalculationResponse calculateSeatChange(SeatChangeCalculationRequest request) {
-        log.info("Calculating seat change and services for booking {}, passenger {}, newSeatId {}, servicesToAdd: {}",
-                request.getBookingCode(), request.getPassengerId(), request.getNewSeatId(),
-                request.getServicesToAdd() != null ? request.getServicesToAdd().size() : 0);
-
-        // Find booking
-        Optional<Booking> bookingOpt = bookingRepository.findByBookingCodeAndPassengerId(
-                request.getBookingCode(), request.getPassengerId());
-        if (bookingOpt.isEmpty()) {
-            throw new ResourceNotFoundException("Booking not found with bookingCode: " + request.getBookingCode() +
-                    " and passengerId: " + request.getPassengerId());
-        }
-        Booking booking = bookingOpt.get();
-
-        // Find passenger
-        Passenger passenger = booking.getPassengers().stream()
-                .filter(p -> p.getPassengerId().equals(request.getPassengerId()))
-                .findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("Passenger not found"));
-
-        BigDecimal totalCharge = BigDecimal.ZERO;
-        BigDecimal seatCharge = BigDecimal.ZERO;
-        BigDecimal servicesCharge = BigDecimal.ZERO;
-        List<String> servicesAdded = new ArrayList<>();
-
-        // Calculate seat change if provided
-        String newSeatNumber = null;
-        Seat newSeat = null;
-        if (request.getNewSeatId() != null || request.getNewSeatNumber() != null) {
-            // Find new seat
-            if (request.getNewSeatId() != null) {
-                newSeat = seatRepository.findById(request.getNewSeatId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Seat not found with ID: " + request.getNewSeatId()));
-            } else {
-                List<Seat> seats = seatRepository.findByFlightIdAndSeatNumberForUpdate(booking.getFlight().getFlightId(), request.getNewSeatNumber());
-                if (seats.isEmpty()) {
-                    throw new ResourceNotFoundException("Seat not found: " + request.getNewSeatNumber());
-                }
-                // Prioritize AVAILABLE seats
-                newSeat = seats.stream()
-                        .filter(s -> SeatStatus.AVAILABLE.equals(s.getStatus()))
-                        .findFirst()
-                        .orElse(seats.get(0));
-            }
-
-            // Check if seat is available
-            if (!SeatStatus.AVAILABLE.equals(newSeat.getStatus())) {
-                throw new IllegalStateException("Seat is not available: " + newSeat.getSeatNumber());
-            }
-
-            newSeatNumber = newSeat.getSeatNumber();
-
-            // Get current seat
-            Seat oldSeat = passenger.getSeat();
-
-            // Calculate seat price difference
-            BigDecimal oldSeatPrice = calculateSeatPrice(oldSeat);
-            BigDecimal newSeatPrice = calculateSeatPrice(newSeat);
-            seatCharge = newSeatPrice.subtract(oldSeatPrice);
-            totalCharge = totalCharge.add(seatCharge);
-
-            log.info("Seat change calculation: oldSeat={}, type={}, price={}, newSeat={}, type={}, price={}, difference={}",
-                    oldSeat != null ? oldSeat.getSeatNumber() : "none",
-                    oldSeat != null ? oldSeat.getType() : "none",
-                    oldSeatPrice,
-                    newSeat.getSeatNumber(),
-                    newSeat.getType(),
-                    newSeatPrice,
-                    seatCharge);
-        }
-
-        // Calculate ancillary services if provided
-        if (request.getServicesToAdd() != null && !request.getServicesToAdd().isEmpty()) {
-            for (BookingAncillaryServiceRequest serviceRequest : request.getServicesToAdd()) {
-                AncillaryService service = ancillaryServiceRepository.findById(serviceRequest.getServiceId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Ancillary service not found: " + serviceRequest.getServiceId()));
-
-                // Check if service already exists for this passenger (don't add duplicates)
-                List<BookingAncillaryService> existingServices = bookingAncillaryServiceRepository.findByBookingId(booking.getBookingId());
-                boolean alreadyExists = existingServices.stream()
-                        .anyMatch(bs -> bs.getAncillaryService().getServiceId().equals(serviceRequest.getServiceId()) &&
-                                   (bs.getPassenger() == null || bs.getPassenger().equals(passenger)));
-
-                if (!alreadyExists) {
-                    servicesCharge = servicesCharge.add(service.getPrice());
-                    servicesAdded.add(service.getServiceName());
-                    log.info("Adding ancillary service: {} - {} VND", service.getServiceName(), service.getPrice());
-                } else {
-                    log.info("Ancillary service already exists: {}", service.getServiceName());
-                }
-            }
-            totalCharge = totalCharge.add(servicesCharge);
-        }
-
-        boolean requiresPayment = totalCharge.compareTo(BigDecimal.ZERO) > 0;
-
-        String message;
-        if (seatCharge.compareTo(BigDecimal.ZERO) > 0 && servicesCharge.compareTo(BigDecimal.ZERO) > 0) {
-            message = String.format("Seat change (%s VND) and %d services (%s VND) require total payment of %s VND",
-                    seatCharge, servicesAdded.size(), servicesCharge, totalCharge);
-        } else if (seatCharge.compareTo(BigDecimal.ZERO) > 0) {
-            message = String.format("Seat change requires additional payment of %s VND", seatCharge);
-        } else if (servicesCharge.compareTo(BigDecimal.ZERO) > 0) {
-            message = String.format("%d ancillary services require payment of %s VND", servicesAdded.size(), servicesCharge);
-        } else {
-            message = "No additional payment required";
-        }
-
-        return SeatChangeCalculationResponse.builder()
-                .priceDifference(seatCharge)
-                .oldSeatPrice(calculateSeatPrice(passenger.getSeat()))
-                .newSeatPrice(seatCharge.add(calculateSeatPrice(passenger.getSeat())))
-                .oldSeatType(passenger.getSeat() != null ? passenger.getSeat().getType().toString() : null)
-                .newSeatType(newSeat != null ? newSeat.getType().toString() : null)
-                .oldSeatNumber(passenger.getSeat() != null ? passenger.getSeat().getSeatNumber() : null)
-                .newSeatNumber(newSeatNumber)
-                .servicesCharge(servicesCharge)
-                .servicesAdded(servicesAdded)
-                .totalCharge(totalCharge)
-                .requiresPayment(requiresPayment)
-                .message(message)
-                .build();
-    }
-
-    private String getSeatTypeFromNumber(Booking booking, String seatNumber) {
-        List<Seat> seats = seatRepository.findByFlightIdAndSeatNumberForUpdate(booking.getFlight().getFlightId(), seatNumber);
-        if (!seats.isEmpty()) {
-            Seat seat = seats.stream()
-                    .filter(s -> SeatStatus.AVAILABLE.equals(s.getStatus()))
-                    .findFirst()
-                    .orElse(seats.get(0));
-            return seat.getType().toString();
-        }
-        return null;
-    }
-
-    @Override
-    @Transactional
-    public UpdateBookingTotalResponse updateBookingTotal(Long bookingId, UpdateBookingTotalRequest request) {
-        log.info("Starting updateBookingTotal for booking {}: additionalAmount={}, reason={}",
-                bookingId, request.getAdditionalAmount(), request.getReason());
-
-        // Find booking
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new ResourceNotFoundException("Booking not found with id: " + bookingId));
-
-        log.info("Found booking {} with current total: {}", bookingId, booking.getTotalAmount());
-
-        // Validate additional amount
-        if (request.getAdditionalAmount() == null || request.getAdditionalAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Additional amount must be positive");
-        }
-
-        // Store old total for response
-        BigDecimal oldTotal = booking.getTotalAmount();
-
-        // Update booking total
-        BigDecimal newTotal = oldTotal.add(request.getAdditionalAmount());
-        booking.setTotalAmount(newTotal);
-        booking = bookingRepository.save(booking);
-
-        log.info("Saved booking {} with new total: {}", bookingId, booking.getTotalAmount());
-
-        // Note: Do NOT update existing payment amount here. Let the payment service handle it
-        // when the user attempts to pay for the additional charges.
-        if (booking.getPayment() != null) {
-            log.info("Existing payment {} found for booking {} - amount will be updated during payment processing",
-                    booking.getPayment().getPaymentId(), bookingId);
-        } else {
-            log.info("No existing payment found for booking {}", bookingId);
-        }
-
-        log.info("Completed updateBookingTotal for booking {}: {} -> {} (reason: {})",
-                bookingId, oldTotal, newTotal, request.getReason());
-
-        return UpdateBookingTotalResponse.builder()
-                .bookingId(bookingId)
-                .bookingCode(booking.getBookingCode())
-                .oldTotalAmount(oldTotal)
-                .additionalAmount(request.getAdditionalAmount())
-                .newTotalAmount(newTotal)
-                .reason(request.getReason())
-                .message(String.format("Booking total updated successfully. New total: %s VND", newTotal))
-                .build();
-    }
 }
-

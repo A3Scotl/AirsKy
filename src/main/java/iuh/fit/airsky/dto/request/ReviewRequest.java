@@ -17,7 +17,7 @@ public class ReviewRequest {
     @NotNull(message = "Flight ID không được để trống")
     private Long flightId;
 
-    @NotNull(message = "Rating không được để trống")
+    // Rating và comment có thể null khi tạo review request tự động
     @Min(value = 1, message = "Rating phải từ 1 đến 5")
     @Max(value = 5, message = "Rating phải từ 1 đến 5")
     private Integer rating;
@@ -28,4 +28,7 @@ public class ReviewRequest {
     private LocalDateTime reviewDate;
 
     private Boolean isApproved = false;
+
+    // Thêm các trường cho review request
+    private LocalDateTime eligibleAt;
 }

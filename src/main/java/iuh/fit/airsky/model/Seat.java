@@ -42,8 +42,12 @@ public class Seat extends BaseFullSoftDeleteEntity {
     private SeatTypes type;
 
     @ManyToOne
-    @JoinColumn(name = "booked_by")
-    private Passenger bookedBy;
+    @JoinColumn(name = "booked_by_user")
+    private User bookedByUser;
+
+    @ManyToOne
+    @JoinColumn(name = "booked_by_passenger")
+    private Passenger bookedByPassenger;
 
 
 

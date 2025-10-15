@@ -7,6 +7,7 @@ import iuh.fit.airsky.enums.Gender;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 public class PassengerSeatRequest {
@@ -16,7 +17,9 @@ public class PassengerSeatRequest {
     private LocalDate dateOfBirth;
     private String passportNumber;
     private PassengerType type;
-    private Long seatId;
+
+    // Thay đổi: Thay seatId duy nhất bằng List<SeatAssignmentRequest>
+    private List<SeatAssignmentRequest> seatAssignments;
 
     private SeatTypes seatType; // Loại ghế được chọn (STANDARD, EXTRA_LEGROOM, etc.)
 
@@ -26,4 +29,11 @@ public class PassengerSeatRequest {
     private String email;
     private String phone;
     private Gender gender;
+
+    @Data
+    public static class SeatAssignmentRequest {
+        private Integer segmentOrder; // Thứ tự segment (1, 2, 3...)
+        private Long seatId; // ID của ghế cho segment này
+        private SeatTypes seatType; // Loại ghế cho segment này (có thể null nếu dùng seatType của passenger)
+    }
 }

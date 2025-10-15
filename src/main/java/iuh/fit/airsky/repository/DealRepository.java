@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -36,4 +37,12 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
                                       @Param("currentTime") LocalDateTime currentTime);
     
     boolean existsByDealCode(String dealCode);
+
+    @Query("SELECT d FROM Deal d WHERE d.isActive = true AND d.validFrom <= :currentTime AND d.validTo >= :currentTime " +
+           "AND (d.totalUsageLimit IS NULL OR d.usedCount < d.totalUsageLimit)")
+    Page<Deal> findActiveDeals(@Param("currentTime") LocalDateTime currentTime, Pageable pageable);
+
+    @Query("SELECT d FROM Deal d WHERE d.isActive = true AND d.validFrom <= :currentTime AND d.validTo >= :currentTime " +
+           "AND (d.totalUsageLimit IS NULL OR d.usedCount < d.totalUsageLimit)")
+    List<Deal> findActiveDealsList(@Param("currentTime") LocalDateTime currentTime);
 }

@@ -25,4 +25,8 @@ public class ReviewResponse {
     private Boolean isApproved;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private LocalDateTime eligibleAt;
+    private LocalDateTime sentAt;
+    private Integer retryCount;
+    private String lastError;
 }

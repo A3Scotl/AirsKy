@@ -16,14 +16,17 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
     List<Seat> findByFlightId(@Param("flightId") Long flightId);
 
     List<Seat> findByFlight(Flight flight);
+    @Query("SELECT s FROM Seat s WHERE s.flight.flightId = :flightId AND s.seatNumber = :seatNumber")
+    List<Seat> findByFlightIdAndSeatNumber(@Param("flightId") Long flightId,
+                                           @Param("seatNumber") String seatNumber);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM Seat s WHERE s.flight.flightId = :flightId AND s.seatNumber = :seatNumber")
-    Optional<Seat> findByFlightIdAndSeatNumberForUpdate(@Param("flightId") Long flightId,
-                                                        @Param("seatNumber") String seatNumber);
+    List<Seat> findByFlightIdAndSeatNumberForUpdate(@Param("flightId") Long flightId,
+                                                    @Param("seatNumber") String seatNumber);
     @Query("SELECT s FROM Seat s WHERE s.flight.flightId = :flightId AND s.travelClass.id = :travelClassId")
     List<Seat> findByFlightIdAndTravelClassId(@Param("flightId") Long flightId,
                                               @Param("travelClassId") Long travelClassId);
-    @Query("SELECT s FROM Seat s WHERE s.flight.flightId = :flightId AND s.travelClass.id = :travelClassId AND s.bookedBy IS NULL")
+    @Query("SELECT s FROM Seat s WHERE s.flight.flightId = :flightId AND s.travelClass.id = :travelClassId AND s.bookedByUser IS NULL AND s.bookedByPassenger IS NULL")
     List<Seat> findAvailableSeatsByFlightIdAndTravelClassId(@Param("flightId") Long flightId,
                                                            @Param("travelClassId") Long travelClassId);
 }

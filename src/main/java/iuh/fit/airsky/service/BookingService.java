@@ -3,10 +3,14 @@ package iuh.fit.airsky.service;
 import iuh.fit.airsky.dto.request.BookingRequest;
 import iuh.fit.airsky.dto.request.PaymentRequest;
 import iuh.fit.airsky.dto.request.CheckinRequest;
+import iuh.fit.airsky.dto.request.SeatChangeCalculationRequest;
+import iuh.fit.airsky.dto.request.UpdateBookingTotalRequest;
 import iuh.fit.airsky.dto.response.BookingResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.dto.response.CheckinEligiblePassengerResponse;
 import iuh.fit.airsky.dto.response.CheckinResponse;
+import iuh.fit.airsky.dto.response.SeatChangeCalculationResponse;
+import iuh.fit.airsky.dto.response.UpdateBookingTotalResponse;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
@@ -24,4 +28,6 @@ public interface BookingService {
     List<CheckinEligiblePassengerResponse> getCheckinEligiblePassengers(String bookingCode, String fullName);
     List<CheckinEligiblePassengerResponse> getPassengersWithCheckinStatus(String bookingCode, String fullName);
     CheckinResponse processCheckin(CheckinRequest request);
+    SeatChangeCalculationResponse calculateSeatChange(SeatChangeCalculationRequest request);
+    UpdateBookingTotalResponse updateBookingTotal(Long bookingId, UpdateBookingTotalRequest request);
 }

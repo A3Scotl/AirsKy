@@ -17,9 +17,11 @@ import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.PaymentMapper;
 import iuh.fit.airsky.model.Booking;
 import iuh.fit.airsky.model.Passenger;
+import iuh.fit.airsky.model.PassengerSeatAssignment;
 import iuh.fit.airsky.model.Payment;
 import iuh.fit.airsky.repository.BookingRepository;
 import iuh.fit.airsky.repository.PaymentRepository;
+import iuh.fit.airsky.repository.PassengerSeatAssignmentRepository;
 import iuh.fit.airsky.repository.SeatRepository;
 import iuh.fit.airsky.service.EmailService;
 import iuh.fit.airsky.service.PaymentService;
@@ -51,6 +53,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final PaymentMapper paymentMapper;
     private final BookingRepository bookingRepository;
+    private final PassengerSeatAssignmentRepository passengerSeatAssignmentRepository;
     private final SeatRepository seatRepository;
     private final EmailService emailService;
     private final APIContext paypalApiContext;
@@ -155,16 +158,65 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private Payment getOrCreatePayment(Booking booking, PaymentMethod paymentMethod) {
-        return paymentRepository.findByBooking_BookingId(booking.getBookingId())
-                .map(existingPayment -> handleExistingPayment(existingPayment, paymentMethod))
-                .orElseGet(() -> createNewPayment(booking, paymentMethod));
+        log.info("Looking for existing payment for booking {} with current total: {}", booking.getBookingId(), booking.getTotalAmount());
+
+        Payment existingPayment = paymentRepository.findByBooking_BookingId(booking.getBookingId())
+                .orElse(null);
+
+        if (existingPayment != null) {
+            log.info("Found existing payment {} with status {}, amount: {}, booking total: {}",
+                existingPayment.getPaymentId(), existingPayment.getStatus(),
+                existingPayment.getAmount(), booking.getTotalAmount());
+
+            // Đảm bảo booking được load đầy đủ
+            if (existingPayment.getBooking() == null || existingPayment.getBooking().getTotalAmount() == null) {
+                existingPayment.setBooking(booking);
+                log.info("Set booking reference for payment {}", existingPayment.getPaymentId());
+            } else {
+                log.info("Payment {} already has booking reference with total: {}", existingPayment.getPaymentId(), existingPayment.getBooking().getTotalAmount());
+            }
+            return handleExistingPayment(existingPayment, paymentMethod);
+        } else {
+            log.info("No existing payment found for booking {}, creating new payment", booking.getBookingId());
+            return createNewPayment(booking, paymentMethod);
+        }
     }
 
     private Payment handleExistingPayment(Payment existingPayment, PaymentMethod newPaymentMethod) {
         switch (existingPayment.getStatus()) {
             case COMPLETED:
-                throw new PaymentProcessingException("Payment for this booking is already completed");
+                // Kiểm tra xem có additional charges không
+                BigDecimal currentBookingTotal = existingPayment.getBooking().getTotalAmount();
+                BigDecimal existingPaymentAmount = existingPayment.getAmount();
+
+                log.info("Checking payment {}: booking total={}, payment amount={}, comparison={}",
+                    existingPayment.getPaymentId(), currentBookingTotal, existingPaymentAmount,
+                    currentBookingTotal.compareTo(existingPaymentAmount));
+
+                if (currentBookingTotal.compareTo(existingPaymentAmount) > 0) {
+                    // Có additional charges - update payment cũ
+                    log.info("Updating completed payment {} for additional charges. Old amount: {}, New amount: {}",
+                        existingPayment.getPaymentId(), existingPaymentAmount, currentBookingTotal);
+
+                    existingPayment.setAmount(currentBookingTotal);
+                    existingPayment.setStatus(PaymentStatus.PENDING);
+                    existingPayment.setPaymentMethod(newPaymentMethod);
+                    existingPayment.setPaymentDate(LocalDateTime.now()); // Reset payment date
+                    return paymentRepository.save(existingPayment);
+                } else {
+                    log.warn("Payment {} is completed and no additional charges found. Booking total: {}, Payment amount: {}",
+                        existingPayment.getPaymentId(), currentBookingTotal, existingPaymentAmount);
+                    throw new PaymentProcessingException("Payment for this booking is already completed");
+                }
             case PENDING:
+                // Update amount nếu booking total thay đổi
+                BigDecimal bookingTotal = existingPayment.getBooking().getTotalAmount();
+                if (existingPayment.getAmount().compareTo(bookingTotal) != 0) {
+                    log.info("Updating pending payment {} amount from {} to {}",
+                        existingPayment.getPaymentId(), existingPayment.getAmount(), bookingTotal);
+                    existingPayment.setAmount(bookingTotal);
+                }
+
                 if (existingPayment.getPaymentMethod() != newPaymentMethod) {
                     existingPayment.setPaymentMethod(newPaymentMethod);
                     return paymentRepository.save(existingPayment);
@@ -172,8 +224,11 @@ public class PaymentServiceImpl implements PaymentService {
                 return existingPayment;
             case FAILED:
             case REFUNDED:
+                // Reset payment cho failed/refunded
                 existingPayment.setStatus(PaymentStatus.PENDING);
                 existingPayment.setPaymentMethod(newPaymentMethod);
+                existingPayment.setAmount(existingPayment.getBooking().getTotalAmount());
+                existingPayment.setPaymentDate(LocalDateTime.now());
                 return paymentRepository.save(existingPayment);
             default:
                 throw new PaymentProcessingException(
@@ -321,6 +376,8 @@ public class PaymentServiceImpl implements PaymentService {
         if (booking.getStatus() == BookingStatus.PENDING) {
             booking.setStatus(BookingStatus.CONFIRMED);
 
+            // Update seat status to OCCUPIED when payment is completed
+            updatePassengerSeats(booking);
 
             bookingRepository.save(booking);
             log.info("Updated booking {} status to CONFIRMED", booking.getBookingId());
@@ -413,7 +470,13 @@ public class PaymentServiceImpl implements PaymentService {
 
         paymentRepository.save(payment);
 
-        updateBookingStatus(payment.getBooking());
+        // Only update booking status for initial payment, not additional payments
+        Booking booking = payment.getBooking();
+        if (booking.getStatus() == BookingStatus.PENDING) {
+            updateBookingStatus(booking);
+        } else {
+            log.info("Additional payment {} completed for booking {}", payment.getPaymentId(), booking.getBookingId());
+        }
 
         log.info("Payment {} completed successfully", payment.getPaymentId());
         return paymentMapper.toResponseDTO(payment);
@@ -449,7 +512,14 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setStatus(PaymentStatus.COMPLETED);
             payment.setPaymentDate(LocalDateTime.now());
             paymentRepository.save(payment);
-            updateBookingStatus(payment.getBooking());
+
+            // Only update booking status for initial payment, not additional payments
+            if (payment.getBooking().getStatus() == BookingStatus.PENDING) {
+                updateBookingStatus(payment.getBooking());
+            } else {
+                log.info("Additional payment {} completed for booking {} via SePay", payment.getPaymentId(), payment.getBooking().getBookingId());
+            }
+
             log.info("Payment {} marked as COMPLETED via SePay webhook", payment.getPaymentId());
         } else if ("FAILED".equalsIgnoreCase(status) || "CANCELLED".equalsIgnoreCase(status) || "OUT".equalsIgnoreCase(status)) {
             payment.setStatus(PaymentStatus.FAILED);
@@ -476,9 +546,20 @@ public class PaymentServiceImpl implements PaymentService {
                 log.debug("Updated seat {} status to OCCUPIED for passenger {}",
                         passenger.getSeat().getSeatNumber(), passenger.getFirstName());
             }
+
+            // Also update PassengerSeatAssignment status to OCCUPIED
+            for (PassengerSeatAssignment assignment : passenger.getSeatAssignments()) {
+                if (assignment.getStatus() == SeatStatus.PENDING_PAYMENT) {
+                    assignment.setStatus(SeatStatus.OCCUPIED);
+                    passengerSeatAssignmentRepository.save(assignment);
+                    log.debug("Updated seat assignment status to OCCUPIED for passenger {} seat {}",
+                            passenger.getFirstName(), assignment.getSeat().getSeatNumber());
+                }
+            }
         }
     }
 
+    @Override
     @Transactional
     public void processRefundForCancelledBooking(Booking booking, String reason) {
         log.info("Processing refund for cancelled booking {}: {}", booking.getBookingId(), reason);
@@ -514,6 +595,45 @@ public class PaymentServiceImpl implements PaymentService {
             log.info("Payment {} for booking {} is not completed (status: {}), no refund needed",
                     payment.getPaymentId(), booking.getBookingId(), payment.getStatus());
         }
+    }
+
+    @Override
+    @Transactional
+    public PaymentResponse createAdditionalPayment(Long bookingId, BigDecimal additionalAmount, PaymentMethod paymentMethod) {
+        log.info("Creating additional payment for booking {}: amount={}, method={}", bookingId, additionalAmount, paymentMethod);
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found with id: " + bookingId));
+
+        // Validate additional amount
+        if (additionalAmount == null || additionalAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new PaymentProcessingException("Additional amount must be positive");
+        }
+
+        // Check if booking has completed payment
+        if (booking.getPayment() == null || booking.getPayment().getStatus() != PaymentStatus.COMPLETED) {
+            throw new PaymentProcessingException("Booking must have completed payment before additional charges");
+        }
+
+        // Create additional payment
+        Payment additionalPayment = new Payment();
+        additionalPayment.setBooking(booking);
+        additionalPayment.setPaymentMethod(paymentMethod);
+        additionalPayment.setStatus(PaymentStatus.PENDING);
+        additionalPayment.setAmount(additionalAmount);
+        additionalPayment.setPaymentDate(LocalDateTime.now());
+
+        Payment savedPayment = paymentRepository.save(additionalPayment);
+
+        // Update booking total amount
+        BigDecimal newTotal = booking.getTotalAmount().add(additionalAmount);
+        booking.setTotalAmount(newTotal);
+        bookingRepository.save(booking);
+
+        log.info("Additional payment created: id={}, booking={}, amount={}, new total={}",
+                savedPayment.getPaymentId(), bookingId, additionalAmount, newTotal);
+
+        return processPayment(savedPayment, booking);
     }
 
     private void sendRefundNotificationEmail(Booking booking, String reason) {

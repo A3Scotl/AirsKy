@@ -18,4 +18,19 @@ public interface ReviewService {
     Double getAverageRatingByFlightId(Long flightId);
     void approveReview(Long id);
     boolean hasUserReviewedBooking(Long bookingId, Long userId);
+
+    // Tự động tạo review request cho các booking đã hoàn thành chuyến bay
+    void createReviewRequestsForCompletedFlights();
+
+    // Lấy danh sách review requests đang chờ
+    List<ReviewResponse> findPendingReviewRequests();
+
+    // Lấy review requests pending của một user
+    List<ReviewResponse> findPendingReviewRequestsByUser(Long userId);
+
+    // Gửi email mời review cho các review request pending
+    void sendPendingReviewEmails();
+
+    // Retry gửi email cho các review request thất bại
+    void retryFailedReviewEmails();
 }

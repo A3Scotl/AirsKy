@@ -3,11 +3,15 @@ package iuh.fit.airsky.controller;
 import iuh.fit.airsky.dto.request.BookingRequest;
 import iuh.fit.airsky.dto.request.PaymentRequest;
 import iuh.fit.airsky.dto.request.CheckinRequest;
+import iuh.fit.airsky.dto.request.SeatChangeCalculationRequest;
+import iuh.fit.airsky.dto.request.UpdateBookingTotalRequest;
 import iuh.fit.airsky.dto.response.BookingResponse;
 import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.dto.response.CheckinEligiblePassengerResponse;
 import iuh.fit.airsky.dto.response.CheckinResponse;
+import iuh.fit.airsky.dto.response.SeatChangeCalculationResponse;
+import iuh.fit.airsky.dto.response.UpdateBookingTotalResponse;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.service.BookingService;
 import iuh.fit.airsky.util.ApiResponseUtil;
@@ -35,6 +39,14 @@ public class BookingController {
 //    @PreAuthorize("hasAnyRole('CUSTOMER', 'BUSINESS')")
     public ResponseEntity<ApiResponse<BookingResponse>> createBooking(@Valid @RequestBody BookingRequest request) {
         try {
+            // Debug logging for deal code and request details
+            log.info("Received booking request with dealCode: '{}' (isNull: {}, length: {}), userId: {}, paymentMethod: {}",
+                    request.getDealCode(),
+                    request.getDealCode() == null,
+                    request.getDealCode() != null ? request.getDealCode().length() : 0,
+                    request.getUserId(),
+                    request.getPaymentMethod());
+
             BookingResponse response = bookingService.createBooking(request);
             return ApiResponseUtil.buildResponse(true, "Booking created successfully", response, "/api/v1/bookings");
         } catch (Exception ex) {
@@ -160,6 +172,38 @@ public class BookingController {
         } catch (Exception ex) {
             ex.printStackTrace();
             return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Payment processing failed", ex.getMessage(), "/api/v1/bookings/" + bookingId + "/guest-payment");
+        }
+    }
+
+    @PostMapping("/calculate-seat-change")
+    public ResponseEntity<ApiResponse<SeatChangeCalculationResponse>> calculateSeatChange(@Valid @RequestBody SeatChangeCalculationRequest request) {
+        try {
+            SeatChangeCalculationResponse response = bookingService.calculateSeatChange(request);
+            return ApiResponseUtil.buildResponse(true, "Seat change calculation completed", response, "/api/v1/bookings/calculate-seat-change");
+        } catch (ResourceNotFoundException ex) {
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), "RESOURCE_NOT_FOUND", "/api/v1/bookings/calculate-seat-change");
+        } catch (IllegalStateException ex) {
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), "INVALID_STATE", "/api/v1/bookings/calculate-seat-change");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Seat change calculation failed", ex.getMessage(), "/api/v1/bookings/calculate-seat-change");
+        }
+    }
+
+    @PutMapping("/{id}/update-total")
+    public ResponseEntity<ApiResponse<UpdateBookingTotalResponse>> updateBookingTotal(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateBookingTotalRequest request) {
+        try {
+            UpdateBookingTotalResponse response = bookingService.updateBookingTotal(id, request);
+            return ApiResponseUtil.buildResponse(true, "Booking total updated successfully", response, "/api/v1/bookings/" + id + "/update-total");
+        } catch (ResourceNotFoundException ex) {
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), "RESOURCE_NOT_FOUND", "/api/v1/bookings/" + id + "/update-total");
+        } catch (IllegalArgumentException ex) {
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), "INVALID_ARGUMENT", "/api/v1/bookings/" + id + "/update-total");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to update booking total", ex.getMessage(), "/api/v1/bookings/" + id + "/update-total");
         }
     }
 

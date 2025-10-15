@@ -15,4 +15,5 @@ public class CheckinEligiblePassengerResponse {
     private BigDecimal ticketPrice;
     private boolean isCheckedIn;
     private CheckinStatus checkinStatus;
+    private String boardingpassurl;
 }

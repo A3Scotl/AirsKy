@@ -5,7 +5,9 @@ import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.DealResponse;
 import iuh.fit.airsky.dto.response.DealUsageResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
+import iuh.fit.airsky.model.Booking;
 import iuh.fit.airsky.model.User;
+import iuh.fit.airsky.repository.BookingRepository;
 import iuh.fit.airsky.service.CloudinaryService;
 import iuh.fit.airsky.service.DealService;
 import iuh.fit.airsky.service.UserService;
@@ -33,6 +35,7 @@ public class DealController {
     private final DealService dealService;
     private final UserService userService;
     private final CloudinaryService cloudinaryService;
+    private final BookingRepository bookingRepository;
 
     @PostMapping(consumes = {"multipart/form-data"})
     @PreAuthorize("hasRole('ADMIN')")
@@ -269,7 +272,11 @@ public class DealController {
             User user = userService.findByEmail(email)
                     .orElseThrow(() -> new RuntimeException("User not found"));
             
-            DealUsageResponse response = dealService.applyDeal(dealCode, user.getId(), bookingId, orderAmount);
+            // Find booking by ID
+            Booking booking = bookingRepository.findById(bookingId)
+                    .orElseThrow(() -> new RuntimeException("Booking not found with ID: " + bookingId));
+            
+            DealUsageResponse response = dealService.applyDeal(dealCode, user.getId(), booking, orderAmount);
             return ApiResponseUtil.buildResponse(true, "Áp dụng mã giảm giá thành công", response, "/api/v1/deals/apply");
         } catch (IllegalArgumentException e) {
             return ApiResponseUtil.buildResponse(false, e.getMessage(), null, "/api/v1/deals/apply");

@@ -4,6 +4,7 @@ import iuh.fit.airsky.dto.request.DealRequest;
 import iuh.fit.airsky.dto.response.DealResponse;
 import iuh.fit.airsky.dto.response.DealUsageResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
+import iuh.fit.airsky.enums.LoyaltyTier;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.DealMapper;
 import iuh.fit.airsky.mapper.DealUsageMapper;
@@ -23,6 +24,7 @@ import jakarta.persistence.PersistenceContext;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -245,13 +247,16 @@ public class DealServiceImpl implements DealService {
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public DealUsageResponse applyDeal(String dealCode, Long userId, Long bookingId, BigDecimal orderAmount) {
-        log.info("Starting applyDeal: dealCode={}, userId={}, bookingId={}, orderAmount={}", dealCode, userId, bookingId, orderAmount);
+    @Transactional
+    public DealUsageResponse applyDeal(String dealCode, Long userId, Booking booking, BigDecimal orderAmount) {
+        log.info("Starting applyDeal: dealCode='{}' (isNull={}, length={}), userId={}, bookingId={}, orderAmount={}",
+                dealCode, dealCode == null, dealCode != null ? dealCode.length() : 0, userId, booking.getBookingId(), orderAmount);
         
         LocalDateTime now = LocalDateTime.now();
+        log.info("Looking for deal with code: {} at time: {}", dealCode, now);
         Deal deal = dealRepository.findValidDealByCode(dealCode, now)
                 .orElseThrow(() -> new IllegalArgumentException("Deal không hợp lệ hoặc đã hết hạn: " + dealCode));
+        log.info("Found valid deal: id={}, code={}, title={}", deal.getDealId(), deal.getDealCode(), deal.getTitle());
         
         User user = null;
         if (userId != null) {
@@ -261,8 +266,7 @@ public class DealServiceImpl implements DealService {
             log.info("Applying deal for guest user (no user account)");
         }
         
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new ResourceNotFoundException("Booking không tồn tại với ID: " + bookingId));
+        // Booking object is passed directly to avoid transaction isolation issues
         
         // Check if this deal has already been applied to this booking
         if (dealUsageRepository.existsByDealAndBooking(deal, booking)) {
@@ -274,10 +278,13 @@ public class DealServiceImpl implements DealService {
             throw new IllegalArgumentException("Giá trị đơn hàng tối thiểu: " + deal.getMinimumOrderAmount());
         }
         
-        // Check total usage limit
-        if (deal.getTotalUsageLimit() != null && deal.getTotalUsageLimit() > 0 && 
-            (deal.getUsedCount() != null ? deal.getUsedCount() : 0) >= deal.getTotalUsageLimit()) {
-            throw new IllegalArgumentException("Deal đã hết lượt sử dụng");
+        // Check total usage limit (for authenticated users only, guests don't count toward total limit)
+        if (user != null && deal.getTotalUsageLimit() != null && deal.getTotalUsageLimit() > 0) {
+            Integer currentUsedCount = deal.getUsedCount() != null ? deal.getUsedCount() : 0;
+            log.info("Checking total usage limit: current={}, limit={}", currentUsedCount, deal.getTotalUsageLimit());
+            if (currentUsedCount >= deal.getTotalUsageLimit()) {
+                throw new IllegalArgumentException("Deal đã hết lượt sử dụng");
+            }
         }
         
         // Check user usage limit (only for authenticated users)
@@ -301,7 +308,7 @@ public class DealServiceImpl implements DealService {
                     deal.getDepartureAirport().getAirportCode() + " đến " + 
                     deal.getArrivalAirport().getAirportCode());
             }
-            log.info("Route-specific deal validated for booking {}", bookingId);
+            log.info("Route-specific deal validated for booking {}", booking.getBookingId());
         } else {
             log.info("Deal applies to all routes (no route restrictions)");
         }
@@ -333,21 +340,17 @@ public class DealServiceImpl implements DealService {
         log.info("DealUsage saved with ID: {}, user: {}, booking: {}", 
                 savedUsage.getUsageId(), savedUsage.getUser() != null ? savedUsage.getUser().getId() : "null", savedUsage.getBooking().getBookingId());
         
-        // Flush to ensure DealUsage is committed before proceeding
-        dealUsageRepository.flush();
+        // Note: Removed manual flush - let @Transactional handle it
         
-        // Detach the DealUsage entity to prevent it from being flushed in the main transaction
-        entityManager.detach(savedUsage);
-        log.info("DealUsage entity detached from session to prevent cross-transaction flushing");
-        
-        // Update deal usage count
+        // Update deal usage count (for both authenticated and guest users)
         Integer currentUsedCount = deal.getUsedCount() != null ? deal.getUsedCount() : 0;
         deal.setUsedCount(currentUsedCount + 1);
         dealRepository.save(deal);
-        log.info("Deal usage count updated to: {} for deal: {}", deal.getUsedCount(), deal.getDealCode());
+        log.info("Deal usage count updated to: {} for deal: {} (user: {})", 
+                deal.getUsedCount(), deal.getDealCode(), 
+                user != null ? "authenticated" : "guest");
         
-        // Flush to ensure deal update is committed
-        dealRepository.flush();
+        // Note: Removed manual flush - let @Transactional handle it
         
         log.info("Deal applied successfully. DealUsage ID: {}, discount: {}", savedUsage.getUsageId(), discountAmount);
         
@@ -395,9 +398,25 @@ public class DealServiceImpl implements DealService {
         }
         
         Deal deal = dealOpt.get();
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại với ID: " + userId));
-        
+        User user = null;
+        if (userId != null) {
+            user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại với ID: " + userId));
+        }
+
+        // Check eligibility first
+        try {
+            validateDealEligibility(deal, user);
+        } catch (IllegalArgumentException e) {
+            log.debug("User {} is not eligible for deal {}: {}", userId, dealCode, e.getMessage());
+            return false;
+        }
+
+        // For guest users, no usage limit check needed
+        if (user == null) {
+            return true;
+        }
+
         long userUsageCount = dealUsageRepository.countByDealAndUser(deal, user);
         // Handle null usagePerUser (unlimited usage per user)
         return deal.getUsagePerUser() == null || userUsageCount < deal.getUsagePerUser();
@@ -474,6 +493,125 @@ public class DealServiceImpl implements DealService {
                 dealPage.getTotalElements(),
                 dealPage.getTotalPages(),
                 dealPage.isLast()
+        );
+    }
+
+    private void validateDealEligibility(Deal deal, User user) {
+        log.info("Validating deal eligibility: deal={}, userId={}", deal.getDealCode(), user != null ? user.getId() : "guest");
+
+        // Case 1: Deal chỉ dành cho guest users
+        if (Boolean.TRUE.equals(deal.getIsGuestOnly())) {
+            if (user != null) {
+                throw new IllegalArgumentException("Deal này chỉ dành cho khách hàng chưa đăng ký tài khoản");
+            }
+            log.info("Deal {} is guest-only and user is guest - eligible", deal.getDealCode());
+            return;
+        }
+
+        // Case 2: Deal chỉ dành cho loyalty members (không cho guest)
+        if (Boolean.TRUE.equals(deal.getIsLoyaltyExclusive())) {
+            if (user == null) {
+                throw new IllegalArgumentException("Deal này chỉ dành cho thành viên loyalty. Vui lòng đăng nhập để sử dụng");
+            }
+            log.info("Deal {} is loyalty-exclusive and user is authenticated - eligible", deal.getDealCode());
+            return;
+        }
+
+        // Case 3: Deal yêu cầu hạng thành viên tối thiểu
+        if (deal.getRequiredLoyaltyTier() != null) {
+            if (user == null) {
+                throw new IllegalArgumentException("Deal này yêu cầu hạng thành viên " + deal.getRequiredLoyaltyTier() +
+                    ". Vui lòng đăng nhập để sử dụng");
+            }
+
+            LoyaltyTier userTier = user.getLoyaltyTier() != null ? user.getLoyaltyTier() : LoyaltyTier.STANDARD;
+            if (userTier.ordinal() < deal.getRequiredLoyaltyTier().ordinal()) {
+                throw new IllegalArgumentException("Deal này yêu cầu hạng thành viên " + deal.getRequiredLoyaltyTier() +
+                    " trở lên. Hạng hiện tại của bạn: " + userTier);
+            }
+            log.info("Deal {} requires tier {} and user has tier {} - eligible", deal.getDealCode(),
+                deal.getRequiredLoyaltyTier(), userTier);
+            return;
+        }
+
+        // Case 4: Deal dành cho tất cả (authenticated users và guest)
+        log.info("Deal {} is available to all users - eligible", deal.getDealCode());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<DealResponse> getUserEligibleDeals(Long userId, Pageable pageable) {
+        log.info("Getting eligible deals for authenticated user: {}", userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại với ID: " + userId));
+
+        LocalDateTime now = LocalDateTime.now();
+        List<Deal> allActiveDeals = dealRepository.findActiveDealsList(now);
+
+        // Filter deals that user is eligible for
+        List<Deal> eligibleDeals = allActiveDeals.stream()
+                .filter(deal -> {
+                    try {
+                        validateDealEligibility(deal, user);
+                        return true;
+                    } catch (IllegalArgumentException e) {
+                        return false;
+                    }
+                })
+                .collect(Collectors.toList());
+
+        // Apply pagination manually since we're filtering
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), eligibleDeals.size());
+        List<Deal> pageContent = eligibleDeals.subList(start, end);
+
+        return new PageResponse<>(
+                pageContent.stream()
+                        .map(dealMapper::toResponseDTO)
+                        .collect(Collectors.toList()),
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                eligibleDeals.size(),
+                (int) Math.ceil((double) eligibleDeals.size() / pageable.getPageSize()),
+                end >= eligibleDeals.size()
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<DealResponse> getGuestEligibleDeals(Pageable pageable) {
+        log.info("Getting eligible deals for guest users");
+
+        LocalDateTime now = LocalDateTime.now();
+        List<Deal> allActiveDeals = dealRepository.findActiveDealsList(now);
+
+        // Filter deals that guest users are eligible for
+        List<Deal> eligibleDeals = allActiveDeals.stream()
+                .filter(deal -> {
+                    try {
+                        validateDealEligibility(deal, null); // null user = guest
+                        return true;
+                    } catch (IllegalArgumentException e) {
+                        return false;
+                    }
+                })
+                .collect(Collectors.toList());
+
+        // Apply pagination manually since we're filtering
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), eligibleDeals.size());
+        List<Deal> pageContent = eligibleDeals.subList(start, end);
+
+        return new PageResponse<>(
+                pageContent.stream()
+                        .map(dealMapper::toResponseDTO)
+                        .collect(Collectors.toList()),
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                eligibleDeals.size(),
+                (int) Math.ceil((double) eligibleDeals.size() / pageable.getPageSize()),
+                end >= eligibleDeals.size()
         );
     }
 }

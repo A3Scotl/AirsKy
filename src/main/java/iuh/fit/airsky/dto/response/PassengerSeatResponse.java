@@ -5,6 +5,7 @@ import iuh.fit.airsky.enums.PassengerType;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 public class PassengerSeatResponse {
@@ -14,7 +15,10 @@ public class PassengerSeatResponse {
     private LocalDate dateOfBirth;
     private String passportNumber;
     private PassengerType type;
-    private String seatNumber;
+
+    // Thay đổi: Thay seatNumber duy nhất bằng List<PassengerSeatAssignmentResponse>
+    private List<PassengerSeatAssignmentResponse> seatAssignments;
+
     private String className;
 
     private Gender gender;

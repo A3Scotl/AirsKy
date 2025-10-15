@@ -23,6 +23,11 @@ public interface ReviewMapper {
     @Mapping(target = "userAvatar", source = "user.avatar")
     @Mapping(target = "flightId", source = "flight.flightId")
     @Mapping(target = "flightCode", source = "flight.flightNumber")
+    @Mapping(target = "createdAt", source = "createdAt")
+    @Mapping(target = "updatedAt", source = "updatedAt")
+    @Mapping(target = "sentAt", source = "sentAt")
+    @Mapping(target = "retryCount", source = "retryCount")
+    @Mapping(target = "lastError", source = "lastError")
     ReviewResponse toResponseDTO(Review entity);
 
     List<ReviewResponse> toResponseDTOList(List<Review> reviews);

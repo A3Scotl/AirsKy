@@ -13,5 +13,5 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface PassengerRepository extends JpaRepository<Passenger, Long> {
     Page<Passenger> findAll(Pageable pageable);
-    List<Passenger> findBySeat(Seat seat);
+    // Removed findBySeat method as seat relationship is now through PassengerSeatAssignment
 }

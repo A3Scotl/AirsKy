@@ -1,5 +1,6 @@
 package iuh.fit.airsky.dto.request;
 
+import iuh.fit.airsky.enums.LoyaltyTier;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 import org.springframework.web.multipart.MultipartFile;
@@ -59,4 +60,10 @@ public class DealRequest {
 
     private Integer earnLoyaltyPoints;
     private Integer redeemLoyaltyPoints;
+
+    private Boolean isGuestOnly = false;
+
+    private LoyaltyTier requiredLoyaltyTier;
+
+    private Boolean isLoyaltyExclusive = false;
 }

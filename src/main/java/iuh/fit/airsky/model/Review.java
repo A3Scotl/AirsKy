@@ -47,4 +47,27 @@ public class Review extends BaseFullSoftDeleteEntity {
 
     @Builder.Default
     private Boolean isApproved = false;
+
+    @Column(nullable = false)
+    private LocalDateTime eligibleAt; // Thời điểm đủ điều kiện để review
+
+    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    private ReviewStatus status;
+
+    @Column
+    private LocalDateTime sentAt; // Thời điểm gửi email
+
+    @Column
+    private Integer retryCount;
+
+    @Column(length = 500)
+    private String lastError;
+
+    public enum ReviewStatus {
+        PENDING,    // Chờ gửi email mời review
+        SENT,       // Đã gửi email mời review
+        FAILED,     // Gửi email thất bại
+        COMPLETED   // Đã review hoặc từ chối review
+    }
 }

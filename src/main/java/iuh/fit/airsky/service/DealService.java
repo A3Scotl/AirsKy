@@ -4,6 +4,7 @@ import iuh.fit.airsky.dto.request.DealRequest;
 import iuh.fit.airsky.dto.response.DealResponse;
 import iuh.fit.airsky.dto.response.DealUsageResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
+import iuh.fit.airsky.model.Booking;
 import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
@@ -23,9 +24,11 @@ public interface DealService {
     boolean existsByCode(String dealCode);
     
     // Deal usage
-    DealUsageResponse applyDeal(String dealCode, Long userId, Long bookingId, BigDecimal orderAmount);
+    DealUsageResponse applyDeal(String dealCode, Long userId, Booking booking, BigDecimal orderAmount);
     boolean canUserUseDeal(String dealCode, Long userId);
     PageResponse<DealUsageResponse> getDealUsageHistory(Long dealId, Pageable pageable);
     PageResponse<DealUsageResponse> getUserDealUsageHistory(Long userId, Pageable pageable);
     PageResponse<DealResponse> refreshDealStatuses(Pageable pageable);
+    PageResponse<DealResponse> getUserEligibleDeals(Long userId, Pageable pageable);
+    PageResponse<DealResponse> getGuestEligibleDeals(Pageable pageable);
 }

@@ -1,10 +1,5 @@
 package iuh.fit.airsky.service.impl;
 
-import com.google.zxing.BarcodeFormat;
-import com.google.zxing.WriterException;
-import com.google.zxing.client.j2se.MatrixToImageWriter;
-import com.google.zxing.common.BitMatrix;
-import com.google.zxing.qrcode.QRCodeWriter;
 import freemarker.template.Configuration;
 import freemarker.template.Template;
 import freemarker.template.TemplateException;
@@ -17,8 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.ui.freemarker.FreeMarkerTemplateUtils;
 
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -83,10 +76,6 @@ public class EmailTemplateGenerator {
                 .collect(Collectors.toList());
         dataModel.put("passengers", passengersList);
 
-        String qrBase64 = generateQRBase64(booking.getBookingCode());
-        if (qrBase64 != null) {
-            dataModel.put("qrCode", qrBase64);
-        }
         // Thanh toán
         Payment payment = booking.getPayment();
         dataModel.put("paymentDate", payment != null
@@ -99,25 +88,5 @@ public class EmailTemplateGenerator {
 
         return dataModel;
     }
-    private String generateQRBase64(String text) {
-        try {
-            QRCodeWriter qrCodeWriter = new QRCodeWriter();
-            BitMatrix bitMatrix = qrCodeWriter.encode(text, BarcodeFormat.QR_CODE, 250, 250);
-
-            BufferedImage qrImage = MatrixToImageWriter.toBufferedImage(bitMatrix);
-
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            javax.imageio.ImageIO.write(qrImage, "png", baos);
-            baos.flush();
-            String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
-            baos.close();
-
-            return "data:image/png;base64," + base64Image; // 🔥 thêm prefix tại đây
-        } catch (WriterException | IOException e) {
-            log.error("Error generating QR code: {}", e.getMessage(), e);
-            return null;
-        }
-    }
-
 
 }

@@ -8,6 +8,7 @@ import iuh.fit.airsky.service.ReviewService;
 import iuh.fit.airsky.util.ApiResponseUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -29,12 +30,40 @@ public class ReviewController {
         return ApiResponseUtil.buildResponse(true, "Review created successfully", review, "/api/reviews");
     }
 
-    @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'BUSINESS')")
-    public ResponseEntity<ApiResponse<ReviewResponse>> updateReview(@PathVariable Long id, @RequestBody ReviewRequest request) {
-        ReviewResponse review = reviewService.updateReview(id, request);
-        return ApiResponseUtil.buildResponse(true, "Review updated successfully", review, "/api/reviews/" + id);
+    // API để submit review từ email link (không cần auth vì đã verify qua email)
+    @PostMapping("/submit")
+    public ResponseEntity<ApiResponse<ReviewResponse>> submitReviewFromEmail(@RequestBody ReviewRequest request) {
+        // Validate required fields for email submission
+        if (request.getBookingId() == null || request.getUserId() == null || request.getFlightId() == null) {
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.BAD_REQUEST, "Missing required fields", "VALIDATION_FAILED", "/api/reviews");
+        }
+        ReviewResponse review = reviewService.createReview(request);
+        return ApiResponseUtil.buildResponse(true, "Review submitted successfully", review, "/api/reviews");
     }
+
+    // API để lấy review request của user (để hiển thị form review)
+    @GetMapping("/my-review-requests")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'BUSINESS')")
+    public ResponseEntity<ApiResponse<List<ReviewResponse>>> getMyReviewRequests(
+            @RequestParam Long userId) {
+        List<ReviewResponse> pendingReviews = reviewService.findPendingReviewRequestsByUser(userId);
+        return ApiResponseUtil.buildResponse(true, "Review requests retrieved", pendingReviews, "/api/reviews/my-review-requests");
+    }
+
+    // API để lấy reviews đã duyệt công khai theo flight
+    @GetMapping("/flight/{flightId}/approved")
+    public ResponseEntity<ApiResponse<List<ReviewResponse>>> getApprovedReviewsByFlight(@PathVariable Long flightId) {
+        List<ReviewResponse> reviews = reviewService.findByFlightId(flightId); // Đã filter isApproved = true
+        return ApiResponseUtil.buildResponse(true, "Approved reviews retrieved", reviews, "/api/reviews/flight/" + flightId + "/approved");
+    }
+
+    // API này không cần thiết - user thường không update review
+    // @PutMapping("/{id}")
+    // @PreAuthorize("hasAnyRole('CUSTOMER', 'BUSINESS')")
+    // public ResponseEntity<ApiResponse<ReviewResponse>> updateReview(@PathVariable Long id, @RequestBody ReviewRequest request) {
+    //     ReviewResponse review = reviewService.updateReview(id, request);
+    //     return ApiResponseUtil.buildResponse(true, "Review updated successfully", review, "/api/reviews/" + id);
+    // }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
@@ -90,5 +119,20 @@ public class ReviewController {
     public ResponseEntity<ApiResponse<Boolean>> hasUserReviewedBooking(@PathVariable Long bookingId, @PathVariable Long userId) {
         boolean hasReviewed = reviewService.hasUserReviewedBooking(bookingId, userId);
         return ApiResponseUtil.buildResponse(true, "Check completed", hasReviewed, "/api/reviews/check/" + bookingId + "/" + userId);
+    }
+
+    @PostMapping("/create-review-requests")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
+    public ResponseEntity<ApiResponse<Void>> createReviewRequestsForCompletedFlights() {
+        reviewService.createReviewRequestsForCompletedFlights();
+        return ApiResponseUtil.buildResponse(true, "Review requests created for completed flights", null, "/api/reviews/create-review-requests");
+    }
+
+    @GetMapping("/pending")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
+    public ResponseEntity<ApiResponse<List<ReviewResponse>>> getPendingReviewRequests() {
+        // Thêm method này vào service sau
+        List<ReviewResponse> pendingReviews = reviewService.findPendingReviewRequests();
+        return ApiResponseUtil.buildResponse(true, "Pending review requests retrieved", pendingReviews, "/api/reviews/pending");
     }
 }

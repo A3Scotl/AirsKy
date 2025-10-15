@@ -169,8 +169,17 @@ public class SeatServiceImpl implements SeatService {
     @Transactional
     public void bookSeats(Long flightId, List<String> seatNumbers, Long passengerId) {
         for (String seatNumber : seatNumbers) {
-            Seat seat = seatRepository.findByFlightIdAndSeatNumberForUpdate(flightId, seatNumber)
-                    .orElseThrow(() -> new RuntimeException("Seat not found: " + seatNumber));
+            List<Seat> seats = seatRepository.findByFlightIdAndSeatNumberForUpdate(flightId, seatNumber);
+            
+            if (seats.isEmpty()) {
+                throw new RuntimeException("Seat not found: " + seatNumber);
+            }
+            
+            if (seats.size() > 1) {
+                throw new RuntimeException("Multiple seats found for seat number: " + seatNumber + ". Found " + seats.size() + " seats.");
+            }
+            
+            Seat seat = seats.get(0);
 
             if (seat.getStatus() != SeatStatus.AVAILABLE) {
                 throw new RuntimeException("Seat already booked: " + seatNumber);
@@ -179,7 +188,7 @@ public class SeatServiceImpl implements SeatService {
             Passenger passenger = passengerRepository.findById(passengerId)
                     .orElseThrow(() -> new RuntimeException("Passenger not found"));
 
-            seat.setBookedBy(passenger);
+            seat.setBookedByPassenger(passenger);
             seat.setStatus(SeatStatus.PENDING_PAYMENT); // Đặt trạng thái chờ thanh toán thay vì BOOKED ngay lập tức
 
 

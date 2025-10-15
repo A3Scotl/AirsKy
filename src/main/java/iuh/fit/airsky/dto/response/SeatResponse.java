@@ -13,5 +13,6 @@ public class SeatResponse {
     private String seatType;
     private Long flightId;
     private Long travelClassId;
-    private Long bookedById;
+    private Long bookedByUserId;
+    private Long bookedByPassengerId;
 }

@@ -1,5 +1,6 @@
 package iuh.fit.airsky.dto.response;
 
+import iuh.fit.airsky.enums.LoyaltyTier;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -42,4 +43,9 @@ public class DealResponse {
     // Thống kê
     private Integer remainingUsage;
     private String status;
+
+    // Quyền sử dụng deal
+    private Boolean isGuestOnly;
+    private LoyaltyTier requiredLoyaltyTier;
+    private Boolean isLoyaltyExclusive;
 }

@@ -17,6 +17,9 @@ public interface DealMapper {
     @Mapping(target = "arrivalAirport", ignore = true)
     @Mapping(target = "usedCount", ignore = true)
     @Mapping(target = "totalUsageLimit", expression = "java(dto.getTotalUsageLimit() != null ? dto.getTotalUsageLimit() : dto.getUsageLimit())")
+    @Mapping(target = "isGuestOnly", source = "isGuestOnly")
+    @Mapping(target = "requiredLoyaltyTier", source = "requiredLoyaltyTier")
+    @Mapping(target = "isLoyaltyExclusive", source = "isLoyaltyExclusive")
     Deal toEntity(DealRequest dto);
 
     @Mapping(target = "departureAirportId", source = "departureAirport.airportId")
@@ -28,6 +31,9 @@ public interface DealMapper {
     @Mapping(target = "remainingUsage", expression = "java(entity.getTotalUsageLimit() != null && entity.getUsedCount() != null ? entity.getTotalUsageLimit() - entity.getUsedCount() : 0)")
 
     @Mapping(target = "status", expression = "java(iuh.fit.airsky.mapper.DealMapperUtils.calculateStatus(entity))")
+    @Mapping(target = "isGuestOnly", source = "isGuestOnly")
+    @Mapping(target = "requiredLoyaltyTier", source = "requiredLoyaltyTier")
+    @Mapping(target = "isLoyaltyExclusive", source = "isLoyaltyExclusive")
     DealResponse toResponseDTO(Deal entity);
 
     List<DealResponse> toResponseDTOList(List<Deal> deals);

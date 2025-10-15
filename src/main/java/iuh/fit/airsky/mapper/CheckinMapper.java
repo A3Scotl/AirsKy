@@ -21,7 +21,15 @@ public interface CheckinMapper {
     @Mapping(target = "bookingId", source = "booking.bookingId")
     @Mapping(target = "passengerId", source = "passenger.passengerId")
     @Mapping(target = "passengerName", expression = "java(entity.getPassenger() != null ? entity.getPassenger().getFirstName() + \" \" + entity.getPassenger().getLastName() : null)")
+    @Mapping(target = "seatNumber", source = "seatNumber")
+    @Mapping(target = "seatType", expression = "java(entity.getPassenger() != null && entity.getPassenger().getSeat() != null ? entity.getPassenger().getSeat().getType().toString() : null)")
+    @Mapping(target = "ticketPrice", source = "ticketPrice")
     @Mapping(target = "issueDate", source = "checkedAt")
+    @Mapping(target = "createdAt", source = "createdAt")
+    @Mapping(target = "updatedAt", source = "updatedAt")
+    @Mapping(target = "active", source = "active")
+    @Mapping(target = "deleted", source = "deleted")
+    @Mapping(target = "deletedAt", source = "deletedAt")
     @Mapping(target = "boardingPassUrl", source = "boardingPassUrl")
     CheckinResponse toResponseDTO(CheckIn entity);
 }
