@@ -6,6 +6,7 @@ import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.enums.BookingStatus;
 import iuh.fit.airsky.enums.CheckinStatus;
 import iuh.fit.airsky.enums.PaymentStatus;
+import iuh.fit.airsky.model.Booking;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.CheckinMapper;
 import iuh.fit.airsky.model.CheckIn;
@@ -14,6 +15,7 @@ import iuh.fit.airsky.repository.CheckinRepository;
 import iuh.fit.airsky.repository.PassengerRepository;
 import iuh.fit.airsky.service.BoardingPassService;
 import iuh.fit.airsky.service.CheckinService;
+import iuh.fit.airsky.service.NotificationService; // Giả sử bạn đã tạo service này
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,20 +29,25 @@ import java.util.Optional;
 @Slf4j
 public class CheckinServiceImpl implements CheckinService {
 
+    private static final int CHECKIN_WINDOW_START_HOURS_BEFORE_DEPARTURE = 24;
+    private static final int CHECKIN_WINDOW_CLOSE_HOURS_BEFORE_DEPARTURE = 1;
+
     private final CheckinRepository checkinRepository;
     private final CheckinMapper checkinMapper;
     private final BookingRepository bookingRepository;
     private final PassengerRepository passengerRepository;
     private final BoardingPassService boardingPassService;
+    private final NotificationService notificationService; // Thêm NotificationService
 
     public CheckinServiceImpl(CheckinRepository checkinRepository, CheckinMapper checkinMapper,
                             BookingRepository bookingRepository, PassengerRepository passengerRepository,
-                            BoardingPassService boardingPassService) {
+                            BoardingPassService boardingPassService, NotificationService notificationService) {
         this.checkinRepository = checkinRepository;
         this.checkinMapper = checkinMapper;
         this.bookingRepository = bookingRepository;
         this.passengerRepository = passengerRepository;
         this.boardingPassService = boardingPassService;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -62,10 +69,7 @@ public class CheckinServiceImpl implements CheckinService {
         }
 
         // **THÊM: Validate flight timing for check-in**
-        LocalDateTime now = LocalDateTime.now();
-        boolean canCheckIn = booking.getFlight().getDepartureTime().isAfter(now.plusHours(1)) &&
-                           booking.getFlight().getDepartureTime().isBefore(now.plusDays(1));
-        if (!canCheckIn) {
+        if (!isCheckinWindowOpen(booking)) {
             throw new IllegalStateException("Check-in not available for this flight at this time");
         }
 
@@ -122,6 +126,12 @@ public class CheckinServiceImpl implements CheckinService {
             } else {
                 log.warn("Boarding pass URL is null or empty for check-in {}", saved.getCheckInId());
             }
+
+            // GỬI THÔNG BÁO SOCKET
+            if (booking.getUserId() != null) {
+                String message = String.format("Bạn đã check-in thành công cho chuyến bay %s. Boarding pass đã được gửi đến email của bạn.", booking.getFlight().getFlightNumber());
+                notificationService.sendNotificationToUser(booking.getUserId().getId(), "CHECKIN_SUCCESSFUL", message);
+            }
         } catch (Exception e) {
             log.error("Failed to generate boarding pass for check-in {}: {}", saved.getCheckInId(), e.getMessage(), e);
             // Continue without boarding pass - checkin is still successful
@@ -168,5 +178,12 @@ public class CheckinServiceImpl implements CheckinService {
         log.info("Checkin soft deleted: {}", id);
     }
 
+    private boolean isCheckinWindowOpen(Booking booking) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime departureTime = booking.getFlight().getDepartureTime();
+        LocalDateTime checkinStartTime = departureTime.minusHours(CHECKIN_WINDOW_START_HOURS_BEFORE_DEPARTURE);
+        LocalDateTime checkinEndTime = departureTime.minusHours(CHECKIN_WINDOW_CLOSE_HOURS_BEFORE_DEPARTURE);
 
+        return now.isAfter(checkinStartTime) && now.isBefore(checkinEndTime);
+    }
 }

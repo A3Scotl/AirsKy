@@ -21,6 +21,7 @@ import com.itextpdf.io.image.ImageDataFactory;
 import iuh.fit.airsky.dto.response.QRVerificationResponse;
 import iuh.fit.airsky.enums.CheckinStatus;
 import iuh.fit.airsky.model.CheckIn;
+import iuh.fit.airsky.model.TravelClass;
 import iuh.fit.airsky.repository.CheckinRepository;
 import iuh.fit.airsky.service.BoardingPassService;
 import iuh.fit.airsky.service.CloudinaryService;
@@ -163,27 +164,28 @@ public class BoardingPassServiceImpl implements BoardingPassService {
             g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 16));
             g2d.drawString("PASSENGER NAME", 50, 120);
             g2d.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 14));
-            String passengerName = (checkIn.getPassenger().getFirstName() != null ? checkIn.getPassenger().getFirstName() : "") + " " + 
-                                  (checkIn.getPassenger().getLastName() != null ? checkIn.getPassenger().getLastName() : "");
-            g2d.drawString(passengerName.trim(), 50, 140);
+            String passengerName = String.join(" ", Optional.ofNullable(checkIn.getPassenger().getFirstName()).orElse(""),
+                                                    Optional.ofNullable(checkIn.getPassenger().getLastName()).orElse("")).trim();
+            g2d.drawString(passengerName, 50, 140);
             
             g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 16));
             g2d.drawString("BOOKING CODE", 50, 170);
             g2d.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 14));
-            g2d.drawString(checkIn.getBooking().getBookingCode() != null ? checkIn.getBooking().getBookingCode() : "", 50, 190);
+            g2d.drawString(Optional.ofNullable(checkIn.getBooking().getBookingCode()).orElse(""), 50, 190);
             
             g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 16));
             g2d.drawString("FLIGHT", 50, 220);
             g2d.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 14));
-            g2d.drawString(checkIn.getBooking().getFlight().getFlightNumber() != null ? checkIn.getBooking().getFlight().getFlightNumber() : "", 50, 240);
+            g2d.drawString(Optional.ofNullable(checkIn.getBooking().getFlight().getFlightNumber()).orElse(""), 50, 240);
             
             g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 16));
             g2d.drawString("ROUTE", 50, 270);
             g2d.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 14));
             String route = "";
             if (checkIn.getBooking().getFlight().getDepartureAirport() != null && checkIn.getBooking().getFlight().getArrivalAirport() != null) {
-                route = (checkIn.getBooking().getFlight().getDepartureAirport().getAirportCode() != null ? checkIn.getBooking().getFlight().getDepartureAirport().getAirportCode() : "") + " → " + 
-                       (checkIn.getBooking().getFlight().getArrivalAirport().getAirportCode() != null ? checkIn.getBooking().getFlight().getArrivalAirport().getAirportCode() : "");
+                String depCode = Optional.ofNullable(checkIn.getBooking().getFlight().getDepartureAirport().getAirportCode()).orElse("");
+                String arrCode = Optional.ofNullable(checkIn.getBooking().getFlight().getArrivalAirport().getAirportCode()).orElse("");
+                route = depCode + " → " + arrCode;
             }
             g2d.drawString(route, 50, 290);
             
@@ -191,13 +193,13 @@ public class BoardingPassServiceImpl implements BoardingPassService {
             g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 20));
             g2d.drawString("SEAT", 500, 120);
             g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 24));
-            g2d.drawString(checkIn.getSeatNumber() != null ? checkIn.getSeatNumber() : "", 500, 150);
+            g2d.drawString(Optional.ofNullable(checkIn.getSeatNumber()).orElse(""), 500, 150);
             
             g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 16));
             g2d.drawString("CLASS", 500, 180);
             g2d.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 14));
-            String className = checkIn.getBooking().getTravelClass() != null && checkIn.getBooking().getTravelClass().getClassName() != null 
-                             ? checkIn.getBooking().getTravelClass().getClassName() : "";
+            String className = Optional.ofNullable(checkIn.getBooking().getTravelClass())
+                                     .map(TravelClass::getClassName).orElse("");
             g2d.drawString(className, 500, 200);
             
             g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 16));

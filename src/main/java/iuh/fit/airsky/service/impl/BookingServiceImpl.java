@@ -142,310 +142,197 @@ public class BookingServiceImpl implements BookingService {
         this.passengerSeatAssignmentRepository = passengerSeatAssignmentRepository;
     }
 
+    /**
+     * Tạo một booking mới.
+     * 1. Xác thực yêu cầu (request validation).
+     * 2. Khởi tạo và lưu các thực thể chính (Booking, Passenger).
+     * 3. Giữ chỗ và cập nhật số lượng ghế trống của chuyến bay.
+     * 4. Tạo các thực thể liên quan (FlightSegment, SeatAssignment, AncillaryService).
+     * 5. Tính toán tổng số tiền cuối cùng, bao gồm cả giảm giá (deal, tier).
+     * 6. Tạo bản ghi thanh toán (Payment).
+     * 7. Tạo các bản ghi check-in ban đầu (trạng thái PENDING).
+     * 8. Lưu lại toàn bộ và trả về kết quả.
+     */
     @Transactional
     public BookingResponse createBooking(BookingRequest request) {
         try {
-            log.info("Starting booking creation for userId: {}, totalAmount: {}, passengers: {}",
-                    request.getUserId(), request.getTotalAmount(), request.getPassengers().size());
+            log.info("Starting booking creation for userId: {}", request.getUserId());
 
-        // Kiểm tra flightSegments không rỗng
+            // Bước 1: Xác thực yêu cầu và kiểm tra tính khả dụng của chuyến bay
+            validateBookingRequest(request);
+
+            // Bước 2: Khởi tạo thực thể Booking và các Passenger liên quan
+            Booking booking = initializeBooking(request);
+            List<Passenger> passengers = mapPassengers(request, booking);
+            booking.getPassengers().addAll(passengers);
+
+            // Bước 3: Giữ chỗ bằng cách giảm số lượng ghế trống trên các chuyến bay
+            for (FlightSegmentRequest segment : request.getFlightSegments()) {
+                Flight segFlight = flightRepository.findById(segment.getFlightId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Flight not found for segment"));
+                updateAvailableSeats(segFlight, passengers.size());
+            }
+
+            // Lưu Booking để lấy ID, cần thiết cho các thực thể liên quan
+            Booking savedBooking = bookingRepository.save(booking);
+
+            // Bước 4: Tạo các thực thể liên quan: FlightSegments, SeatAssignments, AncillaryServices
+            List<FlightSegment> flightSegments = createFlightSegments(request, savedBooking);
+            savedBooking.getFlightSegments().addAll(flightSegments);
+            createSeatAssignments(request, savedBooking);
+            createBookingAncillaryServices(request, savedBooking);
+
+            // Bước 5: Tính toán tổng số tiền cuối cùng, bao gồm các dịch vụ và giảm giá
+            BigDecimal finalAmount = calculateFinalAmount(request, savedBooking);
+            savedBooking.setTotalAmount(finalAmount);
+
+            // Bước 6: Tạo bản ghi thanh toán cho booking
+            Payment paymentEntity = createPaymentForBooking(savedBooking, finalAmount, request.getPaymentMethod());
+            savedBooking.setPayment(paymentEntity);
+
+            // Bước 7: Tạo các bản ghi check-in ban đầu với trạng thái PENDING
+            createInitialCheckinRecords(savedBooking, passengers, request);
+
+            // Bước 8: Lưu lại toàn bộ các thay đổi và chuẩn bị response
+            Booking finalBooking = bookingRepository.save(savedBooking);
+            log.info("Booking creation completed successfully for bookingId: {}", finalBooking.getBookingId());
+
+            // Dọn dẹp EntityManager để đảm bảo response trả về dữ liệu mới nhất từ DB
+            entityManager.flush();
+            entityManager.clear();
+
+            Booking reloadedBooking = bookingRepository.findById(finalBooking.getBookingId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Failed to reload booking after creation"));
+
+            return buildBookingResponse(reloadedBooking);
+        } catch (Exception e) {
+        log.error("Booking creation failed with error: {}", e.getMessage(), e);
+        throw e; // Re-throw to maintain transaction rollback
+    }
+}
+
+    private void validateBookingRequest(BookingRequest request) {
         if (request.getFlightSegments() == null || request.getFlightSegments().isEmpty()) {
-            log.error("Flight segments cannot be empty");
             throw new IllegalArgumentException("Flight segments cannot be empty");
         }
 
-        // Lấy flight đầu tiên làm flight chính cho booking
-        FlightSegmentRequest firstSegment = request.getFlightSegments().get(0);
-        log.info("Processing first segment - flightId: {}, classId: {}", firstSegment.getFlightId(), firstSegment.getClassId());
+        Flight firstFlight = flightRepository.findById(request.getFlightSegments().get(0).getFlightId())
+                .orElseThrow(() -> new ResourceNotFoundException("Flight not found"));
 
-        Flight flight = flightRepository.findById(firstSegment.getFlightId())
-                .orElseThrow(() -> {
-                    log.error("Flight not found with id: {}", firstSegment.getFlightId());
-                    return new ResourceNotFoundException("Flight not found");
-                });
-
-        // Kiểm tra thời gian đặt vé: phải trước giờ khởi hành ít nhất 2 tiếng
-        long hoursUntilDeparture = Duration.between(LocalDateTime.now(), flight.getDepartureTime()).toHours();
-        log.info("Hours until departure: {}", hoursUntilDeparture);
-        if (hoursUntilDeparture < 2) {
-            log.error("Booking too close to departure time: {} hours", hoursUntilDeparture);
+        if (Duration.between(LocalDateTime.now(), firstFlight.getDepartureTime()).toHours() < 2) {
             throw new IllegalArgumentException("Bạn chỉ có thể đặt vé trước giờ khởi hành ít nhất 2 tiếng");
         }
 
-        // Kiểm tra số lượng ghế trống (cho tất cả segments)
         int totalPassengers = request.getPassengers().size();
-        log.info("Total passengers: {}", totalPassengers);
         for (FlightSegmentRequest segment : request.getFlightSegments()) {
-            log.info("Checking availability for segment flightId: {}", segment.getFlightId());
             Flight segFlight = flightRepository.findById(segment.getFlightId())
-                    .orElseThrow(() -> {
-                        log.error("Flight not found for segment: {}", segment.getFlightId());
-                        return new ResourceNotFoundException("Flight not found for segment");
-                    });
+                    .orElseThrow(() -> new ResourceNotFoundException("Flight not found for segment"));
             if (segFlight.getAvailableSeats() < totalPassengers) {
-                log.error("Not enough seats for segment {}: available={}, needed={}",
-                        segment.getSegmentOrder(), segFlight.getAvailableSeats(), totalPassengers);
-                throw new IllegalStateException("Không đủ ghế trống cho segment " + segment.getSegmentOrder());
+                throw new IllegalStateException("Không đủ ghế trống cho chặng bay " + segment.getSegmentOrder());
             }
         }
+    }
 
+    private Booking initializeBooking(BookingRequest request) {
         Booking booking = bookingMapper.toEntity(request);
-        log.info("Created booking entity with code: {}", booking.getBookingCode());
 
         if (request.getUserId() != null) {
-            try {
-                User user = userRepository.findById(request.getUserId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
-                booking.setUserId(user);
-                log.info("Booking created for authenticated user: {}", user.getEmail());
-            } catch (ResourceNotFoundException e) {
-                log.warn("User with id {} not found, treating as guest booking", request.getUserId());
-                booking.setUserId(null);
-            }
-        } else {
-            log.info("Creating booking for guest user");
-            booking.setUserId(null);
+            userRepository.findById(request.getUserId()).ifPresent(booking::setUserId);
         }
 
-        booking.setFlight(flight);
-        // Lấy class từ segment đầu tiên
-//        booking.setTravelClass(travelClassRepository.findById(firstSegment.getClassId())
-//                .orElseThrow(() -> {
-//                    log.error("TravelClass not found with id: {}", firstSegment.getClassId());
-//                    return new ResourceNotFoundException("Không tìm thấy TravelClass");
-//                }));
+        Flight firstFlight = flightRepository.findById(request.getFlightSegments().get(0).getFlightId())
+                .orElseThrow(() -> new ResourceNotFoundException("Flight not found"));
+        booking.setFlight(firstFlight);
 
-            FlightTravelClass flightTravelClass = flightTravelClassRepository.findById(firstSegment.getClassId())
-                    .orElseThrow(() -> {
-                        log.error("FlightTravelClass not found with id: {}", firstSegment.getClassId());
-                        return new ResourceNotFoundException("Không tìm thấy FlightTravelClass");
-                    });
-            booking.setTravelClass(flightTravelClass.getTravelClass());
+        FlightTravelClass flightTravelClass = flightTravelClassRepository.findById(request.getFlightSegments().get(0).getClassId())
+                .orElseThrow(() -> new ResourceNotFoundException("FlightTravelClass not found"));
+        booking.setTravelClass(flightTravelClass.getTravelClass());
+
         booking.setBookingDate(LocalDateTime.now());
         booking.setStatus(BookingStatus.PENDING);
         booking.setHoldTime(LocalDateTime.now());
-        booking.setPaymentTimeout(LocalDateTime.now().plusMinutes(45)); // 45 phút tổng thời gian (30 phút hold + 15 phút payment)
+        booking.setPaymentTimeout(LocalDateTime.now().plusMinutes(45));
 
-        log.info("Mapping passengers...");
-        List<Passenger> passengers = mapPassengers(request, booking);
-        booking.getPassengers().addAll(passengers);
-        log.info("Mapped {} passengers", passengers.size());
+        return booking;
+    }
 
-        // Cập nhật số lượng ghế trống cho tất cả segments
-        for (FlightSegmentRequest segment : request.getFlightSegments()) {
-            Flight segFlight = flightRepository.findById(segment.getFlightId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Flight not found"));
-            updateAvailableSeats(segFlight, passengers.size());
-        }
-
-        // Save booking first to avoid transient object issues
-        log.info("Saving booking...");
-        Booking savedBooking = bookingRepository.save(booking);
-        bookingRepository.flush(); // Ensure booking is persisted before applying deal
-        log.info("Booking saved with id: {}", savedBooking.getBookingId());
-
-        // Now create flight segments after booking is saved
-        log.info("Creating flight segments...");
-        List<FlightSegment> flightSegments = createFlightSegments(request, savedBooking);
-        savedBooking.getFlightSegments().addAll(flightSegments);
-        bookingRepository.save(savedBooking);
-        log.info("Created {} flight segments", flightSegments.size());
-
-        // Now create seat assignments after booking, passengers, and segments are saved
-        log.info("Creating seat assignments...");
-        createSeatAssignments(request, savedBooking);
-        log.info("Created seat assignments for all passengers");
-
-        // Tính base amount từ FlightSegments đã được tạo (đảm bảo nhất quán với giá hiển thị)
+    private BigDecimal calculateFinalAmount(BookingRequest request, Booking savedBooking) {
+        // 1. Base amount from flight segments
         BigDecimal baseAmount = savedBooking.getFlightSegments().stream()
-                .map(segment -> {
-                    BigDecimal segmentPrice = segment.getPrice().multiply(BigDecimal.valueOf(request.getPassengers().size()));
-                    log.info("Segment {} - Flight {}: price per person = {}, passengers = {}, total = {}", 
-                            segment.getSegmentOrder(), segment.getFlight().getFlightNumber(), 
-                            segment.getPrice(), request.getPassengers().size(), segmentPrice);
-                    return segmentPrice;
-                })
+                .map(segment -> segment.getPrice().multiply(BigDecimal.valueOf(request.getPassengers().size())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        
-        log.info("Total base amount from all segments: {}", baseAmount);
-        
-        BigDecimal baggageAmount = BigDecimal.ZERO;
 
-        // Tính tổng giá baggage packages
-        for (PassengerSeatRequest passengerReq : request.getPassengers()) {
-            if (passengerReq.getBaggagePackage() != null) {
-                BaggagePackage baggagePackage = passengerReq.getBaggagePackage();
-                baggageAmount = baggageAmount.add(baggagePackage.getPrice());
-            }
-        }
+        // 2. Baggage amount
+        BigDecimal baggageAmount = request.getPassengers().stream()
+                .filter(p -> p.getBaggagePackage() != null)
+                .map(p -> p.getBaggagePackage().getPrice())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Tính tổng giá seat types (loại ghế)
+        // 3. Seat type amount
         BigDecimal seatTypeAmount = calculateSeatTypeAmount(request, savedBooking);
-        log.info("Seat type amount: {}", seatTypeAmount);
 
-        // Calculate ancillary services amount
+        // 4. Ancillary services amount
         BigDecimal ancillaryServicesAmount = calculateAncillaryServicesAmount(request.getAncillaryServices(), savedBooking.getPassengers());
-        
-        BigDecimal finalAmount = baseAmount.add(baggageAmount).add(seatTypeAmount).add(ancillaryServicesAmount);
-        log.info("Base amount: {}, Baggage amount: {}, Seat type amount: {}, Ancillary services amount: {}, Total before deal: {}", 
-                baseAmount, baggageAmount, seatTypeAmount, ancillaryServicesAmount, finalAmount);
 
+        BigDecimal totalBeforeDiscounts = baseAmount.add(baggageAmount).add(seatTypeAmount).add(ancillaryServicesAmount);
+        log.info("Total before discounts: {}", totalBeforeDiscounts);
+
+        BigDecimal finalAmount = totalBeforeDiscounts;
+
+        // 5. Apply Deal Discount
         if (request.getDealCode() != null && !request.getDealCode().trim().isEmpty()) {
-            log.info("Applying deal: '{}' (length: {}) with orderAmount: {} for userId: {}", 
-                    request.getDealCode(), request.getDealCode().length(), finalAmount, request.getUserId());
-            
-            // Check if deal is eligible for the user before applying
             try {
-                boolean isEligible = dealService.canUserUseDeal(request.getDealCode(), request.getUserId());
-                if (!isEligible) {
-                    log.warn("Deal {} is not eligible for userId: {}, skipping deal application", request.getDealCode(), request.getUserId());
-                } else {
-                    log.info("Deal {} is eligible for userId: {}, proceeding with application", request.getDealCode(), request.getUserId());
-                    log.info("About to call dealService.applyDeal with booking ID: {}", savedBooking.getBookingId());
+                if (dealService.canUserUseDeal(request.getDealCode(), request.getUserId())) {
                     var dealUsage = dealService.applyDeal(request.getDealCode(), request.getUserId(), savedBooking, finalAmount);
-                    log.info("dealService.applyDeal returned successfully: usageId={}, discount={}", 
-                            dealUsage.getUsageId(), dealUsage.getDiscountAmount());
-                    BigDecimal oldFinalAmount = finalAmount;
                     finalAmount = dealUsage.getFinalAmount();
-                    log.info("Applied deal {} to booking {}, discount: {}, amount changed: {} -> {}",
-                            request.getDealCode(), savedBooking.getBookingId(), dealUsage.getDiscountAmount(), oldFinalAmount, finalAmount);
+                    log.info("Applied deal {}. New amount: {}", request.getDealCode(), finalAmount);
                 }
-            } catch (Exception e) {
-                log.error("Failed to apply deal {} for booking {}: {}", request.getDealCode(), savedBooking.getBookingId(), e.getMessage(), e);
-                log.error("Exception details: ", e);
-                // Tiếp tục với amount gốc nếu deal thất bại
+            } catch (IllegalArgumentException e) {
+                log.warn("Failed to apply deal {}: {}. Continuing with original amount.", request.getDealCode(), e.getMessage());
             }
-        } else {
-            log.info("No deal code provided in request (dealCode: '{}', isNull: {}, trimmed: '{}', userId: {})", 
-                    request.getDealCode(), request.getDealCode() == null, 
-                    request.getDealCode() != null ? request.getDealCode().trim() : "N/A", request.getUserId());
         }
 
-        // Áp dụng tier discount tự động cho authenticated users
-        BigDecimal tierDiscountAmount = BigDecimal.ZERO;
+        // 6. Apply Tier Discount
         if (request.getUserId() != null) {
             try {
-                User user = userRepository.findById(request.getUserId())
-                        .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại với ID: " + request.getUserId()));
-
-                LoyaltyTier userTier = user.getLoyaltyTier() != null ? user.getLoyaltyTier() : LoyaltyTier.STANDARD;
-                BigDecimal tierDiscountRate = userTier.getDiscountRate();
-
-                if (tierDiscountRate.compareTo(BigDecimal.ZERO) > 0) {
-                    tierDiscountAmount = finalAmount.multiply(tierDiscountRate);
-                    BigDecimal oldFinalAmount = finalAmount;
-                    finalAmount = finalAmount.subtract(tierDiscountAmount);
-
-                    log.info("Applied tier discount for user {} (tier: {}): discount rate {}%, discount amount: {}, amount changed: {} -> {}",
-                            request.getUserId(), userTier, tierDiscountRate.multiply(BigDecimal.valueOf(100)), tierDiscountAmount, oldFinalAmount, finalAmount);
-                } else {
-                    log.info("No tier discount applied for user {} (tier: {} has 0% discount rate)", request.getUserId(), userTier);
+                User user = userRepository.findById(request.getUserId()).orElse(null);
+                if (user != null && user.getLoyaltyTier() != null) {
+                    BigDecimal tierDiscountRate = user.getLoyaltyTier().getDiscountRate();
+                    if (tierDiscountRate.compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal tierDiscountAmount = finalAmount.multiply(tierDiscountRate);
+                        finalAmount = finalAmount.subtract(tierDiscountAmount);
+                        log.info("Applied tier discount {} ({}%). New amount: {}", user.getLoyaltyTier(), tierDiscountRate.multiply(BigDecimal.valueOf(100)), finalAmount);
+                    }
                 }
             } catch (Exception e) {
                 log.error("Failed to apply tier discount for user {}: {}", request.getUserId(), e.getMessage());
-                // Tiếp tục với amount hiện tại nếu tier discount thất bại
             }
-        } else {
-            log.info("No tier discount applied (guest user)");
         }
 
-        // NOTE: Tích điểm loyalty chỉ được trao khi booking hoàn thành (CONFIRMED)
-        // không phải khi tạo booking (PENDING). Points sẽ được trao trong completeBooking()
-        if (savedBooking.getUserId() != null) {
-            log.info("User {} detected for booking {}, loyalty points will be awarded upon completion", 
-                    savedBooking.getUserId().getId(), savedBooking.getBookingId());
-        }
+        return finalAmount;
+    }
 
-        // Tạo thanh toán với final amount
-        log.info("Creating payment with amount: {} (after deal discount: {}, tier discount: {})", 
-                finalAmount, request.getDealCode() != null ? "applied" : "none", tierDiscountAmount);
+    private Payment createPaymentForBooking(Booking booking, BigDecimal finalAmount, PaymentMethod paymentMethod) {
         PaymentRequest pr = new PaymentRequest();
-
         pr.setBookingId(booking.getBookingId());
         pr.setTotalAmount(finalAmount);
-        pr.setPaymentMethod(request.getPaymentMethod());
+        pr.setPaymentMethod(paymentMethod);
         pr.setPaymentStatus(PaymentStatus.PENDING);
 
-        PaymentResponse payment = paymentService.createPayment(pr);
+        PaymentResponse paymentResponse = paymentService.createPayment(pr);
 
-        Payment paymentEntity = paymentRepository.findById(payment.getPaymentId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
+        return paymentRepository.findById(paymentResponse.getPaymentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found after creation"));
+    }
 
-        savedBooking.setPayment(paymentEntity);
-
-        savedBooking.setTotalAmount(finalAmount);
-        
-        // Cập nhật lại payment amount nếu có deal hoặc tier discount được áp dụng
-        if ((request.getDealCode() != null && !request.getDealCode().trim().isEmpty()) || tierDiscountAmount.compareTo(BigDecimal.ZERO) > 0) {
-            paymentEntity.setAmount(finalAmount);
-            paymentRepository.save(paymentEntity);
-            log.info("Updated payment amount to {} (deal applied: {}, tier discount: {})", 
-                    finalAmount, request.getDealCode() != null, tierDiscountAmount);
-        }
-
-        // Create ancillary services records
-        log.info("Creating ancillary services for booking");
-        createBookingAncillaryServices(request, savedBooking);
-
-        // Tạo CheckIn cho mỗi hành khách
-        log.info("Creating check-ins for {} passengers", passengers.size());
-        passengers.forEach(passenger -> {
-            try {
-                createCheckIn(savedBooking, passenger, request);
-                log.debug("Created check-in for passenger: {}", passenger.getFirstName());
-            } catch (Exception e) {
-                log.error("Failed to create check-in for passenger {}: {}", passenger.getFirstName(), e.getMessage());
-                throw e; // Re-throw to rollback transaction
-            }
-        });
-
-        // Save booking once at the end with all updates
-        log.info("Final booking save...");
-        bookingRepository.save(savedBooking);
-
-        // Gửi email xác nhận nếu có userId
-
-
-        log.info("Booking creation completed successfully for bookingId: {}", savedBooking.getBookingId());
-
-        // Force flush to ensure all changes are persisted before reload
-        entityManager.flush();
-        
-        // Flush and clear to ensure CheckIn/Baggage are persisted and can be loaded fresh
-        entityManager.flush();
-        entityManager.clear();
-        
-        // Reload booking with basic details first
-        Booking reloadedBooking = bookingRepository.findById(savedBooking.getBookingId())
-                .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
-        
-        // Load passengers separately if needed
-        if (reloadedBooking.getPassengers().isEmpty()) {
-            reloadedBooking = bookingRepository.findByIdWithPassengers(savedBooking.getBookingId())
-                    .orElse(reloadedBooking);
-        }
-        
-        // Load check-ins separately if needed
-        if (reloadedBooking.getCheckIns().isEmpty()) {
-            reloadedBooking = bookingRepository.findByIdWithCheckIns(savedBooking.getBookingId())
-                    .orElse(reloadedBooking);
-        }
-        
-        log.info("Booking {} has {} checkIns", reloadedBooking.getBookingId(), 
-                reloadedBooking.getCheckIns() != null ? reloadedBooking.getCheckIns().size() : 0);
-
+    private BookingResponse buildBookingResponse(Booking reloadedBooking) {
         BookingResponse response = bookingMapper.toResponseDTO(reloadedBooking);
         populateDealInformation(response, reloadedBooking);
         populateBaggageInformation(response, reloadedBooking);
         populateAncillaryServicesInformation(response, reloadedBooking);
         populateSeatTypeInformation(response, reloadedBooking);
         return response;
-
-    } catch (Exception e) {
-        log.error("Booking creation failed with error: {}", e.getMessage(), e);
-        throw e; // Re-throw to maintain transaction rollback
     }
-}
 
     @Override
     @Transactional
@@ -766,17 +653,6 @@ public class BookingServiceImpl implements BookingService {
                     }
                 }
 
-                // Gửi cảnh báo khi còn 5 phút nữa là hết hạn thanh toán (sau 40 phút)
-                if (booking.getPaymentTimeout() != null &&
-                    Duration.between(now, booking.getPaymentTimeout()).toMinutes() <= 5 &&
-                    Duration.between(now, booking.getPaymentTimeout()).toMinutes() > 0) {
-
-                    if (booking.getUserId() != null && booking.getPayment() != null &&
-                        booking.getPayment().getStatus() == PaymentStatus.PENDING) {
-                        sendPaymentReminderEmail(booking);
-                    }
-                }
-
             } catch (Exception e) {
                 log.error("Error processing booking {}: {}", booking.getBookingId(), e.getMessage(), e);
             }
@@ -845,36 +721,17 @@ public class BookingServiceImpl implements BookingService {
         // Gửi email thông báo hủy booking
         if (booking.getUserId() != null) {
             sendCancellationEmail(booking, reason);
+
+            // GỬI THÔNG BÁO SOCKET
+            String message = String.format("Đặt vé %s của bạn đã bị hủy do: %s.", booking.getBookingCode(), reason);
+            notificationService.sendNotificationToUser(booking.getUserId().getId(), "BOOKING_CANCELLED", message);
+        } else {
+            // Có thể gửi thông báo cho guest qua một kênh chung nếu có
+            log.warn("Booking {} cancelled for guest user, no user to notify via socket.", booking.getBookingId());
         }
 
         log.info("Successfully cancelled booking {} and released {} seats", booking.getBookingId(), releasedSeats);
     }
-
-    private void sendPaymentReminderEmail(Booking booking) {
-        try {
-            String email = booking.getUserId().getEmail();
-            String subject = "Cảnh báo: Thời hạn thanh toán sắp hết";
-            String body = String.format(
-                "<h3>Xin chào %s</h3>" +
-                "<p>Mã đặt vé: <strong>%s</strong></p>" +
-                "<p>Thời hạn thanh toán cho booking của bạn sẽ hết trong 5 phút nữa.</p>" +
-                "<p>Vui lòng hoàn thành thanh toán để tránh việc hủy booking tự động.</p>" +
-                "<p>Chuyến bay: %s</p>" +
-                "<p>Số tiền: $%.2f</p>" +
-                "<p>Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.</p>",
-                booking.getUserId().getLastName(),
-                booking.getBookingCode(),
-                booking.getFlight().getFlightNumber(),
-                booking.getTotalAmount()
-            );
-
-            emailService.sendEmail(email, subject, body);
-            log.info("Payment reminder email sent to: {}", email);
-        } catch (Exception e) {
-            log.error("Failed to send payment reminder email for booking {}: {}", booking.getBookingId(), e.getMessage());
-        }
-    }
-
     private void sendCancellationEmail(Booking booking, String reason) {
         try {
             String email = booking.getUserId().getEmail();
@@ -921,6 +778,14 @@ public class BookingServiceImpl implements BookingService {
         for (Flight flight : delayedFlights) {
             flight.setStatus(FlightStatus.DELAYED);
             flightRepository.save(flight);
+
+            // GỬI THÔNG BÁO SOCKET CHO TẤT CẢ HÀNH KHÁCH CỦA CHUYẾN BAY
+            List<Booking> affectedBookings = bookingRepository.findByFlightAndStatus(flight, BookingStatus.CONFIRMED);
+            for (Booking booking : affectedBookings) {
+                if (booking.getUserId() != null) {
+                    notificationService.sendNotificationToUser(booking.getUserId().getId(), "FLIGHT_DELAYED", "Chuyến bay " + flight.getFlightNumber() + " của bạn đã bị trễ. Vui lòng kiểm tra lại thông tin.");
+                }
+            }
             log.info("Updated flight {} status to DELAYED", flight.getFlightNumber());
         }
     }
@@ -1018,6 +883,10 @@ public class BookingServiceImpl implements BookingService {
         log.info("Set {} baggage items in response", baggageList.size());
     }
 
+    /**
+     * Map thông tin từ BookingRequest sang danh sách các thực thể Passenger.
+     * Loại bỏ việc sử dụng trường tạm `tempBaggagePackage`.
+     */
     private List<Passenger> mapPassengers(BookingRequest request, Booking booking) {
         return request.getPassengers().stream().map(p -> {
             Passenger passenger = new Passenger();
@@ -1026,17 +895,15 @@ public class BookingServiceImpl implements BookingService {
             passenger.setDateOfBirth(p.getDateOfBirth());
             passenger.setPassportNumber(p.getPassportNumber());
             passenger.setType(p.getType());
-            // Map thêm các thông tin cá nhân
             passenger.setGender(p.getGender());
             passenger.setEmail(p.getEmail());
             passenger.setPhone(p.getPhone());
-
-            // Thay đổi: Không xử lý seat trực tiếp nữa, sẽ xử lý trong createSeatAssignments
-            // Seat assignments sẽ được tạo sau khi passengers và segments đã được lưu
-
-            // ✅ Gắn baggagePackage tạm vào Passenger qua BookingRequest (để xử lý tiếp ở createCheckIn)
             passenger.setBooking(booking);
-            passenger.setTempBaggagePackage(p.getBaggagePackage()); // cần thêm field transient
+
+            // LƯU Ý: Không gán seat hoặc baggage package trực tiếp ở đây.
+            // Việc này sẽ được xử lý trong các phương thức `createSeatAssignments` và `createInitialCheckinRecords`
+            // để đảm bảo luồng dữ liệu rõ ràng và tránh sử dụng các trường tạm.
+
             return passenger;
         }).toList();
     }
@@ -1046,6 +913,10 @@ public class BookingServiceImpl implements BookingService {
         flightRepository.save(flight);
     }
 
+    /**
+     * Tạo các bản ghi gán ghế (PassengerSeatAssignment) cho mỗi hành khách trên mỗi chặng bay.
+     * Đồng thời cập nhật trạng thái của ghế thành PENDING_PAYMENT để tránh bị đặt trùng.
+     */
     private void createSeatAssignments(BookingRequest request, Booking savedBooking) {
         log.info("Creating seat assignments for {} passengers and {} segments",
                 savedBooking.getPassengers().size(), savedBooking.getFlightSegments().size());
@@ -1230,6 +1101,10 @@ public class BookingServiceImpl implements BookingService {
                 ancillaryServiceResponses.size(), ancillaryServicesAmount);
     }
 
+    /**
+     * Tạo các chặng bay (FlightSegment) cho booking dựa trên request.
+     * Giá của mỗi chặng được lấy từ database (FlightTravelClass) để đảm bảo tính nhất quán.
+     */
     private List<FlightSegment> createFlightSegments(BookingRequest request, Booking booking) {
         return request.getFlightSegments().stream()
                 .map(segmentRequest -> {
@@ -1240,10 +1115,6 @@ public class BookingServiceImpl implements BookingService {
                     Flight flight = flightRepository.findById(segmentRequest.getFlightId())
                             .orElseThrow(() -> new ResourceNotFoundException("Flight not found"));
                     
-                    // Ensure airports are loaded
-                    Airport departureAirport = flight.getDepartureAirport();
-                    Airport arrivalAirport = flight.getArrivalAirport();
-                    
                     segment.setFlight(flight);
 //                    segment.setTravelClass(travelClassRepository.findById(segmentRequest.getClassId())
 //                            .orElseThrow(() -> new ResourceNotFoundException("Travel class not found")));
@@ -1253,8 +1124,8 @@ public class BookingServiceImpl implements BookingService {
                     segment.setTravelClass(flightTravelClass.getTravelClass());
                     
                     // Set airport information from the flight
-                    segment.setDepartureAirport(departureAirport);
-                    segment.setArrivalAirport(arrivalAirport);
+                    segment.setDepartureAirport(flight.getDepartureAirport());
+                    segment.setArrivalAirport(flight.getArrivalAirport());
                     
                     // Set price from database FlightTravelClass, not from request
                     BigDecimal segmentPrice = flight.getFlightTravelClasses().stream()
@@ -1284,17 +1155,20 @@ public class BookingServiceImpl implements BookingService {
     }
 
 
-
-    private void createCheckIn(Booking booking, Passenger passenger, BookingRequest request) {
+    /**
+     * Tạo bản ghi CheckIn ban đầu cho một hành khách.
+     * Nếu có gói hành lý được chọn, tạo luôn bản ghi Baggage tương ứng.
+     */
+    private void createCheckIn(Booking booking, Passenger passenger, BaggagePackage baggagePackage) {
         Baggage baggage = null;
 
-        if (passenger.getTempBaggagePackage() != null) {
-            log.info("Creating baggage for passenger {} with package {}", 
-                    passenger.getFirstName(), passenger.getTempBaggagePackage());
+        if (baggagePackage != null) {
+            log.info("Creating baggage for passenger {} with package {}",
+                    passenger.getFirstName(), baggagePackage);
             baggage = Baggage.builder()
                     .type(BaggageType.CHECK_IN)
-                    .purchasedPackage(passenger.getTempBaggagePackage())
-                    .packagePrice(passenger.getTempBaggagePackage().getPrice())
+                    .purchasedPackage(baggagePackage)
+                    .packagePrice(baggagePackage.getPrice())
                     .build();
             baggage = baggageRepository.save(baggage);
             log.info("Baggage created with ID: {}", baggage.getBaggageId());
@@ -1330,6 +1204,21 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
+    /**
+     * Tạo các bản ghi check-in ban đầu cho tất cả hành khách trong booking.
+     * Lấy thông tin gói hành lý trực tiếp từ BookingRequest.
+     */
+    private void createInitialCheckinRecords(Booking booking, List<Passenger> passengers, BookingRequest request) {
+        log.info("Creating initial check-in records for {} passengers", passengers.size());
+        for (int i = 0; i < passengers.size(); i++) {
+            Passenger passenger = passengers.get(i);
+            PassengerSeatRequest passengerRequest = request.getPassengers().get(i);
+            // Lấy baggage package từ request tương ứng, đảm bảo luồng dữ liệu rõ ràng
+            BaggagePackage baggagePackage = passengerRequest.getBaggagePackage();
+            // Tạo check-in với baggage package (có thể là null)
+            createCheckIn(booking, passenger, baggagePackage);
+        }
+    }
     private void awardLoyaltyPointsForCompletedBooking(Booking booking) {
         User user = booking.getUserId();
         if (user == null) {
@@ -2146,6 +2035,11 @@ public class BookingServiceImpl implements BookingService {
                 if (boardingPassUrl != null && !boardingPassUrl.isEmpty()) {
                     checkIn.setBoardingPassUrl(boardingPassUrl);
                     checkinRepository.save(checkIn);
+
+                    // GỬI THÔNG BÁO SOCKET
+                    String message = String.format("Check-in cho hành khách %s %s thành công. Boarding pass đã sẵn sàng.", passenger.getFirstName(), passenger.getLastName());
+                    notificationService.sendNotificationToUser(booking.getUserId().getId(), "CHECKIN_SUCCESS", message);
+
                     response.setBoardingPassUrl(boardingPassUrl);
                 }
             } catch (Exception e) {
@@ -2472,4 +2366,3 @@ public class BookingServiceImpl implements BookingService {
                 .build();
     }
 }
-

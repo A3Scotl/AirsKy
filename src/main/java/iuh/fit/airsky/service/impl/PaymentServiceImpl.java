@@ -24,6 +24,7 @@ import iuh.fit.airsky.repository.PaymentRepository;
 import iuh.fit.airsky.repository.PassengerSeatAssignmentRepository;
 import iuh.fit.airsky.repository.SeatRepository;
 import iuh.fit.airsky.service.EmailService;
+import iuh.fit.airsky.service.NotificationService; // Giả sử bạn đã tạo service này
 import iuh.fit.airsky.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
@@ -57,6 +59,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final SeatRepository seatRepository;
     private final EmailService emailService;
     private final APIContext paypalApiContext;
+    private final NotificationService notificationService; // Thêm NotificationService
 
     @Value("${paypal.success-url}")
     private String successUrl;
@@ -372,28 +375,39 @@ public class PaymentServiceImpl implements PaymentService {
             throw new PaymentProcessingException("Failed to create SePay payment", e);
         }
     }
+
+    // This method will be triggered after the main transaction commits successfully.
+    @TransactionalEventListener
+    public void handleBookingConfirmation(Booking booking) {
+        log.info("Transaction committed. Sending confirmation email for booking {}", booking.getBookingId());
+        try {
+            String email = booking.getUserId().getEmail();
+            String subject = "Xác Nhận Đặt Vé Thành Công - Mã: " + booking.getBookingCode();
+
+            // Render template HTML với dữ liệu từ booking
+            String htmlBody = emailTemplateGenerator.generateEmailTemplate(booking);
+
+            emailService.sendEmail(email, subject, htmlBody);
+            log.info("Confirmation email sent to: {}", email);
+        } catch (Exception e) {
+            log.error("Failed to send confirmation email after transaction commit for booking {}: {}", booking.getBookingId(), e.getMessage());
+            // Do not re-throw, as the main transaction is already complete.
+        }
+    }
+
     private void updateBookingStatus(Booking booking) {
         if (booking.getStatus() == BookingStatus.PENDING) {
             booking.setStatus(BookingStatus.CONFIRMED);
-
-            // Update seat status to OCCUPIED when payment is completed
             updatePassengerSeats(booking);
-
             bookingRepository.save(booking);
             log.info("Updated booking {} status to CONFIRMED", booking.getBookingId());
-            log.info("Sending confirmation email...");
-            try {
-                String email = booking.getUserId().getEmail();
-                String subject = "Xác Nhận Đặt Vé Thành Công - Mã: " + booking.getBookingCode();
+            handleBookingConfirmation(booking); // This will be handled by the TransactionalEventListener
 
-                // Render template HTML với dữ liệu từ savedBooking
-                String htmlBody = emailTemplateGenerator.generateEmailTemplate(booking);
-
-                emailService.sendEmail(email, subject, htmlBody);  // EmailServiceImpl hỗ trợ HTML qua setText(body, true)
-                log.info("Confirmation email sent to: {}", email);
-            } catch (Exception e) {
-                log.error("Failed to send confirmation email: {}", e.getMessage());
-                // Không throw để tránh rollback
+            // GỬI THÔNG BÁO SOCKET
+            if (booking.getUserId() != null) {
+                String message = String.format("Đặt vé %s của bạn đã được xác nhận thành công!", booking.getBookingCode());
+                // Gửi thông báo đến user cụ thể
+                notificationService.sendNotificationToUser(booking.getUserId().getId(), "BOOKING_CONFIRMED", message);
             }
         }
     }
@@ -533,6 +547,13 @@ public class PaymentServiceImpl implements PaymentService {
     private void handlePaymentFailure(Payment payment ) {
         payment.setStatus(PaymentStatus.FAILED);
         paymentRepository.save(payment);
+
+        // GỬI THÔNG BÁO SOCKET
+        Booking booking = payment.getBooking();
+        if (booking != null && booking.getUserId() != null) {
+            String message = String.format("Thanh toán cho đặt vé %s đã thất bại. Vui lòng thử lại.", booking.getBookingCode());
+            notificationService.sendNotificationToUser(booking.getUserId().getId(), "PAYMENT_FAILED", message);
+        }
         log.error("Payment failed: {}", payment.getPaymentId());
     }
 
