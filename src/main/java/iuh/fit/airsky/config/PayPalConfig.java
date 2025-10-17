@@ -36,7 +36,10 @@ public class PayPalConfig {
 
     @Bean
     public APIContext apiContext() throws PayPalRESTException {
-        APIContext context = new APIContext(oAuthTokenCredential().getAccessToken());
+        // Thay vì truyền trực tiếp access token (sẽ hết hạn),
+        // truyền clientId và clientSecret.
+        // APIContext sẽ tự động quản lý và làm mới token khi cần.
+        APIContext context = new APIContext(clientId, clientSecret, mode);
         context.setConfigurationMap(paypalSdkConfig());
         return context;
     }

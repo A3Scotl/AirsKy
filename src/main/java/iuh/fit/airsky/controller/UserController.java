@@ -54,7 +54,6 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable Long id) {
         Optional<UserResponse> user = userService.findById(id);
         if (user.isPresent()) {
@@ -137,6 +136,21 @@ public class UserController {
     public ResponseEntity<ApiResponse<Void>> softDeleteUser(@PathVariable Long id) {
         userService.softDelete(id);
         return ApiResponseUtil.buildResponse(true, "User deleted successfully", null, "/api/users/" + id);
+    }
+
+    /**
+     * Endpoint cho phép ADMIN thay đổi vai trò của một người dùng.
+     * @param id ID của người dùng cần thay đổi vai trò.
+     * @param role Vai trò mới (CUSTOMER, BUSINESS, FLIGHT_MANAGER, STAFF, ADMIN).
+     * @return Phản hồi xác nhận thành công hoặc lỗi.
+     */
+    @PatchMapping("/{id}/role")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> updateUserRole(
+            @PathVariable Long id,
+            @RequestParam("role") String role) {
+        userService.updateUserRole(id, role);
+        return ApiResponseUtil.buildResponse(true, "User role updated successfully", null, "/api/v1/users/" + id + "/role");
     }
 
     @PatchMapping("/{id}/toggle-active")

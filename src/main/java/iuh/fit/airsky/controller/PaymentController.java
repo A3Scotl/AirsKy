@@ -215,4 +215,34 @@ public class PaymentController {
             );
         }
     }
+
+    @GetMapping
+    public ResponseEntity<ApiResponse<PageResponse<PaymentResponse>>> getAllPayments(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size,
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "paymentMethod", required = false) String paymentMethod,
+            @RequestParam(value = "startDate", required = false) String startDate,
+            @RequestParam(value = "endDate", required = false) String endDate
+    ) {
+        try {
+            Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+            PageResponse<PaymentResponse> response = paymentService.findAllWithFilters(pageable, search, status, paymentMethod, startDate, endDate);
+            return ApiResponseUtil.buildResponse(
+                true,
+                "Payments retrieved successfully",
+                response,
+                "/api/v1/payments"
+            );
+        } catch (Exception ex) {
+            log.error("Error fetching payments: {}", ex.getMessage());
+            return ApiResponseUtil.buildErrorResponse(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Failed to retrieve payments",
+                "INTERNAL_SERVER_ERROR",
+                "/api/v1/payments"
+            );
+        }
+    }
 }

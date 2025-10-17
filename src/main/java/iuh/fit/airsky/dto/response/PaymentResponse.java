@@ -18,5 +18,5 @@ public class PaymentResponse {
     private LocalDateTime updatedAt;
     private String transactionId;
     private String payerId;
-    private String paypalApprovalUrl;
+    private String checkoutUrl;
 }

@@ -10,4 +10,6 @@ public class NotificationRequest {
     private String message;
     private NotificationType type;
     private Long relatedId;
+    private Boolean isRead;
+
 }

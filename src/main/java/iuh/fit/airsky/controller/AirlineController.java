@@ -8,7 +8,6 @@ import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.service.AirlineService;
 import iuh.fit.airsky.service.CloudinaryService;
 import iuh.fit.airsky.util.ApiResponseUtil;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;

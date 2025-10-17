@@ -8,7 +8,6 @@ import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.service.AirportService;
 import iuh.fit.airsky.service.CloudinaryService;
 import iuh.fit.airsky.util.ApiResponseUtil;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
@@ -18,7 +17,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
 
 @Slf4j
 @RestController

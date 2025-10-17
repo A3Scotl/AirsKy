@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ReviewRepository extends JpaRepository<Review, Long> {
@@ -21,6 +22,9 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     @Query("SELECT AVG(r.rating) FROM Review r WHERE r.flight.flightId = :flightId AND r.isApproved = true")
     Double findAverageRatingByFlightId(@Param("flightId") Long flightId);
+
+    @Query("SELECT r FROM Review r WHERE r.booking.bookingId = :bookingId AND r.user.id = :userId")
+    Optional<Review> findByBookingIdAndUserId(@Param("bookingId") Long bookingId, @Param("userId") Long userId);
 
     @Query("SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END FROM Review r WHERE r.booking.bookingId = :bookingId AND r.user.id = :userId")
     boolean existsByBookingIdAndUserId(@Param("bookingId") Long bookingId, @Param("userId") Long userId);

@@ -47,12 +47,12 @@ public class EmailTemplateGenerator {
         Map<String, Object> dataModel = new HashMap<>();
 
         // Thông tin cơ bản
-        dataModel.put("bookingCode", booking.getBookingCode());
-        dataModel.put("bookingDate", booking.getBookingDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+        dataModel.put("bookingCode", Optional.ofNullable(booking.getBookingCode()).orElse("N/A"));
+        dataModel.put("bookingDate", Optional.ofNullable(booking.getBookingDate()).map(d -> d.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))).orElse("N/A"));
         Passenger primaryPassenger = booking.getPassengers().isEmpty() ? null : booking.getPassengers().get(0);
-        dataModel.put("passengerName", primaryPassenger != null ? primaryPassenger.getFirstName() + " " + primaryPassenger.getLastName() : "");
-        dataModel.put("phone", primaryPassenger != null ? primaryPassenger.getPhone() : "");
-        dataModel.put("email", primaryPassenger != null ? primaryPassenger.getEmail() : "");
+        dataModel.put("passengerName", primaryPassenger != null ? String.format("%s %s", primaryPassenger.getFirstName(), primaryPassenger.getLastName()) : "Guest");
+        dataModel.put("phone", primaryPassenger != null ? Optional.ofNullable(primaryPassenger.getPhone()).orElse("N/A") : "N/A");
+        dataModel.put("email", primaryPassenger != null ? Optional.ofNullable(primaryPassenger.getEmail()).orElse("N/A") : "N/A");
 
         // Thông tin chuyến bay (dùng flight chính)
         Flight flight = booking.getFlight();
@@ -62,7 +62,7 @@ public class EmailTemplateGenerator {
         dataModel.put("departureAirport", flight.getDepartureAirport().getAirportName());
         dataModel.put("arrivalTime", flight.getArrivalTime().format(DateTimeFormatter.ofPattern("HH:mm")));
         dataModel.put("arrivalAirport", flight.getArrivalAirport().getAirportName());
-        dataModel.put("travelClass",booking.getTravelClass().getClassName());
+        dataModel.put("travelClass", booking.getTravelClass() != null ? booking.getTravelClass().getClassName() : "N/A");
 
         // Danh sách hành khách
         List<Map<String, Object>> passengersList = booking.getPassengers().stream()
@@ -82,7 +82,9 @@ public class EmailTemplateGenerator {
                 ? payment.getPaymentDate().format(DateTimeFormatter.ofPattern("dd MMMM yyyy"))
                 : LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd MMMM yyyy")));
         dataModel.put("paymentMethod", payment != null ? payment.getPaymentMethod().name() : "Agency Credit");
-        String formattedAmount = String.format("%,.0f", booking.getTotalAmount()) + " VND";
+        
+        String formattedAmount = Optional.ofNullable(booking.getTotalAmount())
+                .map(amount -> String.format("%,.0f", amount) + " VND").orElse("0 VND");
         dataModel.put("totalAmount", formattedAmount);
 
 

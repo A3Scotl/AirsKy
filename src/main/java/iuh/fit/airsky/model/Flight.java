@@ -1,5 +1,6 @@
 package iuh.fit.airsky.model;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import iuh.fit.airsky.base.BaseAuditOnlyEntity;
 import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.enums.FlightType;
@@ -63,6 +64,7 @@ public class Flight  extends BaseAuditOnlyEntity {
     private String stops;
 
     @OneToMany(mappedBy = "flight", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonManagedReference
     private List<Stop> stopsList;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -93,7 +95,11 @@ public class Flight  extends BaseAuditOnlyEntity {
     @Column(name = "round_trip_group_id")
     private String roundTripGroupId; // dùng để liên kết các chuyến bay khứ hồi
 
+    @Version
+    @Builder.Default
+    private Integer version = 0;
     @OneToMany(mappedBy = "flight", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+@JsonManagedReference
     @Builder.Default
     private List<FlightTravelClass> flightTravelClasses = new ArrayList<>();
 

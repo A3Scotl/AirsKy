@@ -3,6 +3,7 @@ package iuh.fit.airsky.repository;
 import iuh.fit.airsky.enums.BookingStatus;
 import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.model.Booking;
+import iuh.fit.airsky.model.Flight;
 import iuh.fit.airsky.model.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,6 +28,8 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     @Query("SELECT b FROM Booking b LEFT JOIN FETCH b.userId LEFT JOIN FETCH b.flight LEFT JOIN FETCH b.travelClass LEFT JOIN FETCH b.payment WHERE b.bookingId = :id")
     Optional<Booking> findById(@Param("id") Long id);
 
+    
+    List<Booking> findByFlightAndStatus(Flight flight, BookingStatus status);
 
 
 
@@ -56,6 +59,10 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     // Method để tìm các booking đã hết thời hạn thanh toán
     @Query("SELECT b FROM Booking b LEFT JOIN FETCH b.userId LEFT JOIN FETCH b.flight LEFT JOIN FETCH b.payment WHERE b.paymentTimeout < :now AND b.status = :status")
     List<Booking> findExpiredBookings(@Param("now") java.time.LocalDateTime now, @Param("status") BookingStatus status);
+
+    // Method để tìm các booking hết hạn gần đây
+    @Query("SELECT b FROM Booking b WHERE b.paymentTimeout < :now AND b.status = :status AND b.createdAt > :lookbackTime")
+    List<Booking> findRecentExpiredBookings(@Param("now") java.time.LocalDateTime now, @Param("status") BookingStatus status, @Param("lookbackTime") java.time.LocalDateTime lookbackTime);
 
     // Method để đếm số booking hoàn thành theo user
     @Query("SELECT COUNT(b) FROM Booking b WHERE b.userId.id = :userId AND b.status = :status")

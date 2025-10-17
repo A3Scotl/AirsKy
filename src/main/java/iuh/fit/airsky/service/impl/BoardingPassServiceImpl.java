@@ -23,6 +23,7 @@ import iuh.fit.airsky.enums.BaggagePackage;
 import iuh.fit.airsky.enums.CheckinStatus;
 import iuh.fit.airsky.model.CheckIn;
 import iuh.fit.airsky.repository.BookingAncillaryServiceRepository;
+import iuh.fit.airsky.model.TravelClass;
 import iuh.fit.airsky.repository.CheckinRepository;
 import iuh.fit.airsky.service.BoardingPassService;
 import iuh.fit.airsky.service.CloudinaryService;

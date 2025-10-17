@@ -29,9 +29,9 @@ public interface PaymentService {
     Optional<PaymentResponse> findById(Long id);
 
     /**
-     * Get all payments with pagination
+     * Get all payments with pagination and filters
      */
-    PageResponse<PaymentResponse> findAll(Pageable pageable);
+    PageResponse<PaymentResponse> findAllWithFilters(Pageable pageable, String search, String status, String paymentMethod, String startDate, String endDate);
 
     /**
      * Get all payments for a specific booking
