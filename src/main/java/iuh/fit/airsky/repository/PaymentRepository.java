@@ -29,5 +29,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpec
 
     Optional<Payment> findByTransactionIdAndBooking_BookingId(String transactionId, Long bookingId);
 
+    Optional<Payment> findByBooking_BookingCode(String bookingCode);
+
     Optional<Payment> findByTransactionId(String orderCode);
 }

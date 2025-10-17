@@ -145,6 +145,13 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
+    public Optional<PaymentResponse> findByBookingCode(String bookingCode) {
+        log.info("Finding payment for booking code: {}", bookingCode);
+        Optional<Payment> payment = paymentRepository.findByBooking_BookingCode(bookingCode);
+        return payment.map(paymentMapper::toResponseDTO);
+    }
+
+    @Override
     public void delete(Long id) {
         log.info("Deleting payment with ID: {}", id);
         if (!paymentRepository.existsById(id)) {

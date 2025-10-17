@@ -216,6 +216,37 @@ public class PaymentController {
         }
     }
 
+    @GetMapping("/status/{bookingCode}")
+    public ResponseEntity<ApiResponse<PaymentResponse>> getPaymentStatusByBookingCode(
+            @PathVariable String bookingCode) {
+
+        log.info("Fetching payment status for booking code: {}", bookingCode);
+
+        try {
+            return paymentService.findByBookingCode(bookingCode)
+                    .map(payment -> ApiResponseUtil.buildResponse(
+                            true,
+                            "Payment status retrieved successfully",
+                            payment,
+                            "/api/v1/payments/status/" + bookingCode
+                    ))
+                    .orElseGet(() -> ApiResponseUtil.buildErrorResponse(
+                            HttpStatus.NOT_FOUND,
+                            "No payment found for this booking code",
+                            "PAYMENT_NOT_FOUND",
+                            "/api/v1/payments/status/" + bookingCode
+                    ));
+        } catch (Exception ex) {
+            log.error("Error fetching payment status: {}", ex.getMessage());
+            return ApiResponseUtil.buildErrorResponse(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to retrieve payment status",
+                    "INTERNAL_SERVER_ERROR",
+                    "/api/v1/payments/status/" + bookingCode
+            );
+        }
+    }
+
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<PaymentResponse>>> getAllPayments(
             @RequestParam(value = "page", defaultValue = "0") int page,

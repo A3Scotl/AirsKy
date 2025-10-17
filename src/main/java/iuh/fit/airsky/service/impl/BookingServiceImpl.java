@@ -30,6 +30,7 @@ import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.enums.SeatTypePrice;
 import iuh.fit.airsky.enums.SeatTypes;
 import iuh.fit.airsky.enums.CheckinStatus;
+import iuh.fit.airsky.enums.PassengerType;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.event.BookingCancelledEvent;
 import iuh.fit.airsky.mapper.BookingMapper;
@@ -275,10 +276,15 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private BigDecimal calculateFinalAmount(BookingRequest request, Booking savedBooking) {
-        // 1. Base amount from flight segments
-        BigDecimal baseAmount = savedBooking.getFlightSegments().stream()
-                .map(segment -> segment.getPrice().multiply(BigDecimal.valueOf(request.getPassengers().size())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // 1. Base amount from flight segments - tính theo từng loại hành khách
+        BigDecimal baseAmount = BigDecimal.ZERO;
+        for (FlightSegment segment : savedBooking.getFlightSegments()) {
+            BigDecimal segmentBasePrice = segment.getPrice();
+            for (PassengerSeatRequest passengerReq : request.getPassengers()) {
+                BigDecimal passengerPrice = calculatePassengerBasePrice(segmentBasePrice, passengerReq.getType());
+                baseAmount = baseAmount.add(passengerPrice);
+            }
+        }
 
         // 2. Baggage amount
         BigDecimal baggageAmount = calculateBaggageAmount(request);
@@ -305,6 +311,24 @@ public class BookingServiceImpl implements BookingService {
         }
 
         return finalAmount;
+    }
+
+    /**
+     * Tính giá vé cơ bản cho từng loại hành khách
+     * - ADULT: 100% giá cơ bản
+     * - CHILD: 75% giá cơ bản
+     * - INFANT: 10% giá cơ bản
+     */
+    private BigDecimal calculatePassengerBasePrice(BigDecimal basePrice, PassengerType passengerType) {
+        if (basePrice == null || passengerType == null) {
+            return BigDecimal.ZERO;
+        }
+
+        return switch (passengerType) {
+            case ADULT -> basePrice; // 100%
+            case CHILD -> basePrice.multiply(BigDecimal.valueOf(0.75)); // 75%
+            case INFANT -> basePrice.multiply(BigDecimal.valueOf(0.10)); // 10%
+        };
     }
 
     private BigDecimal calculateBaggageAmount(BookingRequest request) {
@@ -1828,21 +1852,72 @@ public class BookingServiceImpl implements BookingService {
 
     /**
      * Tính giá vé cho từng passenger dựa trên loại passenger
-     * Trong thực tế nên có bảng giá riêng cho từng loại passenger
+     * Sử dụng logic tính giá theo tỷ lệ phần trăm
      */
     private BigDecimal calculatePassengerTicketPrice(Passenger passenger, Booking booking) {
         if (booking.getTotalAmount() == null || booking.getPassengers().isEmpty()) {
             return BigDecimal.ZERO;
         }
 
-        // Tạm thời chia đều - trong thực tế nên có logic tính giá riêng:
-        // - ADULT: 100% giá cơ bản
-        // - CHILD: 75% giá cơ bản
-        // - INFANT: 10% giá cơ bản
-        return booking.getTotalAmount().divide(
-            BigDecimal.valueOf(booking.getPassengers().size()),
-            2, java.math.RoundingMode.HALF_UP
+        // Tính tổng giá cơ bản của tất cả segments
+        BigDecimal totalBasePrice = booking.getFlightSegments().stream()
+                .map(FlightSegment::getPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Tính giá cho hành khách này dựa trên loại
+        BigDecimal passengerBasePrice = calculatePassengerBasePrice(totalBasePrice, passenger.getType());
+
+        // Tính tỷ lệ phần trăm của hành khách này trong tổng booking
+        BigDecimal passengerRatio = passengerBasePrice.divide(
+            booking.getTotalAmount().subtract(calculateNonTicketAmounts(booking)),
+            4, java.math.RoundingMode.HALF_UP
         );
+
+        // Áp dụng tỷ lệ để tính giá vé thực tế
+        return booking.getTotalAmount().multiply(passengerRatio);
+    }
+
+    /**
+     * Tính các khoản phí không phải là giá vé (hành lý, ghế, dịch vụ)
+     */
+    private BigDecimal calculateNonTicketAmounts(Booking booking) {
+        BigDecimal nonTicketAmount = BigDecimal.ZERO;
+
+        // Baggage amount - lấy từ CheckIn entities
+        List<CheckIn> checkIns = checkinRepository.findByBookingIdWithBaggage(booking.getBookingId());
+        for (CheckIn checkIn : checkIns) {
+            if (checkIn.getBaggage() != null && checkIn.getBaggage().getPackagePrice() != null) {
+                nonTicketAmount = nonTicketAmount.add(checkIn.getBaggage().getPackagePrice());
+            }
+        }
+
+        // Seat type amount
+        if (booking.getPassengers() != null) {
+            for (Passenger passenger : booking.getPassengers()) {
+                for (PassengerSeatAssignment assignment : passenger.getSeatAssignments()) {
+                    Seat seat = assignment.getSeat();
+                    if (seat != null && seat.getType() != null) {
+                        try {
+                            SeatTypePrice seatTypePrice = SeatTypePrice.fromSeatType(seat.getType());
+                            nonTicketAmount = nonTicketAmount.add(seatTypePrice.getAdditionalPrice());
+                        } catch (Exception e) {
+                            // Ignore invalid seat types
+                        }
+                    }
+                }
+            }
+        }
+
+        // Ancillary services amount
+        List<BookingAncillaryService> bookingAncillaryServices =
+                bookingAncillaryServiceRepository.findByBookingId(booking.getBookingId());
+        for (BookingAncillaryService service : bookingAncillaryServices) {
+            if (service.getTotalPrice() != null) {
+                nonTicketAmount = nonTicketAmount.add(service.getTotalPrice());
+            }
+        }
+
+        return nonTicketAmount;
     }
 
     @Override

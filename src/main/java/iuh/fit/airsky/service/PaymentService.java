@@ -39,6 +39,11 @@ public interface PaymentService {
     List<PaymentResponse> findByBookingId(Long bookingId);
 
     /**
+     * Get payment status by booking code
+     */
+    Optional<PaymentResponse> findByBookingCode(String bookingCode);
+
+    /**
      * Delete a payment
      */
     void delete(Long id);
