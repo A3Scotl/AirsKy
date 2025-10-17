@@ -20,6 +20,7 @@ import iuh.fit.airsky.model.Booking;
 import iuh.fit.airsky.model.Passenger;
 import iuh.fit.airsky.model.PassengerSeatAssignment;
 import iuh.fit.airsky.model.Payment;
+import iuh.fit.airsky.model.Seat;
 import iuh.fit.airsky.repository.BookingRepository;
 import iuh.fit.airsky.repository.PaymentRepository;
 import iuh.fit.airsky.repository.PassengerSeatAssignmentRepository;
@@ -534,25 +535,39 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Transactional
     protected void updatePassengerSeats(Booking booking) {
+        log.info("Updating seat statuses to OCCUPIED for booking {} after successful payment", booking.getBookingId());
+
         // Cập nhật trạng thái ghế từ PENDING_PAYMENT thành OCCUPIED khi thanh toán thành công
         for (Passenger passenger : booking.getPassengers()) {
+            // Cập nhật ghế chính của passenger (nếu có)
             if (passenger.getSeat() != null && passenger.getSeat().getStatus() == SeatStatus.PENDING_PAYMENT) {
                 passenger.getSeat().setStatus(SeatStatus.OCCUPIED);
                 seatRepository.save(passenger.getSeat());
-                log.debug("Updated seat {} status to OCCUPIED for passenger {}",
+                log.debug("Updated passenger's main seat {} status to OCCUPIED for passenger {}",
                         passenger.getSeat().getSeatNumber(), passenger.getFirstName());
             }
 
-            // Also update PassengerSeatAssignment status to OCCUPIED
+            // Cập nhật tất cả ghế trong seat assignments
             for (PassengerSeatAssignment assignment : passenger.getSeatAssignments()) {
+                Seat seat = assignment.getSeat();
+                if (seat.getStatus() == SeatStatus.PENDING_PAYMENT) {
+                    seat.setStatus(SeatStatus.OCCUPIED);
+                    seatRepository.save(seat);
+                    log.debug("Updated seat {} status to OCCUPIED for passenger {} via assignment",
+                            seat.getSeatNumber(), passenger.getFirstName());
+                }
+
+                // Cũng cập nhật status trong assignment
                 if (assignment.getStatus() == SeatStatus.PENDING_PAYMENT) {
                     assignment.setStatus(SeatStatus.OCCUPIED);
                     passengerSeatAssignmentRepository.save(assignment);
                     log.debug("Updated seat assignment status to OCCUPIED for passenger {} seat {}",
-                            passenger.getFirstName(), assignment.getSeat().getSeatNumber());
+                            passenger.getFirstName(), seat.getSeatNumber());
                 }
             }
         }
+
+        log.info("Successfully updated all seat statuses to OCCUPIED for booking {}", booking.getBookingId());
     }
 
     @Override

@@ -580,20 +580,30 @@ public class BookingServiceImpl implements BookingService {
 
         // Update seat status to OCCUPIED when booking is completed
         for (Passenger passenger : booking.getPassengers()) {
+            // Cập nhật ghế chính của passenger (nếu có)
             if (passenger.getSeat() != null && passenger.getSeat().getStatus() == SeatStatus.PENDING_PAYMENT) {
                 passenger.getSeat().setStatus(SeatStatus.OCCUPIED);
                 seatRepository.save(passenger.getSeat());
-                log.debug("Updated seat {} status to OCCUPIED for completed booking {}",
+                log.debug("Updated passenger's main seat {} status to OCCUPIED for completed booking {}",
                         passenger.getSeat().getSeatNumber(), bookingId);
             }
 
-            // Also update PassengerSeatAssignment status to OCCUPIED
+            // Cập nhật tất cả ghế trong seat assignments
             for (PassengerSeatAssignment assignment : passenger.getSeatAssignments()) {
+                Seat seat = assignment.getSeat();
+                if (seat.getStatus() == SeatStatus.PENDING_PAYMENT) {
+                    seat.setStatus(SeatStatus.OCCUPIED);
+                    seatRepository.save(seat);
+                    log.debug("Updated seat {} status to OCCUPIED for passenger {} in completed booking {}",
+                            seat.getSeatNumber(), passenger.getFirstName(), bookingId);
+                }
+
+                // Cũng cập nhật status trong assignment
                 if (assignment.getStatus() == SeatStatus.PENDING_PAYMENT) {
                     assignment.setStatus(SeatStatus.OCCUPIED);
                     passengerSeatAssignmentRepository.save(assignment);
-                    log.debug("Updated seat assignment status to OCCUPIED for passenger {} seat {}",
-                            passenger.getFirstName(), assignment.getSeat().getSeatNumber());
+                    log.debug("Updated seat assignment status to OCCUPIED for passenger {} seat {} in completed booking {}",
+                            passenger.getFirstName(), seat.getSeatNumber(), bookingId);
                 }
             }
         }
@@ -1005,7 +1015,9 @@ public class BookingServiceImpl implements BookingService {
             log.info("Created booking ancillary service: {} for booking: {}",
                     ancillaryService.getServiceName(), savedBooking.getBookingId());
         }
-    }    private void populateAncillaryServicesInformation(BookingResponse response, Booking booking) {
+    }
+
+    private void populateAncillaryServicesInformation(BookingResponse response, Booking booking) {
         List<BookingAncillaryService> bookingAncillaryServices = 
                 bookingAncillaryServiceRepository.findByBookingId(booking.getBookingId());
         
@@ -1035,8 +1047,87 @@ public class BookingServiceImpl implements BookingService {
         response.setAncillaryServices(ancillaryServiceResponses);
         response.setAncillaryServicesAmount(ancillaryServicesAmount);
         
-        log.info("Populated {} ancillary services with total amount: {}", 
+        log.info("Populated {} ancillary services with total amount: {}",
                 ancillaryServiceResponses.size(), ancillaryServicesAmount);
+    }
+
+    /**
+     * Populate baggage information chỉ cho một hành khách cụ thể
+     */
+    private void populateBaggageInformationForPassenger(BookingResponse response, Booking booking, Passenger passenger) {
+        List<BaggageResponse> baggageList = new ArrayList<>();
+
+        // Check if checkIns are loaded, if not fetch them for baggage population
+        List<CheckIn> checkIns = booking.getCheckIns();
+        if (checkIns == null || !org.hibernate.Hibernate.isInitialized(checkIns)) {
+            log.debug("CheckIns not loaded for booking {}, fetching for baggage population", booking.getBookingId());
+            // Fetch checkIns with baggage information
+            checkIns = checkinRepository.findByBookingIdWithBaggage(booking.getBookingId());
+        }
+
+        if (checkIns != null && !checkIns.isEmpty()) {
+            // Chỉ lấy baggage của hành khách cụ thể
+            Optional<CheckIn> passengerCheckIn = checkIns.stream()
+                .filter(checkIn -> checkIn.getPassenger().getPassengerId().equals(passenger.getPassengerId()))
+                .findFirst();
+
+            if (passengerCheckIn.isPresent() && passengerCheckIn.get().getBaggage() != null) {
+                Baggage baggage = passengerCheckIn.get().getBaggage();
+                BaggageResponse baggageResponse = new BaggageResponse();
+                baggageResponse.setBaggageId(baggage.getBaggageId());
+                baggageResponse.setCheckinId(passengerCheckIn.get().getCheckInId());
+                baggageResponse.setType(baggage.getType());
+                baggageResponse.setPurchasedPackage(baggage.getPurchasedPackage());
+                baggageResponse.setPackagePrice(baggage.getPackagePrice());
+                baggageResponse.setActualWeight(baggage.getActualWeight());
+                baggageResponse.setExcessWeight(baggage.getExcessWeight());
+                baggageResponse.setExcessFee(baggage.getExcessFee());
+                baggageList.add(baggageResponse);
+
+                log.info("Added baggage {} for passenger {}", baggage.getBaggageId(), passenger.getFirstName());
+            }
+        }
+
+        response.setBaggage(baggageList);
+    }
+
+    /**
+     * Populate ancillary services information chỉ cho một hành khách cụ thể
+     */
+    private void populateAncillaryServicesInformationForPassenger(BookingResponse response, Booking booking, Passenger passenger) {
+        List<BookingAncillaryService> bookingAncillaryServices =
+                bookingAncillaryServiceRepository.findByBookingId(booking.getBookingId());
+
+        // Chỉ lấy ancillary services của hành khách cụ thể hoặc áp dụng cho toàn booking
+        List<BookingAncillaryServiceResponse> ancillaryServiceResponses = bookingAncillaryServices.stream()
+                .filter(bas -> bas.getPassenger() == null || bas.getPassenger().getPassengerId().equals(passenger.getPassengerId()))
+                .map(bas -> {
+                    BookingAncillaryServiceResponse serviceResponse = new BookingAncillaryServiceResponse();
+                    serviceResponse.setBookingServiceId(bas.getBookingServiceId());
+                    serviceResponse.setServiceId(bas.getAncillaryService().getServiceId());
+                    serviceResponse.setServiceName(bas.getAncillaryService().getServiceName());
+                    serviceResponse.setServiceType(bas.getAncillaryService().getServiceType().name());
+                    serviceResponse.setServiceTypeDisplayName(bas.getAncillaryService().getServiceType().getVietnameseName());
+                    serviceResponse.setPassengerId(bas.getPassenger() != null ? bas.getPassenger().getPassengerId() : null);
+                    serviceResponse.setPassengerName(bas.getPassenger() != null ?
+                            bas.getPassenger().getFirstName() + " " + bas.getPassenger().getLastName() : null);
+                    serviceResponse.setQuantity(bas.getQuantity());
+                    serviceResponse.setUnitPrice(bas.getUnitPrice());
+                    serviceResponse.setTotalPrice(bas.getTotalPrice());
+                    serviceResponse.setNotes(bas.getNotes());
+                    return serviceResponse;
+                })
+                .collect(java.util.stream.Collectors.toList());
+
+        BigDecimal ancillaryServicesAmount = ancillaryServiceResponses.stream()
+                .map(BookingAncillaryServiceResponse::getTotalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        response.setAncillaryServices(ancillaryServiceResponses);
+        response.setAncillaryServicesAmount(ancillaryServicesAmount);
+
+        log.info("Populated {} ancillary services for passenger {} with total amount: {}",
+                ancillaryServiceResponses.size(), passenger.getFirstName(), ancillaryServicesAmount);
     }
 
     /**
@@ -1235,28 +1326,54 @@ public class BookingServiceImpl implements BookingService {
             Booking booking = bookingOpt.get();
             try {
                 BookingResponse response = bookingMapper.toResponseDTO(booking);
-                populateDealInformation(response, booking);
-                try {
-                    populateBaggageInformation(response, booking);
-                } catch (Exception e) {
-                    log.warn("Could not populate baggage information for guest booking lookup: {}", e.getMessage());
-                    // Baggage information is optional for guest booking lookup
+
+                // Chỉ populate thông tin của hành khách có tên khớp
+                Optional<Passenger> matchingPassenger = booking.getPassengers().stream()
+                    .filter(p -> (p.getFirstName() + " " + p.getLastName()).equalsIgnoreCase(fullName))
+                    .findFirst();
+
+                if (matchingPassenger.isPresent()) {
+                    // Chỉ giữ lại hành khách khớp tên trong response
+                    Passenger passenger = matchingPassenger.get();
+                    List<PassengerSeatResponse> filteredPassengers = new ArrayList<>();
+                    PassengerSeatResponse psr = new PassengerSeatResponse();
+                    psr.setPassengerId(passenger.getPassengerId());
+                    psr.setFirstName(passenger.getFirstName());
+                    psr.setLastName(passenger.getLastName());
+                    psr.setType(passenger.getType());
+                    psr.setPassportNumber(passenger.getPassportNumber());
+                    psr.setEmail(passenger.getEmail());
+                    psr.setPhone(passenger.getPhone());
+                    psr.setGender(passenger.getGender());
+                    psr.setDateOfBirth(passenger.getDateOfBirth());
+                    filteredPassengers.add(psr);
+                    response.setPassengers(filteredPassengers);
+
+                    // Populate thông tin khác chỉ cho hành khách này
+                    populateDealInformation(response, booking);
+                    try {
+                        populateBaggageInformationForPassenger(response, booking, passenger);
+                    } catch (Exception e) {
+                        log.warn("Could not populate baggage information for guest booking lookup: {}", e.getMessage());
+                        // Baggage information is optional for guest booking lookup
+                    }
+                    populateAncillaryServicesInformationForPassenger(response, booking, passenger);
+                    populateSeatTypeInformation(response, booking);
+                    response.setCheckinEligiblePassengers(getPassengersWithCheckinStatus(bookingCode, fullName));
+
+                    // Populate available seats for the travel class
+                    if (booking.getTravelClass() != null && booking.getFlight() != null) {
+                        List<Seat> availableSeats = seatRepository.findAvailableSeatsByFlightIdAndTravelClassId(
+                            booking.getFlight().getFlightId(),
+                            booking.getTravelClass().getId()
+                        );
+                        List<String> availableSeatNumbers = availableSeats.stream()
+                            .map(Seat::getSeatNumber)
+                            .collect(java.util.stream.Collectors.toList());
+                        response.setAvailableSeats(availableSeatNumbers);
+                    }
                 }
-                populateAncillaryServicesInformation(response, booking);
-                populateSeatTypeInformation(response, booking);
-                response.setCheckinEligiblePassengers(getPassengersWithCheckinStatus(bookingCode, fullName));
-                
-                // Populate available seats for the travel class
-                if (booking.getTravelClass() != null && booking.getFlight() != null) {
-                    List<Seat> availableSeats = seatRepository.findAvailableSeatsByFlightIdAndTravelClassId(
-                        booking.getFlight().getFlightId(), 
-                        booking.getTravelClass().getId()
-                    );
-                    List<String> availableSeatNumbers = availableSeats.stream()
-                        .map(Seat::getSeatNumber)
-                        .collect(java.util.stream.Collectors.toList());
-                    response.setAvailableSeats(availableSeatNumbers);
-                }
+
                 return Optional.of(response);
             } catch (Exception e) {
                 log.warn("Could not fully populate booking response for lookup {}: {}", bookingCode, e.getMessage());
@@ -1267,24 +1384,32 @@ public class BookingServiceImpl implements BookingService {
                 response.setStatus(booking.getStatus());
                 response.setTotalAmount(booking.getTotalAmount());
                 response.setBookingDate(booking.getBookingDate());
-                if (booking.getPassengers() != null && !booking.getPassengers().isEmpty()) {
-                    response.setPassengers(booking.getPassengers().stream()
-                            .map((Passenger p) -> {
-                                PassengerSeatResponse psr = new PassengerSeatResponse();
-                                psr.setPassengerId(p.getPassengerId());
-                                psr.setFirstName(p.getFirstName());
-                                psr.setLastName(p.getLastName());
-                                psr.setType(p.getType());
-                                return psr;
-                            })
-                            .collect(java.util.stream.Collectors.toList()));
+
+                // Chỉ trả về thông tin hành khách khớp tên
+                Optional<Passenger> matchingPassenger = booking.getPassengers().stream()
+                    .filter(p -> (p.getFirstName() + " " + p.getLastName()).equalsIgnoreCase(fullName))
+                    .findFirst();
+
+                if (matchingPassenger.isPresent()) {
+                    Passenger passenger = matchingPassenger.get();
+                    List<PassengerSeatResponse> filteredPassengers = new ArrayList<>();
+                    PassengerSeatResponse psr = new PassengerSeatResponse();
+                    psr.setPassengerId(passenger.getPassengerId());
+                    psr.setFirstName(passenger.getFirstName());
+                    psr.setLastName(passenger.getLastName());
+                    psr.setType(passenger.getType());
+                    filteredPassengers.add(psr);
+                    response.setPassengers(filteredPassengers);
+                    response.setCheckinEligiblePassengers(getPassengersWithCheckinStatus(bookingCode, fullName));
                 }
+
                 return Optional.of(response);
             }
         }
 
         return Optional.empty();
     }
+   
 
     @Override
     public BookingResponse processPaymentForGuestBooking(Long bookingId, PaymentRequest paymentRequest) {
@@ -1322,18 +1447,30 @@ public class BookingServiceImpl implements BookingService {
 
             // Update seat status to OCCUPIED
             for (Passenger passenger : booking.getPassengers()) {
+                // Cập nhật ghế chính của passenger (nếu có)
                 if (passenger.getSeat() != null) {
                     passenger.getSeat().setStatus(SeatStatus.OCCUPIED);
                     seatRepository.save(passenger.getSeat());
+                    log.debug("Updated passenger's main seat {} status to OCCUPIED for passenger {}",
+                            passenger.getSeat().getSeatNumber(), passenger.getFirstName());
                 }
 
-                // Also update PassengerSeatAssignment status to OCCUPIED
+                // Cập nhật tất cả ghế trong seat assignments
                 for (PassengerSeatAssignment assignment : passenger.getSeatAssignments()) {
+                    Seat seat = assignment.getSeat();
+                    if (seat.getStatus() == SeatStatus.PENDING_PAYMENT) {
+                        seat.setStatus(SeatStatus.OCCUPIED);
+                        seatRepository.save(seat);
+                        log.debug("Updated seat {} status to OCCUPIED for passenger {} via assignment",
+                                seat.getSeatNumber(), passenger.getFirstName());
+                    }
+
+                    // Cũng cập nhật status trong assignment
                     if (assignment.getStatus() == SeatStatus.PENDING_PAYMENT) {
                         assignment.setStatus(SeatStatus.OCCUPIED);
                         passengerSeatAssignmentRepository.save(assignment);
                         log.debug("Updated seat assignment status to OCCUPIED for passenger {} seat {}",
-                                passenger.getFirstName(), assignment.getSeat().getSeatNumber());
+                                passenger.getFirstName(), seat.getSeatNumber());
                     }
                 }
             }
@@ -1620,7 +1757,7 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     public List<CheckinEligiblePassengerResponse> getPassengersWithCheckinStatus(String bookingCode, String fullName) {
-        log.info("Getting all passengers with check-in status for booking: {} and passenger: {}", bookingCode, fullName);
+        log.info("Getting passengers with check-in status for booking: {} and passenger: {}", bookingCode, fullName);
 
         // First verify booking exists and user has access
         Optional<Booking> bookingOpt = bookingRepository.findByBookingCodeAndPassengerFullName(bookingCode, fullName);
@@ -1636,6 +1773,11 @@ public class BookingServiceImpl implements BookingService {
 
         // Get all passengers and their check-in status
         return booking.getPassengers().stream()
+                .filter(passenger -> {
+                    // Chỉ trả về hành khách có tên khớp với fullName truyền vào
+                    String passengerFullName = passenger.getFirstName() + " " + passenger.getLastName();
+                    return passengerFullName.equalsIgnoreCase(fullName);
+                })
                 .map(passenger -> {
                     CheckinEligiblePassengerResponse response = new CheckinEligiblePassengerResponse();
                     response.setPassengerId(passenger.getPassengerId());
@@ -1653,7 +1795,7 @@ public class BookingServiceImpl implements BookingService {
                     boolean alreadyCheckedIn = checkinRepository.existsByPassengerAndCompleted(passenger);
                     response.setCheckedIn(alreadyCheckedIn);
 
-                    // Get boarding pass URL from CheckIn entity
+                    // Get boarding pass URL from CheckIn entity - chỉ của hành khách này
                     List<CheckIn> checkIns = checkinRepository.findByBookingIdWithBaggage(booking.getBookingId());
                     Optional<CheckIn> passengerCheckIn = checkIns.stream()
                             .filter(ci -> ci.getPassenger().getPassengerId().equals(passenger.getPassengerId()))
