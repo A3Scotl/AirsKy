@@ -23,5 +23,10 @@ public interface BookingAncillaryServiceRepository extends JpaRepository<Booking
     List<BookingAncillaryService> findByBookingIdAndPassengerId(@Param("bookingId") Long bookingId, 
                                                                @Param("passengerId") Long passengerId);
     
+    @Query("SELECT bas FROM BookingAncillaryService bas " +
+           "JOIN FETCH bas.ancillaryService " +
+           "WHERE bas.booking.bookingId = :bookingId AND bas.passenger IS NULL")
+    List<BookingAncillaryService> findByBookingIdAndPassengerIdIsNull(@Param("bookingId") Long bookingId);
+    
     void deleteByBookingBookingId(Long bookingId);
 }

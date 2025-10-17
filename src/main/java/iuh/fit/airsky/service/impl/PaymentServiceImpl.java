@@ -158,26 +158,29 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private Payment getOrCreatePayment(Booking booking, PaymentMethod paymentMethod) {
-        log.info("Looking for existing payment for booking {} with current total: {}", booking.getBookingId(), booking.getTotalAmount());
+        log.info("Looking for existing payments for booking {} with current total: {}", booking.getBookingId(), booking.getTotalAmount());
 
-        Payment existingPayment = paymentRepository.findByBooking_BookingId(booking.getBookingId())
-                .orElse(null);
+        // Tìm tất cả payments của booking, sắp xếp theo ngày giảm dần
+        List<Payment> existingPayments = paymentRepository.findByBooking_BookingIdOrderByPaymentDateDesc(booking.getBookingId());
 
-        if (existingPayment != null) {
-            log.info("Found existing payment {} with status {}, amount: {}, booking total: {}",
-                existingPayment.getPaymentId(), existingPayment.getStatus(),
-                existingPayment.getAmount(), booking.getTotalAmount());
+        if (!existingPayments.isEmpty()) {
+            // Tìm payment COMPLETED gần nhất
+            Payment latestCompletedPayment = existingPayments.stream()
+                    .filter(p -> p.getStatus() == PaymentStatus.COMPLETED)
+                    .findFirst()
+                    .orElse(null);
 
-            // Đảm bảo booking được load đầy đủ
-            if (existingPayment.getBooking() == null || existingPayment.getBooking().getTotalAmount() == null) {
-                existingPayment.setBooking(booking);
-                log.info("Set booking reference for payment {}", existingPayment.getPaymentId());
+            if (latestCompletedPayment != null) {
+                log.info("Found latest completed payment {} with amount: {}", latestCompletedPayment.getPaymentId(), latestCompletedPayment.getAmount());
+                return handleExistingPayment(latestCompletedPayment, paymentMethod);
             } else {
-                log.info("Payment {} already has booking reference with total: {}", existingPayment.getPaymentId(), existingPayment.getBooking().getTotalAmount());
+                // Có payments nhưng chưa có COMPLETED, lấy payment gần nhất
+                Payment latestPayment = existingPayments.get(0);
+                log.info("Found latest payment {} with status {}, amount: {}", latestPayment.getPaymentId(), latestPayment.getStatus(), latestPayment.getAmount());
+                return handleExistingPayment(latestPayment, paymentMethod);
             }
-            return handleExistingPayment(existingPayment, paymentMethod);
         } else {
-            log.info("No existing payment found for booking {}, creating new payment", booking.getBookingId());
+            log.info("No existing payments found for booking {}, creating new payment", booking.getBookingId());
             return createNewPayment(booking, paymentMethod);
         }
     }
@@ -189,23 +192,25 @@ public class PaymentServiceImpl implements PaymentService {
                 BigDecimal currentBookingTotal = existingPayment.getBooking().getTotalAmount();
                 BigDecimal existingPaymentAmount = existingPayment.getAmount();
 
-                log.info("Checking payment {}: booking total={}, payment amount={}, comparison={}",
-                    existingPayment.getPaymentId(), currentBookingTotal, existingPaymentAmount,
-                    currentBookingTotal.compareTo(existingPaymentAmount));
-
                 if (currentBookingTotal.compareTo(existingPaymentAmount) > 0) {
-                    // Có additional charges - update payment cũ
+                    // Có additional charges - update payment cũ và clear PayPal fields để tránh conflict
                     log.info("Updating completed payment {} for additional charges. Old amount: {}, New amount: {}",
                         existingPayment.getPaymentId(), existingPaymentAmount, currentBookingTotal);
 
                     existingPayment.setAmount(currentBookingTotal);
                     existingPayment.setStatus(PaymentStatus.PENDING);
                     existingPayment.setPaymentMethod(newPaymentMethod);
-                    existingPayment.setPaymentDate(LocalDateTime.now()); // Reset payment date
+                    existingPayment.setPaymentDate(LocalDateTime.now());
+
+                    // Clear PayPal fields để tạo payment mới không conflict
+                    existingPayment.setTransactionId(null);
+                    existingPayment.setPayerId(null);
+                    existingPayment.setPaypalApprovalUrl(null);
+
                     return paymentRepository.save(existingPayment);
                 } else {
-                    log.warn("Payment {} is completed and no additional charges found. Booking total: {}, Payment amount: {}",
-                        existingPayment.getPaymentId(), currentBookingTotal, existingPaymentAmount);
+                    log.warn("Payment {} is completed and no additional charges found. Payment amount: {}, Booking total: {}",
+                        existingPayment.getPaymentId(), existingPaymentAmount, currentBookingTotal);
                     throw new PaymentProcessingException("Payment for this booking is already completed");
                 }
             case PENDING:

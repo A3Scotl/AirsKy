@@ -225,8 +225,12 @@ public class FlightServiceImpl implements FlightService {
 
         // Dynamic pricing: increase price if within 24h of departure
         // Đã set basePrice ở trên, chỉ tăng giá nếu gần giờ bay
+        // WARNING: This will increase basePrice by 20% if departure is within 24 hours!
+        // Comment out the next 3 lines if you don't want dynamic pricing
         if (Duration.between(LocalDateTime.now(), request.getDepartureTime()).toHours() <= 24) {
             BigDecimal increasedPrice = flight.getBasePrice().multiply(BigDecimal.valueOf(1.2)); // 20% increase
+            log.warn("Dynamic pricing applied: basePrice increased from {} to {} (departure within 24h)",
+                    flight.getBasePrice(), increasedPrice);
             flight.setBasePrice(increasedPrice);
         }
 

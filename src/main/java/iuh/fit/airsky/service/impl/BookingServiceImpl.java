@@ -536,8 +536,7 @@ public class BookingServiceImpl implements BookingService {
             // Kiểm tra payment timeout (45 phút tổng thời gian)
             else if (booking.getPaymentTimeout() != null && now.isAfter(booking.getPaymentTimeout())) {
                 if (booking.getPayment() != null) {
-                    PaymentStatus paymentStatus = booking.getPayment().getStatus();
-                    if (paymentStatus == PaymentStatus.PENDING || paymentStatus == PaymentStatus.FAILED) {
+                    if (booking.getPayment().getStatus() == PaymentStatus.PENDING || booking.getPayment().getStatus() == PaymentStatus.FAILED) {
                         shouldCancel = true;
                         cancelReason = "Payment timeout expired (45 minutes total)";
                     }
@@ -1941,9 +1940,8 @@ public class BookingServiceImpl implements BookingService {
             throw new IllegalStateException("Booking must be confirmed before check-in. Current status: " + booking.getStatus());
         }
 
-        // Check if booking is paid (required for check-in)
-        boolean isPaid = booking.getPayment() != null &&
-                        booking.getPayment().getStatus() == PaymentStatus.COMPLETED;
+        // Check if booking is paid (required for check-in) - kiểm tra có ít nhất 1 payment COMPLETED
+        boolean isPaid = booking.getPayment() != null && booking.getPayment().getStatus() == PaymentStatus.COMPLETED;
         if (!isPaid) {
             throw new IllegalStateException("Booking must be paid before check-in");
         }
@@ -2017,97 +2015,30 @@ public class BookingServiceImpl implements BookingService {
 
         response.setTotalCharge(totalCharge);
 
-        // Check if payment is required - only when totalCharge > 0
-        if (totalCharge.compareTo(BigDecimal.ZERO) > 0) {
-            // Payment required for additional charges
-            log.info("Payment required for booking {}: totalCharge={}", booking.getBookingId(), totalCharge);
+        // At checkin stage, payment should already be completed via update-total + payment APIs
+        // Checkin only validates payment and creates checkin record, doesn't calculate additional charges
+        if (booking.getPayment() != null) {
+            Payment existingPayment = booking.getPayment();
+            if (existingPayment.getStatus() == PaymentStatus.COMPLETED &&
+                existingPayment.getAmount().compareTo(booking.getTotalAmount()) >= 0) {
+                // Payment is sufficient - proceed with checkin
+                log.info("Payment {} validated for checkin. Amount: {}, Booking total: {}",
+                        existingPayment.getPaymentId(), existingPayment.getAmount(), booking.getTotalAmount());
 
-            // Update existing payment amount instead of creating new payment
-            if (booking.getPayment() != null) {
-                Payment existingPayment = booking.getPayment();
-
-                // Check if payment is already completed and amount matches booking total
-                BigDecimal currentBookingTotal = booking.getTotalAmount().add(totalCharge);
-                if (existingPayment.getStatus() == PaymentStatus.COMPLETED &&
-                    existingPayment.getAmount().compareTo(currentBookingTotal) >= 0) {
-                    // Payment already covers the additional charges
-                    log.info("Payment {} already completed and covers additional charges. Current amount: {}, Required: {}",
-                            existingPayment.getPaymentId(), existingPayment.getAmount(), currentBookingTotal);
-
-                    // Just update booking total, don't change payment status
-                    booking.setTotalAmount(currentBookingTotal);
-                    bookingRepository.save(booking);
-
-                    response.setUpdatedTotalAmount(currentBookingTotal);
-                    response.setStatus("SUCCESS");
-                    response.setMessage("Check-in processed successfully. Additional charges already paid.");
-                    response.setPaymentRequired(false);
-                } else {
-                    // Need additional payment
-                    BigDecimal oldAmount = existingPayment.getAmount();
-                    BigDecimal newAmount = currentBookingTotal;
-
-                    existingPayment.setAmount(newAmount);
-                    existingPayment.setStatus(PaymentStatus.PENDING); // Reset to pending for additional payment
-                    paymentRepository.save(existingPayment);
-
-                    log.info("Updated existing payment {} for booking {}: {} -> {} (status: {} -> PENDING)",
-                            existingPayment.getPaymentId(), booking.getBookingId(), oldAmount, newAmount, existingPayment.getStatus());
-
-                    // Update booking total
-                    booking.setTotalAmount(currentBookingTotal);
-                    bookingRepository.save(booking);
-
-                    response.setUpdatedTotalAmount(currentBookingTotal);
-                    response.setStatus("PAYMENT_PENDING");
-                    response.setMessage("Check-in processed. Payment required for additional charges.");
-                    response.setPaymentRequired(true);
-                }
+                response.setStatus("SUCCESS");
+                response.setMessage("Check-in processed successfully");
+                response.setPaymentRequired(false);
             } else {
-                // Fallback: create new payment if none exists (should not happen in normal flow)
-                PaymentMethod paymentMethod = request.getPaymentMethod() != null ?
-                        request.getPaymentMethod() : PaymentMethod.BANK_TRANSFER;
-
-                Payment newPayment = new Payment();
-                newPayment.setBooking(booking);
-                newPayment.setAmount(booking.getTotalAmount().add(totalCharge));
-                newPayment.setPaymentMethod(paymentMethod);
-                newPayment.setStatus(PaymentStatus.PENDING);
-                newPayment.setPaymentDate(LocalDateTime.now());
-                paymentRepository.save(newPayment);
-
-                // Update booking total
-                BigDecimal newTotal = booking.getTotalAmount().add(totalCharge);
-                booking.setTotalAmount(newTotal);
-                bookingRepository.save(booking);
-
-                log.warn("Created new payment {} for booking {} with additional amount {} (no existing payment found)",
-                        newPayment.getPaymentId(), booking.getBookingId(), totalCharge);
-
-                response.setUpdatedTotalAmount(newTotal);
-                response.setStatus("PAYMENT_PENDING");
-                response.setMessage("Check-in processed. Payment required for additional charges.");
-                response.setPaymentRequired(true);
+                // Payment insufficient or not completed
+                log.error("Payment validation failed for checkin. Payment status: {}, Amount: {}, Required: {}",
+                        existingPayment.getStatus(), existingPayment.getAmount(), booking.getTotalAmount());
+                throw new IllegalStateException("Payment not completed or insufficient. Please complete payment before check-in.");
             }
-
         } else {
-            // No payment required - update booking total if there were changes
-            if (totalCharge.compareTo(BigDecimal.ZERO) != 0) {
-                BigDecimal newTotal = booking.getTotalAmount().add(totalCharge);
-                booking.setTotalAmount(newTotal);
-                bookingRepository.save(booking);
-                response.setUpdatedTotalAmount(newTotal);
-            } else {
-                response.setUpdatedTotalAmount(booking.getTotalAmount());
-            }
-
-            response.setStatus("SUCCESS");
-            response.setMessage("Check-in processed successfully");
-            response.setPaymentRequired(false);
+            throw new IllegalStateException("No payment found for booking. Payment must be completed before check-in.");
         }
 
-        // Update check-in status
-        boolean paymentRequired = totalCharge.compareTo(BigDecimal.ZERO) > 0;
+        // Update check-in status - since payment is validated, checkin should be COMPLETED
         Optional<CheckIn> existingCheckIn = checkinRepository.findByBookingIdWithBaggage(booking.getBookingId()).stream()
                 .filter(ci -> ci.getPassenger().equals(passenger))
                 .findFirst();
@@ -2115,17 +2046,31 @@ public class BookingServiceImpl implements BookingService {
         CheckIn checkIn;
         if (existingCheckIn.isPresent()) {
             checkIn = existingCheckIn.get();
-            checkIn.setStatus(paymentRequired ? CheckinStatus.PAYMENT_PENDING : CheckinStatus.COMPLETED);
+            checkIn.setStatus(CheckinStatus.COMPLETED); // Always COMPLETED since payment is validated
             checkIn.setCheckedAt(LocalDateTime.now());
+            // Update seat number from passenger's current seat
+            if (passenger.getSeat() != null) {
+                checkIn.setSeatNumber(passenger.getSeat().getSeatNumber());
+            }
+            // Set ticket price if not already set
+            if (checkIn.getTicketPrice() == null) {
+                checkIn.setTicketPrice(booking.getTotalAmount());
+            }
             checkinRepository.save(checkIn);
         } else {
             // Create new check-in record
             checkIn = new CheckIn();
             checkIn.setBooking(booking);
             checkIn.setPassenger(passenger);
-            checkIn.setStatus(paymentRequired ? CheckinStatus.PAYMENT_PENDING : CheckinStatus.COMPLETED);
+            checkIn.setStatus(CheckinStatus.COMPLETED); // Always COMPLETED since payment is validated
             checkIn.setCheckedAt(LocalDateTime.now());
             checkIn.setActive(true);
+            // Set seat number from passenger's seat
+            if (passenger.getSeat() != null) {
+                checkIn.setSeatNumber(passenger.getSeat().getSeatNumber());
+            }
+            // Set ticket price from booking total amount (assuming single passenger booking)
+            checkIn.setTicketPrice(booking.getTotalAmount());
             checkinRepository.save(checkIn);
         }
 
@@ -2137,6 +2082,7 @@ public class BookingServiceImpl implements BookingService {
         response.setActive(checkIn.isActive());
         response.setDeleted(checkIn.isDeleted());
         response.setDeletedAt(checkIn.getDeletedAt());
+        response.setTicketPrice(checkIn.getTicketPrice());
 
         // Set boarding pass URL if check-in is completed
         if (checkIn.getStatus() == CheckinStatus.COMPLETED) {
@@ -2153,9 +2099,10 @@ public class BookingServiceImpl implements BookingService {
                 // Continue without boarding pass - checkin is still successful
             }
         }
-
+    
         return response;
     }
+
 
     private BigDecimal handleSeatChange(Booking booking, Passenger passenger, Long newSeatId) {
         // Find the new seat by ID (chính xác hơn)
@@ -2439,6 +2386,16 @@ public class BookingServiceImpl implements BookingService {
             throw new IllegalArgumentException("Additional amount must be positive");
         }
 
+        // Check if there's already pending additional charges
+        if (booking.getPayment() != null && booking.getPayment().getStatus() == PaymentStatus.COMPLETED) {
+            BigDecimal paymentAmount = booking.getPayment().getAmount();
+            if (booking.getTotalAmount().compareTo(paymentAmount) > 0) {
+                log.warn("Booking {} already has pending additional charges. Current total: {}, Payment amount: {}. Cannot add more charges until payment is completed.",
+                        bookingId, booking.getTotalAmount(), paymentAmount);
+                throw new IllegalStateException("Cannot add additional charges while payment is pending. Please complete the current payment first.");
+            }
+        }
+
         // Store old total for response
         BigDecimal oldTotal = booking.getTotalAmount();
 
@@ -2447,7 +2404,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setTotalAmount(newTotal);
         booking = bookingRepository.save(booking);
 
-        log.info("Saved booking {} with new total: {}", bookingId, booking.getTotalAmount());
+        log.info("Saved booking {} with new total: {} (added {})", bookingId, booking.getTotalAmount(), request.getAdditionalAmount());
 
         // Note: Do NOT update existing payment amount here. Let the payment service handle it
         // when the user attempts to pay for the additional charges.
@@ -2468,7 +2425,7 @@ public class BookingServiceImpl implements BookingService {
                 .additionalAmount(request.getAdditionalAmount())
                 .newTotalAmount(newTotal)
                 .reason(request.getReason())
-                .message(String.format("Booking total updated successfully. New total: %s VND", newTotal))
+                .message(String.format("Booking total updated successfully. New total: %s VND. Please proceed with payment.", newTotal))
                 .build();
     }
 }
