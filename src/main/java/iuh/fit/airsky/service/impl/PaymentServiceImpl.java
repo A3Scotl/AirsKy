@@ -495,6 +495,18 @@ public class PaymentServiceImpl implements PaymentService {
 
         if ("PAID".equalsIgnoreCase(status) || "SUCCESS".equalsIgnoreCase(status) || "IN".equalsIgnoreCase(status)) {
             processSuccessfulPayment(payment);
+            // ✅ GỬI NOTIFICATION SEPAY THÀNH CÔNG
+            Booking booking = payment.getBooking();
+            if (booking != null && booking.getUserId() != null) {
+                String message = String.format("Thanh toán SePay %.0f VND cho đặt vé %s đã hoàn tất thành công",
+                        payment.getAmount(), booking.getBookingCode());
+                notificationService.sendNotificationToUserWithRelatedId(
+                    booking.getUserId().getId(),
+                    "PAYMENT_SUCCESS",
+                    message,
+                    payment.getPaymentId()
+                );
+            }
         } else if ("FAILED".equalsIgnoreCase(status) || "CANCELLED".equalsIgnoreCase(status) || "OUT".equalsIgnoreCase(status)) {
             payment.setStatus(PaymentStatus.FAILED);
             paymentRepository.save(payment);
@@ -511,7 +523,19 @@ public class PaymentServiceImpl implements PaymentService {
         paymentRepository.save(payment);
 
         Booking booking = payment.getBooking();
-        
+
+        // ✅ GỬI NOTIFICATION THANH TOÁN THÀNH CÔNG
+        if (booking.getUserId() != null) {
+            String message = String.format("Thanh toán %.0f VND cho đặt vé %s đã hoàn tất thành công",
+                    payment.getAmount(), booking.getBookingCode());
+            notificationService.sendNotificationToUserWithRelatedId(
+                booking.getUserId().getId(),
+                "PAYMENT_SUCCESS",
+                message,
+                payment.getPaymentId()
+            );
+        }
+
         // Chỉ cập nhật trạng thái booking nếu nó đang PENDING
         if (booking.getStatus() == BookingStatus.PENDING) {
             booking.setStatus(BookingStatus.CONFIRMED);
@@ -535,7 +559,12 @@ public class PaymentServiceImpl implements PaymentService {
         Booking booking = payment.getBooking();
         if (booking != null && booking.getUserId() != null) {
             String message = String.format("Thanh toán cho đặt vé %s đã thất bại. Vui lòng thử lại.", booking.getBookingCode());
-            notificationService.sendNotificationToUser(booking.getUserId().getId(), "PAYMENT_FAILED", message);
+            notificationService.sendNotificationToUserWithRelatedId(
+                booking.getUserId().getId(),
+                "PAYMENT_FAILED",
+                message,
+                payment.getPaymentId()
+            );
         }
         log.error("Payment failed: {}", payment.getPaymentId());
     }

@@ -71,7 +71,10 @@ public class SecurityConfig {
             "/api/v1/ancillary-services/**",
             "/api/v1/boarding-passes/**",
             "/api/v1/loyalty/**",
-            "/ws/**"
+            "/ws/**",
+            "/websocket-test.html",
+            "/postman-websocket-test.json",
+            "/WEBSOCKET_TEST_README.md"
     };
     private static final String[] PERMISION_ROUTES = {
             "/api/v1/auth/change-password",

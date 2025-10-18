@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -39,6 +40,13 @@ public class NotificationServiceImpl implements NotificationService {
     @Transactional
     @Async // Chạy bất đồng bộ để không làm chậm các tiến trình chính (đặt vé, thanh toán)
     public void sendNotificationToUser(Long userId, String type, String message) {
+        sendNotificationToUserWithRelatedId(userId, type, message, null);
+    }
+
+    @Override
+    @Transactional
+    @Async // Chạy bất đồng bộ để không làm chậm các tiến trình chính (đặt vé, thanh toán)
+    public void sendNotificationToUserWithRelatedId(Long userId, String type, String message, Long relatedId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
@@ -51,6 +59,7 @@ public class NotificationServiceImpl implements NotificationService {
                     .title(notificationType.getDefaultTitle())
                     .message(message)
                     .type(notificationType)
+                    .relatedId(relatedId)
                     .isRead(false)
                     .build();
             Notification savedNotification = notificationRepository.save(notification);
@@ -62,7 +71,15 @@ public class NotificationServiceImpl implements NotificationService {
             // 3. Gửi thông báo qua WebSocket đến user cụ thể
             // Client sẽ lắng nghe trên "/user/queue/notifications"
             String destination = "/queue/notifications";
-            messagingTemplate.convertAndSendToUser(user.getId().toString(), destination, response);
+            messagingTemplate.convertAndSendToUser(user.getId().toString(), destination, Map.of(
+                "notificationId", savedNotification.getNotificationId(),
+                "title", savedNotification.getTitle(),
+                "message", savedNotification.getMessage(),
+                "type", savedNotification.getType().toString(),
+                "relatedId", savedNotification.getRelatedId(),
+                "isRead", savedNotification.getIsRead(),
+                "timestamp", savedNotification.getCreatedAt()
+            ));
 
             log.info("Sent notification to user {} via WebSocket on destination {}", userId, destination);
 
@@ -100,12 +117,24 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Long getUnreadCountByUserId(Long userId) {
+        return notificationRepository.countUnreadByUserId(userId);
+    }
+
+    @Override
     @Transactional
     public void markAsRead(Long userId, List<Long> notificationIds) {
         if (notificationIds == null || notificationIds.isEmpty()) {
             return;
         }
         notificationRepository.markAsReadByUserIdAndIds(userId, notificationIds);
+    }
+
+    @Override
+    @Transactional
+    public void markAllAsRead(Long userId) {
+        notificationRepository.markAllAsReadByUserId(userId);
     }
 
     // Các phương thức dưới đây để tương thích với Controller, bạn có thể triển khai logic chi tiết hơn nếu cần
@@ -169,5 +198,40 @@ public class NotificationServiceImpl implements NotificationService {
     @Transactional
     public void softDelete(Long id) {
         notificationRepository.softDeleteById(id, LocalDateTime.now());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Long getNotificationUserId(Long notificationId) {
+        Notification notification = notificationRepository.findById(notificationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Notification not found with id: " + notificationId));
+        return notification.getUser().getId();
+    }
+
+    @Override
+    @Transactional
+    public void broadcastSystemNotification(String type, String title, String message, Long relatedId) {
+        try {
+            // Tạo notification mẫu để lấy title từ enum
+            NotificationType notificationType = NotificationType.valueOf(type);
+            String finalTitle = title != null ? title : notificationType.getDefaultTitle();
+
+            // Gửi broadcast qua WebSocket tới tất cả client đang kết nối
+            messagingTemplate.convertAndSend("/topic/system-notifications", Map.of(
+                "title", finalTitle,
+                "message", message,
+                "type", type,
+                "relatedId", relatedId,
+                "timestamp", LocalDateTime.now(),
+                "broadcast", true
+            ));
+
+            log.info("Broadcast system notification to all users: {} - {}", finalTitle, message);
+
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid notification type: {}", type);
+        } catch (Exception e) {
+            log.error("Failed to broadcast system notification: {}", e.getMessage(), e);
+        }
     }
 }

@@ -4,6 +4,7 @@ import iuh.fit.airsky.dto.request.NotificationRequest;
 import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.NotificationResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
+import iuh.fit.airsky.security.JwtUtil;
 import iuh.fit.airsky.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,14 +25,57 @@ import java.util.Optional;
 public class NotificationController {
 
     private final NotificationService notificationService;
+    private final JwtUtil jwtUtil;
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<NotificationResponse>> createNotification(@RequestBody NotificationRequest request) {
         log.info("Creating notification: {}", request);
         NotificationResponse response = notificationService.createNotification(request);
+
+        // Gửi real-time notification qua WebSocket
+            notificationService.sendNotificationToUserWithRelatedId(
+                request.getUserId(),
+                request.getType().name(),
+                request.getMessage(),
+                request.getRelatedId()
+            );
+
         ApiResponse<NotificationResponse> apiResponse = new ApiResponse<>(true, "Notification created successfully", response, null, null, null);
         return ResponseEntity.status(HttpStatus.CREATED).body(apiResponse);
+    }
+
+    @PostMapping("/broadcast")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> broadcastNotification(@RequestBody NotificationRequest request) {
+        log.info("Broadcasting notification to all customers: {}", request);
+
+        try {
+            // Gửi thông báo hệ thống cho tất cả customer
+            notificationService.broadcastSystemNotification(
+                request.getType().name(),
+                request.getTitle(),
+                request.getMessage(),
+                request.getRelatedId()
+            );
+
+            ApiResponse<String> apiResponse = new ApiResponse<>(
+                true,
+                "Notification broadcasted to all customers successfully",
+                "Broadcast completed",
+                null, null, null
+            );
+            return ResponseEntity.ok(apiResponse);
+
+        } catch (Exception e) {
+            log.error("Failed to broadcast notification: {}", e.getMessage(), e);
+            ApiResponse<String> apiResponse = new ApiResponse<>(
+                false,
+                "Failed to broadcast notification",
+                null, null, null, null
+            );
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(apiResponse);
+        }
     }
 
     @PutMapping("/{id}")
@@ -70,7 +114,7 @@ public class NotificationController {
     }
 
     @GetMapping("/user/{userId}")
-    @PreAuthorize("hasRole('ADMIN') or #userId == authentication.principal.id")
+    @PreAuthorize("hasRole('ADMIN') or @securityService.getCurrentUserId(authentication) == #userId")
     public ResponseEntity<ApiResponse<PageResponse<NotificationResponse>>> getNotificationsByUserId(
             @PathVariable Long userId,
             @RequestParam(defaultValue = "0") int page,
@@ -82,17 +126,17 @@ public class NotificationController {
         return ResponseEntity.ok(apiResponse);
     }
 
-    @GetMapping("/user/{userId}/unread")
-    @PreAuthorize("isAuthenticated() and #userId == authentication.principal.id")
-    public ResponseEntity<ApiResponse<List<NotificationResponse>>> getUnreadNotificationsByUserId(@PathVariable Long userId) {
-        log.info("Getting unread notifications for user ID: {}", userId);
-        List<NotificationResponse> response = notificationService.findUnreadByUserId(userId);
-        ApiResponse<List<NotificationResponse>> apiResponse = new ApiResponse<>(true, "Unread notifications retrieved successfully", response, null, null, null);
+    @GetMapping("/user/{userId}/count-unread")
+    @PreAuthorize("@securityService.getCurrentUserId(authentication) == #userId")
+    public ResponseEntity<ApiResponse<Long>> getUnreadNotificationCount(@PathVariable Long userId) {
+        log.info("Getting unread notification count for user ID: {}", userId);
+        Long count = notificationService.getUnreadCountByUserId(userId);
+        ApiResponse<Long> apiResponse = new ApiResponse<>(true, "Unread notification count retrieved successfully", count, null, null, null);
         return ResponseEntity.ok(apiResponse);
     }
 
     @PutMapping("/user/{userId}/mark-read")
-    @PreAuthorize("isAuthenticated() and #userId == authentication.principal.id")
+    @PreAuthorize("@securityService.getCurrentUserId(authentication) == #userId")
     public ResponseEntity<ApiResponse<Void>> markNotificationsAsRead(@PathVariable Long userId, @RequestBody List<Long> notificationIds) {
         log.info("Marking notifications as read for user ID: {} with IDs: {}", userId, notificationIds);
         notificationService.markAsRead(userId, notificationIds);
@@ -100,8 +144,20 @@ public class NotificationController {
         return ResponseEntity.ok(apiResponse);
     }
 
+    /**
+     * Đánh dấu tất cả notification của user là đã đọc
+     */
+    @PutMapping("/user/{userId}/mark-read-all")
+    @PreAuthorize("@securityService.getCurrentUserId(authentication) == #userId")
+    public ResponseEntity<ApiResponse<Void>> markAllNotificationsAsRead(@PathVariable Long userId) {
+        log.info("Marking ALL notifications as read for user ID: {}", userId);
+        notificationService.markAllAsRead(userId);
+        ApiResponse<Void> apiResponse = new ApiResponse<>(true, "All notifications marked as read successfully", null, null, null, null);
+        return ResponseEntity.ok(apiResponse);
+    }
+
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or @securityService.isSelf(authentication, @notificationService.getNotificationUserId(#id))")
     public ResponseEntity<ApiResponse<Void>> deleteNotification(@PathVariable Long id) {
         log.info("Deleting notification with ID: {}", id);
         notificationService.softDelete(id);

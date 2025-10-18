@@ -1,5 +1,6 @@
 package iuh.fit.airsky.config;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
@@ -8,7 +9,10 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 
 @Configuration
 @EnableWebSocketMessageBroker
+@RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+
+    private final JwtHandshakeInterceptor jwtHandshakeInterceptor;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
@@ -26,6 +30,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         // withSockJS() để hỗ trợ các trình duyệt không hỗ trợ WebSocket thuần
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("*") // Cho phép tất cả các origin, cần cấu hình chặt chẽ hơn trên production
+                .addInterceptors(jwtHandshakeInterceptor) // ✅ Thêm JWT interceptor
                 .withSockJS();
     }
 }

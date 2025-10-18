@@ -13,7 +13,8 @@ spring:
     dispatch-options-request: true
   web:
     resources:
-      add-mappings: false
+      add-mappings: true # test websocket in web
+      static-locations: classpath:/static/, file:./
   servlet:
     multipart:
       max-file-size: 10MB
@@ -83,7 +84,6 @@ logging:
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
 
-
 # PayPal Configuration
 paypal:
   client-id: ${PAYPAL_CLIENT_ID:}
@@ -96,8 +96,8 @@ paypal:
 sepay:
   api-key: FRT7YMJW2CP268P567ULDTN1XZBYI3QQGYP8USUF1HV3WCFUGJ0XMLGLRMMSEWDP
   qr:
-    account: "0964133949"     # số tài khoản nhận tiền
-    bank: "MBBank"               # mã ngân hàng
+    account: "0964133949" # số tài khoản nhận tiền
+    bank: "MBBank" # mã ngân hàng
     template: "compact"
 
 # Application URL

@@ -28,6 +28,9 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     @Query("SELECT n FROM Notification n WHERE n.user.id = :userId AND n.isRead = false AND n.deleted = false")
     List<Notification> findUnreadByUserId(Long userId);
 
+    @Query("SELECT COUNT(n) FROM Notification n WHERE n.user.id = :userId AND n.isRead = false AND n.deleted = false")
+    Long countUnreadByUserId(Long userId);
+
     @Modifying
     @Transactional
     @Query("UPDATE Notification n SET n.deleted = true, n.deletedAt = :now, n.active = false WHERE n.notificationId = :id")
@@ -37,4 +40,9 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     @Transactional
     @Query("UPDATE Notification n SET n.isRead = true WHERE n.user.id = :userId AND n.notificationId IN :ids")
     void markAsReadByUserIdAndIds(Long userId, List<Long> ids);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE Notification n SET n.isRead = true WHERE n.user.id = :userId")
+    void markAllAsReadByUserId(Long userId);
 }

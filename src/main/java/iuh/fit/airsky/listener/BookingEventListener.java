@@ -58,7 +58,12 @@ public class BookingEventListener {
         try {
             if (booking.getUserId() != null) {
                 String message = String.format("Đặt vé %s của bạn đã được xác nhận thành công!", booking.getBookingCode());
-                notificationService.sendNotificationToUser(booking.getUserId().getId(), "BOOKING_CONFIRMED", message);
+                notificationService.sendNotificationToUserWithRelatedId(
+                    booking.getUserId().getId(),
+                    "BOOKING_CONFIRMED",
+                    message,
+                    booking.getBookingId()
+                );
             }
         } catch (Exception e) {
             log.error("Failed to send BOOKING_CONFIRMED notification for booking {}: {}", booking.getBookingId(), e.getMessage(), e);
@@ -107,7 +112,12 @@ public class BookingEventListener {
         try {
             if (booking.getUserId() != null) {
                 String message = String.format("Đặt vé %s của bạn đã bị hủy do: %s.", booking.getBookingCode(), reason);
-                notificationService.sendNotificationToUser(booking.getUserId().getId(), "BOOKING_CANCELLED", message);
+                notificationService.sendNotificationToUserWithRelatedId(
+                    booking.getUserId().getId(),
+                    "BOOKING_CANCELLED",
+                    message,
+                    booking.getBookingId()
+                );
             }
         } catch (Exception e) {
             log.error("Failed to send BOOKING_CANCELLED notification for booking {}: {}", booking.getBookingId(), e.getMessage(), e);
