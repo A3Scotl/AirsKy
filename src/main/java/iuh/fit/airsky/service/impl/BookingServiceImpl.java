@@ -671,6 +671,7 @@ public class BookingServiceImpl implements BookingService {
 
         // Hủy booking
         booking.setStatus(BookingStatus.CANCELLED);
+        booking.setCancellationReason(reason);
         bookingRepository.save(booking);
 
         // Giải phóng ghế và cập nhật availableSeats
@@ -1581,133 +1582,46 @@ public class BookingServiceImpl implements BookingService {
                 seatTypeDetails.size(), totalSeatTypeAmount);
     }
 
-    private void sendHoldTimeWarningEmail(Booking booking, int minutesLeft) {
-        if (booking.getUserId() == null) {
-            log.debug("Skipping hold time warning email for guest booking {}", booking.getBookingId());
-            return;
-        }
-
-        try {
-            String email = booking.getUserId().getEmail();
-            String subject = "Cảnh báo: Thời gian giữ ghế sắp hết hạn";
-
-            String body = String.format(
-                "<h3>Xin chào %s</h3>" +
-                "<p>Thời gian giữ ghế cho đơn đặt vé <strong>%s</strong> của bạn sắp hết hạn.</p>" +
-                "<p><strong>Thời gian còn lại:</strong> %d phút</p>" +
-                "<p><strong>Chuyến bay:</strong> %s</p>" +
-                "<p><strong>Khởi hành:</strong> %s</p>" +
-                "<p>Vui lòng hoàn tất thanh toán trong thời gian còn lại để giữ ghế của bạn.</p>" +
-                "<p>Nếu không thanh toán, ghế sẽ được giải phóng tự động.</p>" +
-                "<p>Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.</p>",
-                booking.getUserId().getLastName(),
-                booking.getBookingCode(),
-                minutesLeft,
-                booking.getFlight().getFlightNumber(),
-                booking.getFlight().getDepartureTime().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
-            );
-
-            emailService.sendEmail(email, subject, body);
-            log.info("Sent hold time warning email to {} for booking {} ({} minutes left)",
-                    email, booking.getBookingId(), minutesLeft);
-
-        } catch (Exception e) {
-            log.error("Failed to send hold time warning email for booking {}: {}",
-                    booking.getBookingId(), e.getMessage());
-        }
-    }
-
     /**
      * Scheduled job để xử lý các booking đã hết thời hạn thanh toán
      * Chạy mỗi phút để check và cancel expired bookings
      */
-    // @Scheduled(fixedRate = 60000) // 60 seconds = 1 minute
-    // @Transactional
-    // public void processExpiredPayments() {
-    //     log.debug("Checking for expired payments...");
+    @Scheduled(fixedRate = 60000) // Chạy mỗi phút
+    @Transactional
+    public void processExpiredPayments() {
+        log.debug("Checking for expired payments...");
 
-    //     LocalDateTime now = LocalDateTime.now();
-    //     // Chỉ kiểm tra các booking được tạo trong vòng 24 giờ qua để tránh xử lý lại dữ liệu cũ
-    //     LocalDateTime lookbackTime = now.minusHours(24);
+        LocalDateTime now = LocalDateTime.now();
+        // Chỉ kiểm tra các booking được tạo trong vòng 24 giờ qua để tránh xử lý lại dữ liệu cũ
+        LocalDateTime lookbackTime = now.minusHours(24);
 
-    //     List<Booking> expiredBookings = bookingRepository.findRecentExpiredBookings(
-    //             now, BookingStatus.PENDING, lookbackTime);
+        List<Booking> expiredBookings = bookingRepository.findRecentExpiredBookings(
+                now, BookingStatus.PENDING, lookbackTime);
 
-    //     if (expiredBookings.isEmpty()) {
-    //         log.debug("No expired bookings found");
-    //         return;
-    //     }
-
-    //     log.info("Found {} expired bookings to process", expiredBookings.size());
-
-    //     for (Booking booking : expiredBookings) {
-    //         try {
-    //             cancelExpiredBooking(booking);
-    //             log.info("Successfully cancelled expired booking: {}", booking.getBookingCode());
-    //         } catch (Exception e) {
-    //             log.error("Failed to cancel expired booking {}: {}", booking.getBookingId(), e.getMessage());
-    //         }
-    //     }
-    // }
-
-    /**
-     * Hủy booking đã hết thời hạn thanh toán
-     */
-    private void cancelExpiredBooking(Booking booking) {
-        log.info("Cancelling expired booking: {} (timeout: {})",
-                booking.getBookingCode(), booking.getPaymentTimeout());
-
-        // Kiểm tra xem booking đã bị hủy chưa để tránh xử lý lặp lại
-        if (booking.getStatus() == BookingStatus.CANCELLED) {
-            log.warn("Booking {} is already cancelled. Skipping.", booking.getBookingCode());
+        if (expiredBookings.isEmpty()) {
+            log.debug("No expired bookings found");
             return;
         }
 
-        // 1. Cập nhật payment status thành EXPIRED
-        if (booking.getPayment() != null) {
-            booking.getPayment().setStatus(PaymentStatus.EXPIRED);
-            paymentRepository.save(booking.getPayment());
-            log.debug("Updated payment status to EXPIRED for booking {}", booking.getBookingCode());
-        }
+        log.info("Found {} expired bookings to process", expiredBookings.size());
 
-        // 2. Cập nhật booking status thành CANCELLED
-        booking.setStatus(BookingStatus.CANCELLED);
-        bookingRepository.save(booking);
-
-        // 3. Xóa passenger seat references và giải phóng ghế
-        int releasedSeats = 0;
-        List<Passenger> passengersToUpdate = new ArrayList<>(booking.getPassengers());
-        for (Passenger passenger : passengersToUpdate) {
-            if (passenger.getSeat() != null) {
-                passenger.getSeat().setStatus(SeatStatus.AVAILABLE);
-                passenger.getSeat().setBookedByUser(null);
-                passenger.getSeat().setBookedByPassenger(null);
-                seatRepository.save(passenger.getSeat());
-
-                // Xóa seat reference từ passenger để ghế có thể được book lại
-                passenger.setSeat(null);
-                passengerRepository.save(passenger);
-
-                releasedSeats++;
-                log.debug("Released seat and cleared seat reference for passenger {} in expired booking {}", passenger.getFirstName(), booking.getBookingCode());
+        for (Booking booking : expiredBookings) {
+            try {
+                // Kiểm tra lại trạng thái thanh toán trước khi hủy
+                if (booking.getPayment() != null && booking.getPayment().getStatus() == PaymentStatus.COMPLETED) {
+                    log.warn("Booking {} has a completed payment but was marked as expired. Skipping cancellation.", booking.getBookingId());
+                    continue;
+                }
+                log.info("Cancelling expired booking: {} (timeout: {})",
+                        booking.getBookingCode(), booking.getPaymentTimeout());
+                cancelBookingAndReleaseSeats(booking, "Hết hạn thanh toán");
+                log.info("Successfully cancelled expired booking: {}", booking.getBookingCode());
+            } catch (Exception e) {
+                log.error("Failed to cancel expired booking {}: {}", booking.getBookingId(), e.getMessage(), e);
             }
         }
-
-        // 4. Cập nhật availableSeats của flight
-        if (releasedSeats > 0 && booking.getFlight() != null) {
-            Flight flight = booking.getFlight();
-            flight.setAvailableSeats(flight.getAvailableSeats() + releasedSeats);
-            flightRepository.save(flight);
-            log.info("Updated available seats for flight {}: +{} (expired booking {})",
-                    flight.getFlightNumber(), releasedSeats, booking.getBookingCode());
-        }
-        
-        // 5. Publish event to handle notifications (email, socket)
-        eventPublisher.publishEvent(new BookingCancelledEvent(this, booking, "Payment timeout expired"));
-        
-        log.info("Successfully cancelled expired booking {} and released {} seats. Event published.",
-                booking.getBookingCode(), releasedSeats);
     }
+
 
     @Override
     public List<CheckinEligiblePassengerResponse> getCheckinEligiblePassengers(String bookingCode, String fullName) {
