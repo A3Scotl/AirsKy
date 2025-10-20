@@ -22,13 +22,13 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     @Query("SELECT n FROM Notification n WHERE n.notificationId = :id AND n.deleted = false")
     Optional<Notification> findById(Long id);
 
-    @Query("SELECT n FROM Notification n WHERE n.user.id = :userId AND n.deleted = false ORDER BY n.createdAt DESC")
+    @Query("SELECT n FROM Notification n WHERE (n.user.id = :userId OR n.user IS NULL) AND n.deleted = false ORDER BY n.createdAt DESC")
     Page<Notification> findByUserId(Long userId, Pageable pageable);
 
-    @Query("SELECT n FROM Notification n WHERE n.user.id = :userId AND n.isRead = false AND n.deleted = false")
+    @Query("SELECT n FROM Notification n WHERE (n.user.id = :userId OR n.user IS NULL) AND n.isRead = false AND n.deleted = false")
     List<Notification> findUnreadByUserId(Long userId);
 
-    @Query("SELECT COUNT(n) FROM Notification n WHERE n.user.id = :userId AND n.isRead = false AND n.deleted = false")
+    @Query("SELECT COUNT(n) FROM Notification n WHERE (n.user.id = :userId OR n.user IS NULL) AND n.isRead = false AND n.deleted = false")
     Long countUnreadByUserId(Long userId);
 
     @Modifying
@@ -45,4 +45,9 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     @Transactional
     @Query("UPDATE Notification n SET n.isRead = true WHERE n.user.id = :userId")
     void markAllAsReadByUserId(Long userId);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE Notification n SET n.deleted = true, n.deletedAt = :now, n.active = false WHERE n.isRead = true AND n.createdAt < :cutoffDate AND n.deleted = false")
+    int cleanupOldReadNotifications(LocalDateTime cutoffDate, LocalDateTime now);
 }

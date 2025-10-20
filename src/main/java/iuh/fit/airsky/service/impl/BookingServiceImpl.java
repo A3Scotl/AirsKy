@@ -755,11 +755,14 @@ public class BookingServiceImpl implements BookingService {
             List<Booking> affectedBookings = bookingRepository.findByFlightAndStatus(flight, BookingStatus.CONFIRMED);
             for (Booking booking : affectedBookings) {
                 if (booking.getUserId() != null) {
-                    notificationService.sendNotificationToUserWithRelatedId(
+                    String message = "Chuyến bay " + flight.getFlightNumber() + " của bạn đã bị trễ. Vui lòng kiểm tra lại thông tin.";
+                    String title = "Thông báo chuyến bay bị trễ";
+                    notificationService.createAndSendNotification(
                         booking.getUserId().getId(),
                         "FLIGHT_DELAYED",
-                        "Chuyến bay " + flight.getFlightNumber() + " của bạn đã bị trễ. Vui lòng kiểm tra lại thông tin.",
-                        flight.getFlightId()
+                        message,
+                        flight.getFlightId(),
+                        title
                     );
                 }
             }
@@ -2124,11 +2127,13 @@ public class BookingServiceImpl implements BookingService {
 
                     // GỬI THÔNG BÁO SOCKET
                     String message = String.format("Check-in cho hành khách %s %s thành công. Boarding pass đã sẵn sàng.", passenger.getFirstName(), passenger.getLastName());
-                    notificationService.sendNotificationToUserWithRelatedId(
+                    String title = "Check-in thành công";
+                    notificationService.createAndSendNotification(
                         booking.getUserId().getId(),
                         "CHECKIN_SUCCESSFUL",
                         message,
-                        checkIn.getCheckInId()
+                        checkIn.getCheckInId(),
+                        title
                     );
                 } else {
                     log.warn("Boarding pass URL is null or empty for check-in {}", checkIn.getCheckInId());

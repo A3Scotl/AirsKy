@@ -146,7 +146,8 @@ public void updateUserRole(Long userId, String role) {
 
     // Gửi thông báo WebSocket cho người dùng bị thay đổi vai trò
     String message = String.format("Vai trò của bạn đã được thay đổi thành %s.", newRole.name());
-    notificationService.sendNotificationToUserWithRelatedId(userId, "SYSTEM_ANNOUNCEMENT", message, userId);
+    String title = "Thông báo thay đổi vai trò";
+    notificationService.createAndSendNotification(userId, "SYSTEM_ANNOUNCEMENT", message, userId, title);
 
 }
 

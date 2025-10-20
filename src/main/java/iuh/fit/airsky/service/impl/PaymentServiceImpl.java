@@ -500,11 +500,13 @@ public class PaymentServiceImpl implements PaymentService {
             if (booking != null && booking.getUserId() != null) {
                 String message = String.format("Thanh toán SePay %.0f VND cho đặt vé %s đã hoàn tất thành công",
                         payment.getAmount(), booking.getBookingCode());
-                notificationService.sendNotificationToUserWithRelatedId(
+                String title = "Thanh toán thành công";
+                notificationService.createAndSendNotification(
                     booking.getUserId().getId(),
                     "PAYMENT_SUCCESS",
                     message,
-                    payment.getPaymentId()
+                    payment.getPaymentId(),
+                    title
                 );
             }
         } else if ("FAILED".equalsIgnoreCase(status) || "CANCELLED".equalsIgnoreCase(status) || "OUT".equalsIgnoreCase(status)) {
@@ -528,11 +530,13 @@ public class PaymentServiceImpl implements PaymentService {
         if (booking.getUserId() != null) {
             String message = String.format("Thanh toán %.0f VND cho đặt vé %s đã hoàn tất thành công",
                     payment.getAmount(), booking.getBookingCode());
-            notificationService.sendNotificationToUserWithRelatedId(
+            String title = "Thanh toán thành công";
+            notificationService.createAndSendNotification(
                 booking.getUserId().getId(),
                 "PAYMENT_SUCCESS",
                 message,
-                payment.getPaymentId()
+                payment.getPaymentId(),
+                title
             );
         }
 
@@ -559,11 +563,13 @@ public class PaymentServiceImpl implements PaymentService {
         Booking booking = payment.getBooking();
         if (booking != null && booking.getUserId() != null) {
             String message = String.format("Thanh toán cho đặt vé %s đã thất bại. Vui lòng thử lại.", booking.getBookingCode());
-            notificationService.sendNotificationToUserWithRelatedId(
+            String title = "Thanh toán thất bại";
+            notificationService.createAndSendNotification(
                 booking.getUserId().getId(),
                 "PAYMENT_FAILED",
                 message,
-                payment.getPaymentId()
+                payment.getPaymentId(),
+                title
             );
         }
         log.error("Payment failed: {}", payment.getPaymentId());

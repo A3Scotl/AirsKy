@@ -4,8 +4,10 @@ import iuh.fit.airsky.dto.request.NotificationRequest;
 import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.NotificationResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
+import iuh.fit.airsky.enums.NotificationType;
 import iuh.fit.airsky.security.JwtUtil;
 import iuh.fit.airsky.service.NotificationService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -15,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,20 +32,65 @@ public class NotificationController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<NotificationResponse>> createNotification(@RequestBody NotificationRequest request) {
+    public ResponseEntity<ApiResponse<NotificationResponse>> createNotification(@Valid @RequestBody NotificationRequest request) {
         log.info("Creating notification: {}", request);
-        NotificationResponse response = notificationService.createNotification(request);
 
-        // Gửi real-time notification qua WebSocket
-            notificationService.sendNotificationToUserWithRelatedId(
-                request.getUserId(),
-                request.getType().name(),
+        // Kiểm tra logic: SYSTEM_ANNOUNCEMENT không cần userId
+        if (request.getType() == NotificationType.SYSTEM_ANNOUNCEMENT) {
+            request.setUserId(null);  // Set null để broadcast cho tất cả
+            log.info("System announcement - broadcasting to all users");
+        }
+
+        // Tạo notification và gửi real-time qua WebSocket trong cùng một method
+        NotificationResponse response = notificationService.createAndSendNotification(
+            request.getUserId(),
+            request.getType() != null ? request.getType().name() : null,
+            request.getMessage(),
+            request.getRelatedId(),
+            request.getTitle()
+        );
+
+        String message = request.getType() == NotificationType.SYSTEM_ANNOUNCEMENT 
+            ? "System announcement created and broadcasted successfully"
+            : "Notification created successfully";
+
+        ApiResponse<NotificationResponse> apiResponse = new ApiResponse<>(true, message, response, null, null, null);
+        return ResponseEntity.status(HttpStatus.CREATED).body(apiResponse);
+    }    
+    
+    @PostMapping("/admin/send-to-user/{userId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> adminSendNotificationToUser(
+            @PathVariable Long userId,
+            @RequestBody NotificationRequest request) {
+        log.info("Admin sending notification to user {}: {}", userId, request);
+
+        try {
+            NotificationResponse response = notificationService.createAndSendNotification(
+                userId,
+                request.getType() != null ? request.getType().name() : "SYSTEM_ANNOUNCEMENT",
                 request.getMessage(),
-                request.getRelatedId()
+                request.getRelatedId(),
+                request.getTitle()
             );
 
-        ApiResponse<NotificationResponse> apiResponse = new ApiResponse<>(true, "Notification created successfully", response, null, null, null);
-        return ResponseEntity.status(HttpStatus.CREATED).body(apiResponse);
+            ApiResponse<String> apiResponse = new ApiResponse<>(
+                true,
+                "Notification sent to user successfully",
+                "Notification ID: " + response.getNotificationId(),
+                null, null, null
+            );
+            return ResponseEntity.ok(apiResponse);
+        } catch (Exception e) {
+            log.error("Failed to send notification to user {}: {}", userId, e.getMessage(), e);
+            ApiResponse<String> apiResponse = new ApiResponse<>(
+                false,
+                "Failed to send notification to user",
+                null,
+                e.getMessage(), null, null
+            );
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(apiResponse);
+        }
     }
 
     @PostMapping("/broadcast")
@@ -66,19 +114,17 @@ public class NotificationController {
                 null, null, null
             );
             return ResponseEntity.ok(apiResponse);
-
         } catch (Exception e) {
             log.error("Failed to broadcast notification: {}", e.getMessage(), e);
             ApiResponse<String> apiResponse = new ApiResponse<>(
                 false,
                 "Failed to broadcast notification",
-                null, null, null, null
+                null,
+                e.getMessage(), null, null
             );
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(apiResponse);
         }
     }
-
-    @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<NotificationResponse>> updateNotification(@PathVariable Long id, @RequestBody NotificationRequest request) {
         log.info("Updating notification with ID: {}", id);
@@ -163,5 +209,23 @@ public class NotificationController {
         notificationService.softDelete(id);
         ApiResponse<Void> apiResponse = new ApiResponse<>(true, "Notification deleted successfully", null, null, null, null);
         return ResponseEntity.ok(apiResponse);
+    }
+
+    @DeleteMapping("/cleanup")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> cleanupOldNotifications(
+            @RequestParam(defaultValue = "30") int daysOld) {
+        log.info("Cleaning up old read notifications older than {} days", daysOld);
+
+        try {
+            int deletedCount = notificationService.cleanupOldReadNotifications(daysOld);
+            String message = String.format("Cleaned up %d old read notifications older than %d days", deletedCount, daysOld);
+            ApiResponse<String> apiResponse = new ApiResponse<>(true, message, String.valueOf(deletedCount), null, null, null);
+            return ResponseEntity.ok(apiResponse);
+        } catch (Exception e) {
+            log.error("Failed to cleanup old notifications: {}", e.getMessage(), e);
+            ApiResponse<String> apiResponse = new ApiResponse<>(false, "Failed to cleanup old notifications", null, e.getMessage(), null, null);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(apiResponse);
+        }
     }
 }

@@ -58,11 +58,13 @@ public class BookingEventListener {
         try {
             if (booking.getUserId() != null) {
                 String message = String.format("Đặt vé %s của bạn đã được xác nhận thành công!", booking.getBookingCode());
-                notificationService.sendNotificationToUserWithRelatedId(
+                String title = "Xác nhận đặt vé thành công";
+                notificationService.createAndSendNotification(
                     booking.getUserId().getId(),
                     "BOOKING_CONFIRMED",
                     message,
-                    booking.getBookingId()
+                    booking.getBookingId(),
+                    title
                 );
             }
         } catch (Exception e) {
@@ -112,11 +114,13 @@ public class BookingEventListener {
         try {
             if (booking.getUserId() != null) {
                 String message = String.format("Đặt vé %s của bạn đã bị hủy do: %s.", booking.getBookingCode(), reason);
-                notificationService.sendNotificationToUserWithRelatedId(
+                String title = "Thông báo hủy vé";
+                notificationService.createAndSendNotification(
                     booking.getUserId().getId(),
                     "BOOKING_CANCELLED",
                     message,
-                    booking.getBookingId()
+                    booking.getBookingId(),
+                    title
                 );
             }
         } catch (Exception e) {

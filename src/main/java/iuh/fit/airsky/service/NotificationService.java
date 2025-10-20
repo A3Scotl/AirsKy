@@ -11,20 +11,20 @@ import java.util.Optional;
 
 @Component("notificationService")
 public interface NotificationService {
-    void sendNotificationToUser(Long userId, String type, String message);
-    void sendNotificationToUserWithRelatedId(Long userId, String type, String message, Long relatedId);
+    // void sendNotificationToUserWithRelatedId(Long userId, String type, String message, Long relatedId);
     PageResponse<NotificationResponse> findByUserId(Long userId, Pageable pageable);
     List<NotificationResponse> findUnreadByUserId(Long userId);
     Long getUnreadCountByUserId(Long userId);
     void markAsRead(Long userId, List<Long> notificationIds);
     void markAllAsRead(Long userId);
 
-    // Các phương thức bổ sung để khớp với Controller
-    NotificationResponse createNotification(NotificationRequest request);
+    // Unified method to create and send notification
+    NotificationResponse createAndSendNotification(Long userId, String type, String message, Long relatedId, String title);
     NotificationResponse updateNotification(Long id, NotificationRequest request);
     Optional<NotificationResponse> findById(Long id);
     PageResponse<NotificationResponse> findAll(Pageable pageable);
     void softDelete(Long id);
     Long getNotificationUserId(Long notificationId);
     void broadcastSystemNotification(String type, String title, String message, Long relatedId);
+    int cleanupOldReadNotifications(int daysOld);
 }
