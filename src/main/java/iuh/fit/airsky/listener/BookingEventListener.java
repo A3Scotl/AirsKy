@@ -85,6 +85,7 @@ public class BookingEventListener {
         if(booking.getStatus() == BookingStatus.CANCELLED){
             return;
         }
+        
         if (booking.getUserId() != null) {
             contactEmail = booking.getUserId().getEmail();
             contactName = booking.getUserId().getFirstName();

@@ -53,7 +53,9 @@ public class Booking extends BaseAuditOnlyEntity {
 
     @Enumerated(EnumType.STRING)
     private BookingStatus status;
-    
+
+    private String cancellationReason;
+
     @PrePersist
     protected void onCreate() {
         if (this.bookingCode == null) {
