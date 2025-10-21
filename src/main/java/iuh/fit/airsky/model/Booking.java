@@ -54,6 +54,9 @@ public class Booking extends BaseAuditOnlyEntity {
     @Enumerated(EnumType.STRING)
     private BookingStatus status;
 
+    @Column(name = "contact_email", length = 100)
+    private String contactEmail; 
+
     private String cancellationReason;
 
     @PrePersist

@@ -25,5 +25,6 @@ public class BookingRequest {
     private CheckInType checkInType = CheckInType.OFFLINE;
     private String dealCode; // Mã giảm giá (tùy chọn)
     private List<BookingAncillaryServiceRequest> ancillaryServices; // Dịch vụ đi kèm
+    private String contactEmail; // Email để nhận thông tin booking
 
 }

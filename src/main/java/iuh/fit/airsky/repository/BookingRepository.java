@@ -18,7 +18,7 @@ import java.util.Optional;
 
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Long> {
-    @Query("SELECT b FROM Booking b LEFT JOIN FETCH b.flight LEFT JOIN FETCH b.travelClass LEFT JOIN FETCH b.payment")
+    @Query("SELECT b FROM Booking b LEFT JOIN FETCH b.flight LEFT JOIN FETCH b.travelClass LEFT JOIN FETCH b.payment ORDER BY b.createdAt DESC")
     Page<Booking> findAll(Pageable pageable);
 
     @EntityGraph(attributePaths = {"checkIns","checkIns.baggage"})
