@@ -98,8 +98,9 @@ public class Flight  extends BaseAuditOnlyEntity {
     @Version
     @Builder.Default
     private Integer version = 0;
+
     @OneToMany(mappedBy = "flight", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-@JsonManagedReference
+    @JsonManagedReference
     @Builder.Default
     private List<FlightTravelClass> flightTravelClasses = new ArrayList<>();
 

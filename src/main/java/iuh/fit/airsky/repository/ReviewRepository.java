@@ -15,6 +15,9 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     @Query("SELECT r FROM Review r WHERE r.flight.flightId = :flightId AND r.isApproved = true")
     List<Review> findByFlightIdAndIsApprovedTrue(@Param("flightId") Long flightId);
 
+    @Query("SELECT r FROM Review r WHERE r.flight.departureAirport.airportCode = :departureCode AND r.flight.arrivalAirport.airportCode = :arrivalCode AND r.isApproved = true")
+    List<Review> findByRouteAndIsApprovedTrue(@Param("departureCode") String departureCode, @Param("arrivalCode") String arrivalCode);
+
     List<Review> findByUserId(Long userId);
 
     @Query("SELECT r FROM Review r WHERE r.booking.bookingId = :bookingId")

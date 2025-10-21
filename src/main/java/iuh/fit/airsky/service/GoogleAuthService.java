@@ -105,7 +105,7 @@ public class GoogleAuthService {
     }
 
     private AuthResponse buildAuthResponse(User user) {
-        String accessToken = jwtService.generateAccessToken(user.getEmail(), user.getRole().name());
+        String accessToken = jwtService.generateAccessToken(user.getId(), user.getEmail(), user.getRole().name()); // Use new method to include user ID
         String refreshToken = jwtService.generateRefreshToken(user.getEmail());
         return new AuthResponse(accessToken, refreshToken);
     }

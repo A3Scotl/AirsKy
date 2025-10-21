@@ -57,14 +57,6 @@ public class ReviewController {
         return ApiResponseUtil.buildResponse(true, "Approved reviews retrieved", reviews, "/api/reviews/flight/" + flightId + "/approved");
     }
 
-    // API này không cần thiết - user thường không update review
-    // @PutMapping("/{id}")
-    // @PreAuthorize("hasAnyRole('CUSTOMER', 'BUSINESS')")
-    // public ResponseEntity<ApiResponse<ReviewResponse>> updateReview(@PathVariable Long id, @RequestBody ReviewRequest request) {
-    //     ReviewResponse review = reviewService.updateReview(id, request);
-    //     return ApiResponseUtil.buildResponse(true, "Review updated successfully", review, "/api/reviews/" + id);
-    // }
-
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
     public ResponseEntity<ApiResponse<Void>> deleteReview(@PathVariable Long id) {
@@ -94,24 +86,42 @@ public class ReviewController {
         return ApiResponseUtil.buildResponse(true, "Reviews retrieved successfully", reviews, "/api/reviews/flight/" + flightId);
     }
 
-    @GetMapping("/user/{userId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
-    public ResponseEntity<ApiResponse<List<ReviewResponse>>> getReviewsByUser(@PathVariable Long userId) {
-        List<ReviewResponse> reviews = reviewService.findByUserId(userId);
-        return ApiResponseUtil.buildResponse(true, "Reviews retrieved successfully", reviews, "/api/reviews/user/" + userId);
+    // API để lấy reviews theo 2 điểm đi và đến (airport codes)
+    @GetMapping("/route")
+    public ResponseEntity<ApiResponse<List<ReviewResponse>>> getReviewsByRoute(
+            @RequestParam String departureCode,
+            @RequestParam String arrivalCode) {
+        List<ReviewResponse> reviews = reviewService.findByRoute(departureCode, arrivalCode);
+        return ApiResponseUtil.buildResponse(true, "Reviews retrieved successfully", reviews, "/api/reviews/route?departureCode=" + departureCode + "&arrivalCode=" + arrivalCode);
     }
 
-    @GetMapping("/flight/{flightId}/average-rating")
-    public ResponseEntity<ApiResponse<Double>> getAverageRating(@PathVariable Long flightId) {
-        Double averageRating = reviewService.getAverageRatingByFlightId(flightId);
-        return ApiResponseUtil.buildResponse(true, "Average rating retrieved successfully", averageRating, "/api/reviews/flight/" + flightId + "/average-rating");
+    // API để lấy reviews theo chuyến bay của một booking (lấy flightId từ booking)
+    @GetMapping("/booking/{bookingId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER', 'BUSINESS')")
+    public ResponseEntity<ApiResponse<List<ReviewResponse>>> getReviewsByBookingFlight(@PathVariable Long bookingId) {
+        List<ReviewResponse> reviews = reviewService.findByBookingFlightId(bookingId);
+        return ApiResponseUtil.buildResponse(true, "Reviews retrieved successfully", reviews, "/api/reviews/booking/" + bookingId);
     }
 
-    @PutMapping("/{id}/approve")
+    // API để lấy review request của user cho một booking cụ thể
+    @GetMapping("/booking/{bookingId}/my-review")
+    @PreAuthorize("hasAnyRole('ADMIN','CUSTOMER', 'BUSINESS')")
+    public ResponseEntity<ApiResponse<ReviewResponse>> getMyReviewForBooking(
+            @PathVariable Long bookingId,
+            @RequestParam Long userId) {
+        ReviewResponse review = reviewService.findReviewByBookingAndUser(bookingId, userId);
+        if (review != null) {
+            return ApiResponseUtil.buildResponse(true, "Review found", review, "/api/reviews/booking/" + bookingId + "/my-review");
+        } else {
+            return ApiResponseUtil.buildResponse(true, "No review found", null, "/api/reviews/booking/" + bookingId + "/my-review");
+        }
+    }
+
+    @PutMapping("/{id}/hide")
     @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
-    public ResponseEntity<ApiResponse<Void>> approveReview(@PathVariable Long id) {
-        reviewService.approveReview(id);
-        return ApiResponseUtil.buildResponse(true, "Review approved successfully", null, "/api/reviews/" + id + "/approve");
+    public ResponseEntity<ApiResponse<Void>> hideReview(@PathVariable Long id) {
+        reviewService.hideReview(id);
+        return ApiResponseUtil.buildResponse(true, "Review hidden successfully", null, "/api/reviews/" + id + "/hide");
     }
 
     @GetMapping("/check/{bookingId}/{userId}")

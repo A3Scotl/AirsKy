@@ -58,6 +58,21 @@ public class JwtUtil {
     }
 
     /**
+     * Generate a JWT token for the user with database id, email, and role.
+     */
+    public String generateToken(Long userId, String email, String role) {
+        logger.debug("Generating token for userId: {}, email: {}, role: {}", userId, email, role);
+        return Jwts.builder()
+                .setSubject(email)
+                .claim("id", userId)
+                .claim("role", role)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + expiration))
+                .signWith(SignatureAlgorithm.HS256, secret)
+                .compact();
+    }
+
+    /**
      * Extract email from the JWT token.
      */
     public String getEmailFromToken(String token) {

@@ -3,6 +3,7 @@ package iuh.fit.airsky.service.impl;
 import iuh.fit.airsky.dto.request.ReviewRequest;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.dto.response.ReviewResponse;
+import iuh.fit.airsky.enums.BookingStatus;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.ReviewMapper;
 import iuh.fit.airsky.model.Booking;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -52,13 +54,30 @@ public class ReviewServiceImpl implements ReviewService {
     public ReviewResponse createReview(ReviewRequest request) {
         log.info("Creating review for booking ID: {}", request.getBookingId());
 
-        // Validate entities exist
-        User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        // Fetch required entities
         Booking booking = bookingRepository.findById(request.getBookingId())
-                .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found with id: " + request.getBookingId()));
+
+        User user = userRepository.findById(request.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + request.getUserId()));
+
         Flight flight = flightRepository.findById(request.getFlightId())
-                .orElseThrow(() -> new ResourceNotFoundException("Flight not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Flight not found with id: " + request.getFlightId()));
+
+        // Validate user permission - user chỉ có thể review booking của chính họ
+        if (!booking.getUserId().getId().equals(request.getUserId())) {
+            throw new IllegalArgumentException("User can only review their own bookings");
+        }
+
+        // Validate flight đã hoàn thành (đã bay xong)
+        if (flight.getArrivalTime().isAfter(LocalDateTime.now())) {
+            throw new IllegalArgumentException("Cannot review flight that hasn't completed yet");
+        }
+
+        // Validate booking đã được confirm
+        if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.COMPLETED) {
+            throw new IllegalArgumentException("Can only review confirmed or completed bookings");
+        }
 
         // Tìm review request đã có hoặc tạo mới
         // Điều này ngăn việc tạo nhiều review request cho cùng một booking
@@ -71,7 +90,7 @@ public class ReviewServiceImpl implements ReviewService {
                     newReview.setStatus(Review.ReviewStatus.PENDING);
                     newReview.setRetryCount(0);
                     newReview.setRating(0); 
-                    newReview.setIsApproved(false);
+                    newReview.setIsApproved(false); // Review requests are not approved until user submits
                     newReview.setEligibleAt(request.getEligibleAt() != null ? request.getEligibleAt() : LocalDateTime.now());
                     return newReview;
                 });
@@ -86,7 +105,7 @@ public class ReviewServiceImpl implements ReviewService {
             review.setComment(request.getComment());
             review.setReviewDate(request.getReviewDate() != null ? request.getReviewDate() : LocalDateTime.now());
             review.setStatus(Review.ReviewStatus.COMPLETED); // Review thực sự
-            review.setIsApproved(request.getIsApproved() != null ? request.getIsApproved() : false);
+            review.setIsApproved(true); // User reviews are automatically approved, admin can hide if needed
         } else {
             // Đây là trường hợp tạo review request tự động từ scheduler
             // Không cần làm gì thêm vì đã xử lý ở orElseGet
@@ -154,6 +173,14 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    public List<ReviewResponse> findByRoute(String departureCode, String arrivalCode) {
+        List<Review> reviews = reviewRepository.findByRouteAndIsApprovedTrue(departureCode, arrivalCode);
+        return reviews.stream()
+                .map(reviewMapper::toResponseDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public List<ReviewResponse> findByUserId(Long userId) {
         List<Review> reviews = reviewRepository.findByUserId(userId);
         return reviews.stream()
@@ -162,16 +189,41 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
-    public Double getAverageRatingByFlightId(Long flightId) {
-        return reviewRepository.findAverageRatingByFlightId(flightId);
+    public List<ReviewResponse> findByBookingId(Long bookingId) {
+        List<Review> reviews = reviewRepository.findByBookingId(bookingId);
+        return reviews.stream()
+                .map(reviewMapper::toResponseDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ReviewResponse> findByBookingFlightId(Long bookingId) {
+        // Lấy booking để tìm flightId
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found with id: " + bookingId));
+
+        // Lấy flightId từ booking (có thể có nhiều flight segments, lấy flight đầu tiên)
+        Long flightId = booking.getFlight().getFlightId();
+
+        // Tìm reviews theo flightId
+        List<Review> reviews = reviewRepository.findByFlightIdAndIsApprovedTrue(flightId);
+        return reviews.stream()
+                .map(reviewMapper::toResponseDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public ReviewResponse findReviewByBookingAndUser(Long bookingId, Long userId) {
+        Optional<Review> review = reviewRepository.findByBookingIdAndUserId(bookingId, userId);
+        return review.map(reviewMapper::toResponseDTO).orElse(null);
     }
 
     @Override
     @Transactional
-    public void approveReview(Long id) {
+    public void hideReview(Long id) {
         Review review = reviewRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Review not found"));
-        review.setIsApproved(true);
+        review.setIsApproved(false); // Admin can hide reviews by setting isApproved to false
         reviewRepository.save(review);
     }
 

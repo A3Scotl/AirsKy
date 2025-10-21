@@ -14,9 +14,12 @@ public interface ReviewService {
     ReviewResponse findById(Long id);
     PageResponse<ReviewResponse> findAll(Pageable pageable);
     List<ReviewResponse> findByFlightId(Long flightId);
+    List<ReviewResponse> findByRoute(String departureCode, String arrivalCode);
     List<ReviewResponse> findByUserId(Long userId);
-    Double getAverageRatingByFlightId(Long flightId);
-    void approveReview(Long id);
+    List<ReviewResponse> findByBookingId(Long bookingId);
+    List<ReviewResponse> findByBookingFlightId(Long bookingId);
+    ReviewResponse findReviewByBookingAndUser(Long bookingId, Long userId);
+    void hideReview(Long id);
     boolean hasUserReviewedBooking(Long bookingId, Long userId);
 
     // Tự động tạo review request cho các booking đã hoàn thành chuyến bay

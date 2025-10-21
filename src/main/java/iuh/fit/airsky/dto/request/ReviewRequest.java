@@ -27,7 +27,7 @@ public class ReviewRequest {
 
     private LocalDateTime reviewDate;
 
-    private Boolean isApproved = false;
+    private Boolean isApproved = true;
 
     // Thêm các trường cho review request
     private LocalDateTime eligibleAt;

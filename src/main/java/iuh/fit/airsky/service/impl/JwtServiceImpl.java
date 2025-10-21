@@ -20,4 +20,9 @@ public class JwtServiceImpl implements JwtService {
     public String generateRefreshToken(String email) {
         return jwtUtil.generateResetPasswordToken(email);
     }
+
+    @Override
+    public String generateAccessToken(Long userId, String email, String role) {
+        return jwtUtil.generateToken(userId, email, role);
+    }
 }

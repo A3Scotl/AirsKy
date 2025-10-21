@@ -242,7 +242,11 @@ public class FlightServiceImpl implements FlightService {
         
         // Generate standard travel classes after flight is saved
         List<FlightTravelClass> flightTravelClasses = generateStandardTravelClasses(saved);
-        saved.setFlightTravelClasses(flightTravelClasses);
+        
+        // Instead of replacing the collection, add each item to avoid orphan removal issues
+        for (FlightTravelClass ftc : flightTravelClasses) {
+            saved.getFlightTravelClasses().add(ftc);
+        }
         
         // Save again with travel classes
         Flight finalSaved = flightRepository.save(saved);
