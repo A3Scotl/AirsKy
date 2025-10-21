@@ -558,7 +558,7 @@ public class PaymentServiceImpl implements PaymentService {
             booking.setStatus(BookingStatus.CONFIRMED);
             updatePassengerSeats(booking);
             bookingRepository.save(booking);
-            log.info("Updated booking {} status to CONFIRMED", booking.getBookingId());
+            log.info("Updated booking {} status to CONFIRMED", booking.getBookingId()); 
             // Phát sự kiện BookingConfirmedEvent để các listener khác xử lý (gửi email, socket,...)
             eventPublisher.publishEvent(new BookingConfirmedEvent(this, booking));
         } else {

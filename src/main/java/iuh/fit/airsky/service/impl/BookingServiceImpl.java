@@ -32,6 +32,7 @@ import iuh.fit.airsky.enums.SeatTypes;
 import iuh.fit.airsky.enums.CheckinStatus;
 import iuh.fit.airsky.enums.PassengerType;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
+import iuh.fit.airsky.exception.SeatNotAvailableException;
 import iuh.fit.airsky.event.BookingCancelledEvent;
 import iuh.fit.airsky.mapper.BookingMapper;
 import iuh.fit.airsky.mapper.PassengerMapper;
@@ -2100,7 +2101,7 @@ public class BookingServiceImpl implements BookingService {
             log.error("Seat {} is not available. Status: {}, bookedBy: {}",
                     newSeat.getSeatId(), newSeat.getStatus(),
                     newSeat.getBookedByPassenger() != null ? newSeat.getBookedByPassenger().getPassengerId() : "null");
-            throw new IllegalStateException("Seat is not available: " + newSeat.getSeatId());
+            throw new SeatNotAvailableException("Ghế " + newSeat.getSeatId()+"đã được đặt trước.");
         }
 
         // Lưu ghế cũ để xử lý
