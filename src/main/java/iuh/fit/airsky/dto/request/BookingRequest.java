@@ -26,5 +26,6 @@ public class BookingRequest {
     private String dealCode; // Mã giảm giá (tùy chọn)
     private List<BookingAncillaryServiceRequest> ancillaryServices; // Dịch vụ đi kèm
     private String contactEmail; // Email để nhận thông tin booking
+    private String contactName; // Tên người liên hệ
 
 }

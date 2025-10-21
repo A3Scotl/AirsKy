@@ -16,8 +16,9 @@ import java.util.UUID;
 
 @Repository
 public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpecificationExecutor<Payment> {
-    @Query("SELECT p FROM Payment p LEFT JOIN FETCH p.booking ORDER BY p.createdAt DESC")
-    Page<Payment> findAll(Pageable pageable);
+    @Override
+    @EntityGraph(attributePaths = {"booking"})
+    Page<Payment> findAll(Pageable pageable); 
     Optional<Payment> findByBooking_BookingId(Long bookingId);
 
     boolean existsByBooking_BookingId(Long bookingId);

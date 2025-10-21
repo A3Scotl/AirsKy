@@ -32,14 +32,10 @@ public class BookingEventListener {
         String contactEmail = null;
         String contactName = null;
 
+        // Ưu tiên thông tin liên hệ được cung cấp trong booking
         if (booking.getContactEmail() != null && !booking.getContactEmail().isBlank()) {
             contactEmail = booking.getContactEmail();
-            // Lấy tên từ user nếu có, hoặc từ passenger đầu tiên
-            if (booking.getUserId() != null) {
-                contactName = booking.getUserId().getFirstName();
-            } else if (booking.getPassengers() != null && !booking.getPassengers().isEmpty()) {
-                contactName = booking.getPassengers().get(0).getFirstName();
-            }
+            contactName = booking.getContactName();
         } else if (booking.getUserId() != null) { // Fallback về user email
             contactEmail = booking.getUserId().getEmail();
             contactName = booking.getUserId().getFirstName();
@@ -91,11 +87,7 @@ public class BookingEventListener {
         // Ưu tiên email liên hệ được cung cấp trong booking
         if (booking.getContactEmail() != null && !booking.getContactEmail().isBlank()) {
             contactEmail = booking.getContactEmail();
-            if (booking.getUserId() != null) {
-                contactName = booking.getUserId().getFirstName();
-            } else if (booking.getPassengers() != null && !booking.getPassengers().isEmpty()) {
-                contactName = booking.getPassengers().get(0).getFirstName();
-            }
+            contactName = booking.getContactName();
         } else if (booking.getUserId() != null) { // Fallback về user email
             contactEmail = booking.getUserId().getEmail();
             contactName = booking.getUserId().getFirstName();

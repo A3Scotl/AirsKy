@@ -9,9 +9,10 @@ import java.util.List;
 @Data
 public class BookingResponse {
     private Long bookingId;
-    private String bookingCode;
-    private String userEmail; // Email của user (authenticated) hoặc passenger đầu tiên (guest)
     private String flightNumber;
+    private String bookingCode;
+    private String contactName;
+    private String contactEmail; 
     private String travelClass;
     private LocalDateTime bookingDate;
     private BigDecimal totalAmount;

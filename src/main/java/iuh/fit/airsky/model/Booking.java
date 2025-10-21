@@ -57,6 +57,9 @@ public class Booking extends BaseAuditOnlyEntity {
     @Column(name = "contact_email", length = 100)
     private String contactEmail; 
 
+    @Column(name = "contact_name", length = 100)
+    private String contactName;
+
     private String cancellationReason;
 
     @PrePersist

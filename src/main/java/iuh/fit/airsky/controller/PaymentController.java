@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -254,12 +255,17 @@ public class PaymentController {
             @RequestParam(value = "search", required = false) String search,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "paymentMethod", required = false) String paymentMethod,
-            @RequestParam(value = "startDate", required = false) String startDate,
-            @RequestParam(value = "endDate", required = false) String endDate
+            @RequestParam(value = "startDate", required = false) String startDate, 
+            @RequestParam(value = "endDate", required = false) String endDate,
+            @RequestParam(defaultValue = "paymentDate") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir
     ) {
         try {
-            Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+            Sort sort = sortDir.equalsIgnoreCase("asc") ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
+            Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size, sort);
+
             PageResponse<PaymentResponse> response = paymentService.findAllWithFilters(pageable, search, status, paymentMethod, startDate, endDate);
+            
             return ApiResponseUtil.buildResponse(
                 true,
                 "Payments retrieved successfully",
