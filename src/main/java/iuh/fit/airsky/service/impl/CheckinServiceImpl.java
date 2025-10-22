@@ -131,13 +131,12 @@ public class CheckinServiceImpl implements CheckinService {
             // GỬI THÔNG BÁO SOCKET
             if (booking.getUserId() != null) {
                 String message = String.format("Bạn đã check-in thành công cho chuyến bay %s. Boarding pass đã được gửi đến email của bạn.", booking.getFlight().getFlightNumber());
-                String title = "Check-in thành công";
                 notificationService.createAndSendNotification(
                     booking.getUserId().getId(),
                     NotificationType.CHECKIN_SUCCESSFUL.toString(),
                     message,
                     saved.getCheckInId(),
-                    title
+                    "Check-in thành công"
                 );
             }
         } catch (Exception e) {

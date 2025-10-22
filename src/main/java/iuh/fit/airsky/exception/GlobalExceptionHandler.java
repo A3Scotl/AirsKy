@@ -84,4 +84,10 @@ public class GlobalExceptionHandler {
         ex.printStackTrace(); // log
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred: " + ex.getMessage(), ErrorCode.UNEXPECTED_ERROR, request.getRequestURI());
     }
+
+    @ExceptionHandler(SeatNotAvailableException.class)
+    public ResponseEntity<ApiResponse<Object>> handleSeatNotAvailable(SeatNotAvailableException ex, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.CONFLICT, ex.getMessage(), ErrorCode.SEAT_NOT_AVAILABLE, request.getRequestURI());
+    }
+    
 }

@@ -32,14 +32,13 @@ public class BookingEventListener {
         String contactEmail = null;
         String contactName = null;
 
-        if (booking.getUserId() != null) {
+        // Ưu tiên thông tin liên hệ được cung cấp trong booking
+        if (booking.getContactEmail() != null && !booking.getContactEmail().isBlank()) {
+            contactEmail = booking.getContactEmail();
+            contactName = booking.getContactName();
+        } else if (booking.getUserId() != null) { // Fallback về user email
             contactEmail = booking.getUserId().getEmail();
             contactName = booking.getUserId().getFirstName();
-        } else if (booking.getPassengers() != null && !booking.getPassengers().isEmpty()) {
-            // Lấy thông tin từ hành khách đầu tiên cho guest booking
-            Passenger firstPassenger = booking.getPassengers().get(0);
-            contactEmail = firstPassenger.getEmail();
-            contactName = firstPassenger.getFirstName();
         }
 
         // 1. Gửi email xác nhận
@@ -58,13 +57,12 @@ public class BookingEventListener {
         try {
             if (booking.getUserId() != null) {
                 String message = String.format("Đặt vé %s của bạn đã được xác nhận thành công!", booking.getBookingCode());
-                String title = "Xác nhận đặt vé thành công";
                 notificationService.createAndSendNotification(
                     booking.getUserId().getId(),
                     "BOOKING_CONFIRMED",
                     message,
                     booking.getBookingId(),
-                    title
+                    "Đặt vé thành công"
                 );
             }
         } catch (Exception e) {
@@ -86,17 +84,17 @@ public class BookingEventListener {
             return;
         }
         
-        if (booking.getUserId() != null) {
+        // Ưu tiên email liên hệ được cung cấp trong booking
+        if (booking.getContactEmail() != null && !booking.getContactEmail().isBlank()) {
+            contactEmail = booking.getContactEmail();
+            contactName = booking.getContactName();
+        } else if (booking.getUserId() != null) { // Fallback về user email
             contactEmail = booking.getUserId().getEmail();
             contactName = booking.getUserId().getFirstName();
-        } else if (booking.getPassengers() != null && !booking.getPassengers().isEmpty()) {
-            Passenger firstPassenger = booking.getPassengers().get(0);
-            contactEmail = firstPassenger.getEmail();
-            contactName = firstPassenger.getFirstName();
         }
 
         // 1. Gửi email thông báo hủy
-        try {
+        try { 
             if (contactEmail != null && !contactEmail.isBlank()) {
                 String subject = "Thông báo: Đặt vé đã bị hủy - Mã: " + booking.getBookingCode();
                 // Bạn có thể tạo một template email riêng cho việc hủy vé
@@ -115,16 +113,16 @@ public class BookingEventListener {
         try {
             if (booking.getUserId() != null) {
                 String message = String.format("Đặt vé %s của bạn đã bị hủy do: %s.", booking.getBookingCode(), reason);
-                String title = "Thông báo hủy vé";
                 notificationService.createAndSendNotification(
                     booking.getUserId().getId(),
                     "BOOKING_CANCELLED",
                     message,
                     booking.getBookingId(),
-                    title
+                    "Đặt vé đã bị hủy"
                 );
             }
-        } catch (Exception e) {
+        }
+ catch (Exception e) {
             log.error("Failed to send BOOKING_CANCELLED notification for booking {}: {}", booking.getBookingId(), e.getMessage(), e);
         }
     }

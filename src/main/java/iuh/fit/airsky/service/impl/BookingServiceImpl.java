@@ -36,6 +36,7 @@ import iuh.fit.airsky.enums.CheckinStatus;
 import iuh.fit.airsky.enums.PassengerType;
 import iuh.fit.airsky.enums.NotificationType;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
+import iuh.fit.airsky.exception.SeatNotAvailableException;
 import iuh.fit.airsky.event.BookingCancelledEvent;
 import iuh.fit.airsky.mapper.BookingMapper;
 import iuh.fit.airsky.mapper.PaymentMapper;
@@ -279,6 +280,16 @@ public class BookingServiceImpl implements BookingService {
                 throw new IllegalStateException("Không đủ ghế trống cho chặng bay " + segment.getSegmentOrder());
             }
         }
+
+    // Thêm validation cho guest booking: phải có contactEmail và contactName
+    if (request.getUserId() == null) {
+        if (request.getContactEmail() == null || request.getContactEmail().isBlank()) {
+            throw new IllegalArgumentException("Email liên hệ là bắt buộc đối với đặt vé của khách.");
+        }
+        if (request.getContactName() == null || request.getContactName().isBlank()) {
+            throw new IllegalArgumentException("Tên người liên hệ là bắt buộc đối với đặt vé của khách.");
+        }
+    }
     }
 
     private Booking initializeBooking(BookingRequest request) {
@@ -286,6 +297,15 @@ public class BookingServiceImpl implements BookingService {
 
         if (request.getUserId() != null) {
             userRepository.findById(request.getUserId()).ifPresent(booking::setUserId);
+        }
+
+        // Thêm email liên hệ từ request
+        if (request.getContactEmail() != null && !request.getContactEmail().isBlank()) {
+            booking.setContactEmail(request.getContactEmail());
+        }
+        // Thêm tên liên hệ từ request
+        if (request.getContactName() != null && !request.getContactName().isBlank()) {
+            booking.setContactName(request.getContactName());
         }
 
         Flight firstFlight = findFlightById(request.getFlightSegments().get(0).getFlightId());
@@ -434,6 +454,7 @@ public class BookingServiceImpl implements BookingService {
         populateBaggageInformation(response, reloadedBooking);
         populateAncillaryServicesInformation(response, reloadedBooking);
         populateSeatTypeInformation(response, reloadedBooking);
+        populateContactInformation(response, reloadedBooking);
         return response;
     }
 
@@ -486,6 +507,7 @@ public class BookingServiceImpl implements BookingService {
             populateDealInformation(response, booking);
             populateBaggageInformation(response, booking);
             populateAncillaryServicesInformation(response, booking);
+            populateContactInformation(response, booking);
             return Optional.of(response);
         }
 
@@ -506,6 +528,7 @@ public class BookingServiceImpl implements BookingService {
         populateDealInformation(response, booking);
         populateBaggageInformation(response, booking);
         populateAncillaryServicesInformation(response, booking);
+        populateContactInformation(response, booking);
 
         return response;
     }
@@ -542,6 +565,7 @@ public class BookingServiceImpl implements BookingService {
                         populateDealInformation(response, booking);
                         populateBaggageInformation(response, booking);
                         populateAncillaryServicesInformation(response, booking);
+                        populateContactInformation(response, booking);
                         return response;
                     } catch (Exception e) {
                         log.warn("Could not fully populate booking response for booking {}: {}", booking.getBookingId(), e.getMessage());
@@ -2199,13 +2223,12 @@ public class BookingServiceImpl implements BookingService {
 
                     // GỬI THÔNG BÁO SOCKET
                     String message = String.format("Check-in cho hành khách %s %s thành công. Boarding pass đã sẵn sàng.", passenger.getFirstName(), passenger.getLastName());
-                    String title = "Check-in thành công";
                     notificationService.createAndSendNotification(
                         booking.getUserId().getId(),
                         NotificationType.CHECKIN_SUCCESSFUL.toString(),
                         message,
                         checkIn.getCheckInId(),
-                        title
+                        "Check-in thành công"
                     );
                 } else {
                     log.warn("Boarding pass URL is null or empty for check-in {}", checkIn.getCheckInId());
@@ -2238,7 +2261,7 @@ public class BookingServiceImpl implements BookingService {
             log.error("Seat {} is not available. Status: {}, bookedBy: {}",
                     newSeat.getSeatId(), newSeat.getStatus(),
                     newSeat.getBookedByPassenger() != null ? newSeat.getBookedByPassenger().getPassengerId() : "null");
-            throw new IllegalStateException("Seat is not available: " + newSeat.getSeatId());
+            throw new SeatNotAvailableException("Ghế " + newSeat.getSeatId()+"đã được đặt trước.");
         }
 
         // Lưu ghế cũ để xử lý
@@ -2541,6 +2564,19 @@ public class BookingServiceImpl implements BookingService {
                 .reason(request.getReason())
                 .message(String.format("Booking total updated successfully. New total: %s VND. Please proceed with payment.", newTotal))
                 .build();
+    }
+
+    private void populateContactInformation(BookingResponse response, Booking booking) {
+        // Ưu tiên thông tin liên hệ từ booking entity
+        if (booking.getContactName() != null && !booking.getContactName().isBlank()) {
+            response.setContactName(booking.getContactName());
+            response.setContactEmail(booking.getContactEmail());
+        } 
+        // Fallback về thông tin người dùng nếu có
+        else if (booking.getUserId() != null) {
+            response.setContactName(booking.getUserId().getFirstName() + " " + booking.getUserId().getLastName());
+            response.setContactEmail(booking.getUserId().getEmail());
+        }
     }
 
     private void refundPointsForCancelledBooking(Booking booking) {

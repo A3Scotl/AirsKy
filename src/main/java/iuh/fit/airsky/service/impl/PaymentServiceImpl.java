@@ -35,6 +35,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Sort.Direction;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -132,9 +134,9 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     public PageResponse<PaymentResponse> findAll(Pageable pageable) {
-        log.info("Finding all payments with pagination: {}", pageable);
-        Page<Payment> page = paymentRepository.findAll(pageable);
-        return new PageResponse<>(page.map(paymentMapper::toResponseDTO));
+        // log.info("Finding all payments with pagination: {}", pageable);
+        // Page<Payment> page = paymentRepository.findAll(pageable);
+        return null;
     }
 
     @Override
@@ -165,6 +167,17 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     public PageResponse<PaymentResponse> findAllWithFilters(Pageable pageable, String search, String status, String paymentMethod, String startDate, String endDate) {
         Specification<Payment> spec = Specification.where(null);
+
+        // Tạo Pageable mới với sắp xếp mặc định nếu chưa có
+        Pageable sortedPageable = pageable;
+        if (pageable.getSort().isUnsorted()) {
+            sortedPageable = org.springframework.data.domain.PageRequest.of(
+                pageable.getPageNumber(), 
+                pageable.getPageSize(), 
+                Sort.by(Direction.DESC, "paymentDate")
+            );
+        }
+
         if (search != null && !search.isBlank()) {
             spec = spec.and((root, query, cb) -> cb.or(
                 cb.like(cb.lower(root.get("booking").get("bookingCode")), "%" + search.toLowerCase() + "%"),
@@ -185,7 +198,7 @@ public class PaymentServiceImpl implements PaymentService {
             LocalDate end = LocalDate.parse(endDate);
             spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("paymentDate"), end.atTime(23, 59, 59)));
         }
-        Page<Payment> page = paymentRepository.findAll(spec, pageable);
+        Page<Payment> page = paymentRepository.findAll(spec, sortedPageable);
         return new PageResponse<>(page.map(paymentMapper::toResponseDTO));
     }
 
@@ -545,7 +558,7 @@ public class PaymentServiceImpl implements PaymentService {
             booking.setStatus(BookingStatus.CONFIRMED);
             updatePassengerSeats(booking);
             bookingRepository.save(booking);
-            log.info("Updated booking {} status to CONFIRMED", booking.getBookingId());
+            log.info("Updated booking {} status to CONFIRMED", booking.getBookingId()); 
             // Phát sự kiện BookingConfirmedEvent để các listener khác xử lý (gửi email, socket,...)
             eventPublisher.publishEvent(new BookingConfirmedEvent(this, booking));
         } else {
@@ -713,4 +726,3 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 }
-

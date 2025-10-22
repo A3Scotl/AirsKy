@@ -1,264 +1,345 @@
 <!DOCTYPE html>
 <html lang="vi">
-
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Xác Nhận Đặt Vé - AirSky Airlines</title>
+    <title>Xác nhận đặt vé - ${bookingCode}</title>
     <style>
         body {
-            font-family: "Segoe UI", Arial, sans-serif;
-            background-color: #f4f6fb;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+            background-color: #f0f2f5;
             margin: 0;
             padding: 0;
-            color: #333;
+            color: #1c1e21;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
         .container {
-            max-width: 850px;
-            background: #fff;
-            margin: 20px auto;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            border-radius: 6px;
+            max-width: 700px;
+            margin: 30px auto;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
             overflow: hidden;
+            border: 1px solid #e0e0e0;
         }
 
         .header {
-            background: #0e66dc;
-            color: white;
+            background-color: #0e66dc;
+            padding: 24px;
             text-align: center;
-            padding: 20px;
         }
 
-        .logo {
-            font-size: 26px;
-            font-weight: bold;
+        .header .logo {
+            color: #ffffff;
+            font-size: 28px;
+            font-weight: 700;
             letter-spacing: 1px;
         }
 
-        .booking-bar {
-            background: #002f96;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 20px;
-            font-size: 18px;
-            font-weight: 600;
+        .main-content {
+            padding: 24px 32px;
         }
 
-        .booking-bar img {
-            width: 90px;
-            height: 90px;
-            border: 2px solid white;
-            border-radius: 6px;
+        .greeting {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .sub-greeting {
+            font-size: 16px;
+            color: #606770;
+            margin-bottom: 24px;
+        }
+
+        .booking-code-wrapper {
+            text-align: center;
+            background-color: #e7f3ff;
+            border: 1px dashed #90b8d9;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .booking-code-label {
+            font-size: 14px;
+            color: #606770;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .booking-code {
+            font-size: 32px;
+            font-weight: 700;
+            color: #0e66dc;
+            letter-spacing: 2px;
+            margin: 4px 0;
+        }
+
+        .qr-section {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .qr-button {
+            display: inline-block;
+            background-color: #28a745;
+            color: #ffffff;
+            padding: 14px 28px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            transition: background-color 0.2s;
+        }
+
+        .qr-button:hover {
+            background-color: #218838;
         }
 
         .section {
-            padding: 20px;
-            border-bottom: 1px solid #e0e0e0;
+            margin-bottom: 24px;
         }
 
         .section h3 {
-            background: #0e66dc;
-            color: white;
-            padding: 8px 12px;
-            border-radius: 4px;
+            font-size: 18px;
+            font-weight: 600;
+            color: #002f96;
+            border-bottom: 2px solid #e7f3ff;
+            padding-bottom: 8px;
             margin-top: 0;
-            font-size: 16px;
+            margin-bottom: 16px;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
         }
 
         th,
         td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            font-size: 14px;
+            padding: 12px 0;
+            font-size: 15px;
+            border-bottom: 1px solid #e9ebee;
+            vertical-align: top;
         }
 
         th {
-            background: #f2f2f2;
+            text-align: left;
+            color: #606770;
+            font-weight: 600;
         }
 
-        .insurance {
-            background: #e9f4ff;
-            border-left: 4px solid #0e66dc;
+        .flight-details {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        .invoice {
-            background: #f5fff5;
-            border-left: 4px solid #0e66dc;
+        .flight-point {
+            text-align: center;
+        }
+
+        .flight-point .time {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .flight-point .code {
+            font-size: 24px;
+            font-weight: 700;
+            color: #0e66dc;
+        }
+
+        .flight-point .airport {
+            font-size: 14px;
+            color: #606770;
+        }
+
+        .flight-arrow {
+            text-align: center;
+            color: #90b8d9;
+        }
+
+        .flight-arrow .duration {
+            font-size: 12px;
+        }
+
+        .flight-arrow .plane-icon {
+            font-size: 24px;
+            line-height: 1;
+        }
+
+        .passenger-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ebee;
+            list-style-type: none;
+        }
+
+        .passenger-list {
+            padding-left: 0;
+            margin: 0;
+        }
+
+        .passenger-list li:last-child {
+            border-bottom: none;
+        }
+
+        .price-summary {
+            background-color: #f7f8fa;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .price-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: 15px;
+        }
+
+        .price-row.total {
+            font-size: 18px;
+            font-weight: 700;
+            color: #0e66dc;
+            border-top: 1px solid #e0e0e0;
+            padding-top: 12px;
+            margin-top: 12px;
         }
 
         .footer {
-            background: #0e66dc;
-            color: #fff;
+            background-color: #f0f2f5;
+            color: #606770;
             text-align: center;
-            padding: 15px;
-            font-size: 14px;
+            padding: 24px;
+            font-size: 12px;
         }
 
         .footer a {
-            color: white;
+            color: #0e66dc;
             text-decoration: none;
+            font-weight: 600;
         }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <!-- Header -->
         <div class="header">
-            <div class="logo">AIRSKY AIRLINES</div>
-            <p>Xác Nhận Đặt Vé Thành Công</p>
+            <div class="logo">AIRSKY</div>
         </div>
 
-        <!-- Booking code + Important Info -->
-        <div class="booking-bar">
-            <div style="flex: 1;">
-                <div style="font-size: 24px; font-weight: bold; margin-bottom: 8px;">MÃ ĐẶT CHỖ: ${bookingCode}</div>
-                <div style="font-size: 14px; color: #666;">
-                    • Vui lòng lưu mã này để tra cứu và check-in<br>
-                    • Check-in mở cửa trước giờ bay 24 tiếng<br>
-                    • Đến sân bay sớm ít nhất 2 tiếng
-                </div>
+        <div class="main-content">
+            <p class="greeting">Chào ${contactName},</p>
+            <p class="sub-greeting">Cảm ơn bạn đã đặt vé tại AirSky. Chuyến bay của bạn đã được xác nhận thành công!</p>
+
+            <div class="booking-code-wrapper">
+                <div class="booking-code-label">Mã đặt chỗ của bạn</div>
+                <div class="booking-code">${bookingCode}</div>
+                <p style="font-size: 14px; color: #606770; margin-top: 10px;">Vui lòng sử dụng mã này để quản lý đặt vé và làm thủ tục check-in.</p>
+                
+                <!-- Nút thanh toán QR -->
+                <#if paymentUrl?has_content>
+                    <div class="qr-section">
+                        <a href="${paymentUrl}" class="qr-button">Thanh toán ngay bằng QR</a>
+                    </div>
+                </#if>
             </div>
-            <div style="text-align: center; padding-left: 20px;">
-                <div
-                    style="background: #e8f4fd; border: 2px solid #0e66dc; border-radius: 8px; padding: 15px; display: inline-block;">
-                    <div style="font-size: 18px; font-weight: bold; color: #0e66dc; margin-bottom: 5px;">📱</div>
-                    <div style="font-size: 12px; color: #0e66dc; font-weight: 600;">CHECK-IN ONLINE</div>
-                    <div style="font-size: 10px; color: #666;">Sẵn sàng 24h trước bay</div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Booking Info -->
-        <div class="section">
-            <h3>1. Thông Tin Đặt Chỗ</h3>
-            <p>Trạng thái đặt chỗ: <strong>ĐÃ XÁC NHẬN</strong></p>
-            <p>Ngày đặt: ${bookingDate}</p>
-            <p>Tên hành khách chính: ${passengerName}</p>
-            <p>Số điện thoại: ${phone}</p>
-            <p>Email: ${email}</p>
-        </div>
-
-        <!-- Flight Info -->
-        <div class="section">
-            <h3>2. Thông Tin Chuyến Bay</h3>
-            <table>
-                <tr>
-                    <th>Chuyến Bay</th>
-                    <th>Ngày</th>
-                    <th>Loại Vé</th>
-                    <th>Khởi Hành</th>
-                    <th>Đến</th>
-                </tr>
-                <tr>
-                    <td>${flightNumber}</td>
-                    <td>${flightDate}</td>
-                    <td>${travelClass}</td>
-                    <td>${departureTime} - ${departureAirport}</td>
-                    <td>${arrivalTime} - ${arrivalAirport}</td>
-                </tr>
-            </table>
-        </div>
-
-        <!-- Passenger Info -->
-        <div class="section">
-            <h3>3. Thông Tin Hành Khách</h3>
-            <table>
-                <tr>
-                    <th>Tên Hành Khách</th>
-                    <th>Số Ghế</th>
-                </tr>
-                <#list passengers as p>
-                    <tr>
-                        <td>${p.firstName} ${p.lastName}</td>
-                        <td>${p.seatNumber!""}</td>
-                    </tr>
+            <div class="section">
+                <h3>Hành trình chuyến bay</h3>
+                <!-- Flight Segment Loop -->
+                <#list flightSegments as segment>
+                    <div style="border: 1px solid #e9ebee; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                        <div style="font-size: 14px; font-weight: 600; color: #606770; margin-bottom: 12px;">
+                            Chặng ${segment.segmentOrder}: ${segment.flightNumber}
+                        </div>
+                        <div class="flight-details">
+                            <div class="flight-point">
+                                <div class="time">${segment.departureTime}</div>
+                                <div class="code">${segment.departureCode}</div>
+                                <div class="airport">${segment.departureAirport}</div>
+                            </div>
+                            <div class="flight-arrow">
+                                <div class="duration">${segment.duration}</div>
+                                <div class="plane-icon">✈</div>
+                                <div style="font-size: 12px;">${segment.airlineName}</div>
+                            </div>
+                            <div class="flight-point" style="text-align: right;">
+                                <div class="time">${segment.arrivalTime}</div>
+                                <div class="code">${segment.arrivalCode}</div>
+                                <div class="airport">${segment.arrivalAirport}</div>
+                            </div>
+                        </div>
+                        <div style="font-size: 13px; color: #606770; margin-top: 12px; text-align: center;">Ngày: ${segment.flightDate} | Hạng vé: ${segment.travelClass}</div>
+                    </div>
                 </#list>
-            </table>
-        </div>
+            </div>
 
-        <!-- Check-in Instructions -->
-        <div class="section">
-            <h3>4. Hướng Dẫn Check-in</h3>
-            <div style="background: #f0f8ff; border-left: 4px solid #0e66dc; padding: 15px; margin: 10px 0;">
-                <h4 style="margin-top: 0; color: #0e66dc;">🕒 Thời Gian Check-in</h4>
-                <ul style="margin: 5px 0; padding-left: 20px;">
-                    <li>Check-in online: Mở 24 tiếng trước giờ bay</li>
-                    <li>Check-in tại sân bay: Mở 3 tiếng trước giờ bay</li>
-                    <li>Đóng check-in: 45 phút trước giờ bay</li>
+            <div class="section">
+                <h3>Thông tin hành khách</h3>
+                <ul class="passenger-list">
+                    <#list passengers as p>
+                        <li>
+                            <span style="font-weight: 600;">${p.lastName} ${p.firstName}</span>
+                            <span style="color: #606770; font-size: 14px;"> - Ghế: ${p.seatNumber!"Chưa chọn"}</span>
+                        </li>
+                    </#list>
                 </ul>
             </div>
-            <div style="background: #fff5f5; border-left: 4px solid #dc3545; padding: 15px; margin: 10px 0;">
-                <h4 style="margin-top: 0; color: #dc3545;">⚠️ Lưu Ý Quan Trọng</h4>
-                <ul style="margin: 5px 0; padding-left: 20px;">
-                    <li>Đến sân bay sớm ít nhất 2 tiếng cho chuyến bay nội địa</li>
-                    <li>Mang theo giấy tờ tùy thân và mã đặt chỗ</li>
-                    <li>Kiểm tra hạn sử dụng của giấy tờ</li>
-                    <li>Chuẩn bị đầy đủ giấy tờ y tế nếu cần</li>
+
+            <div class="section">
+                <h3>Chi tiết thanh toán</h3>
+                <div class="price-summary">
+                    <div class="price-row">
+                        <span>Giá vé cơ bản</span>
+                        <span>${baseFare}</span>
+                    </div>
+                    <div class="price-row">
+                        <span>Thuế và phí</span>
+                        <span>${taxesAndFees}</span>
+                    </div>
+                    <div class="price-row">
+                        <span>Dịch vụ bổ sung (ghế, hành lý,...)</span>
+                        <span>${extrasTotal}</span>
+                    </div>
+                    <#if discountAmount?has_content && discountAmount != "0">
+                        <div class="price-row" style="color: #28a745;">
+                            <span>Giảm giá (${appliedDealCode})</span>
+                            <span>-${discountAmount}</span>
+                        </div>
+                    </#if>
+                    <div class="price-row total">
+                        <span>Tổng cộng</span>
+                        <span>${totalAmount}</span>
+                    </div>
+                </div>
+                <div style="font-size: 14px; color: #606770; margin-top: 12px;">
+                    Đã thanh toán qua: <strong>${paymentMethod}</strong> vào lúc ${paymentDate}.
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>Lưu ý quan trọng</h3>
+                <ul style="font-size: 14px; color: #606770; padding-left: 20px;">
+                    <li>Vui lòng có mặt tại sân bay ít nhất <strong>2 giờ</strong> trước giờ khởi hành cho chuyến bay nội địa và <strong>3 giờ</strong> cho chuyến bay quốc tế.</li>
+                    <li>Quầy làm thủ tục sẽ đóng <strong>45 phút</strong> trước giờ bay.</li>
+                    <li>Mang theo giấy tờ tùy thân hợp lệ (CCCD/Hộ chiếu) và mã đặt chỗ này.</li>
                 </ul>
             </div>
         </div>
 
-        <!-- Insurance -->
-        <div class="section insurance">
-            <h3>5. Chương Trình Bảo Hiểm</h3>
-            <p>AirSky trân trọng dành tặng quý hành khách các chương trình bảo hiểm khi bay cùng AirSky:</p>
-            <ul>
-                <li>Bảo hiểm “Bay An Toàn” cho các chuyến bay nội địa Việt Nam.</li>
-                <li>Bảo hiểm “Flight Care” cho hạng vé SkyBoss và Deluxe.</li>
-            </ul>
-            <p>Chương trình bảo hiểm với nhiều quyền lợi cùng sự hỗ trợ tốt nhất, mang lại sự an tâm tuyệt đối cho hành
-                khách.</p>
-        </div>
-
-        <!-- Pricing -->
-        <div class="section">
-            <h3>6. Giá Vé & Thanh Toán</h3>
-            <table>
-                <tr>
-                    <th>Ngày Thanh Toán</th>
-                    <th>Phương Thức</th>
-                    <th>Tổng Số Tiền</th>
-                </tr>
-                <tr>
-                    <td>${paymentDate}</td>
-                    <td>${paymentMethod}</td>
-                    <td><strong>${totalAmount} VND</strong></td>
-                </tr>
-            </table>
-        </div>
-
-        <!-- Invoice -->
-        <div class="section invoice">
-            <h3>7. Hóa Đơn</h3>
-            <p><strong>Công Ty Cổ Phần Hàng Không AirSky</strong><br />
-                Địa chỉ: Số 123 Nguyễn Văn Trỗi, Quận Phú Nhuận, TP. Hồ Chí Minh<br />
-                Mã số thuế: 0312345678</p>
-        </div>
-
-        <!-- Conditions -->
-        <div class="section">
-            <h3>8. Điều Lệ Vận Chuyển</h3>
-            <p>Vui lòng đọc và kiểm tra điều lệ vận chuyển trước mỗi chuyến bay tại
-                <a href="http://airsky.com/terms">airsky.com/terms</a>.
-            </p>
-        </div>
-
-        <!-- Footer -->
         <div class="footer">
-            <p>Cảm ơn bạn đã chọn AirSky Airlines. Chúc chuyến bay an lành!</p>
-            <p><a href="http://airsky.com">airsky.com</a></p>
+            <p>Cảm ơn bạn đã lựa chọn AirSky. Chúc bạn một chuyến bay tốt đẹp!</p>
+            <p>
+                <a href="https://yourwebsite.com/contact">Liên hệ</a> |
+                <a href="https://yourwebsite.com/faq">Câu hỏi thường gặp</a> |
+                <a href="https://yourwebsite.com/policy">Chính sách</a>
+            </p>
+            <p style="font-size: 10px; color: #8a8d91;">© 2024 AirSky Airlines. All rights reserved.</p>
         </div>
     </div>
 </body>
-
 </html>
