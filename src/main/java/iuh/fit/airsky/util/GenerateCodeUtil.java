@@ -1,5 +1,6 @@
 package iuh.fit.airsky.util;
 
+import iuh.fit.airsky.repository.DealRepository;
 import iuh.fit.airsky.repository.FlightRepository;
 import org.springframework.stereotype.Component;
 
@@ -18,5 +19,17 @@ public class GenerateCodeUtil {
             number = airlineCode + String.format("%04d", random.nextInt(10000));
         } while (repository.findByFlightNumber(number).isPresent());
         return number;
+    }
+
+    /**
+     * Generate unique deal code (POINTS + 6 digits for points redemption)
+     */
+    public String generateDealCode(DealRepository repository) {
+        Random random = new Random();
+        String code;
+        do {
+            code = "POINTS" + String.format("%06d", random.nextInt(1000000));
+        } while (repository.existsByDealCode(code));
+        return code;
     }
 }

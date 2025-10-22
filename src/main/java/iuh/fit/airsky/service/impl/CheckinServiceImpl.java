@@ -15,7 +15,8 @@ import iuh.fit.airsky.repository.CheckinRepository;
 import iuh.fit.airsky.repository.PassengerRepository;
 import iuh.fit.airsky.service.BoardingPassService;
 import iuh.fit.airsky.service.CheckinService;
-import iuh.fit.airsky.service.NotificationService; 
+import iuh.fit.airsky.service.NotificationService;
+import iuh.fit.airsky.enums.NotificationType; 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -133,7 +134,7 @@ public class CheckinServiceImpl implements CheckinService {
                 String title = "Check-in thành công";
                 notificationService.createAndSendNotification(
                     booking.getUserId().getId(),
-                    "CHECKIN_SUCCESSFUL",
+                    NotificationType.CHECKIN_SUCCESSFUL.toString(),
                     message,
                     saved.getCheckInId(),
                     title

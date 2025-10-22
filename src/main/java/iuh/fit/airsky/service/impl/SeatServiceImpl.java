@@ -7,6 +7,7 @@ import iuh.fit.airsky.mapper.SeatMapper;
 import iuh.fit.airsky.model.*;
 import iuh.fit.airsky.repository.AircraftRepository;
 import iuh.fit.airsky.repository.FlightRepository;
+import iuh.fit.airsky.repository.FlightTravelClassRepository;
 import iuh.fit.airsky.repository.PassengerRepository;
 import iuh.fit.airsky.repository.SeatRepository;
 import iuh.fit.airsky.repository.TravelClassRepository;
@@ -32,6 +33,7 @@ public class SeatServiceImpl implements SeatService {
     private final PassengerRepository passengerRepository;
     private final AircraftRepository aircraftRepository;
     private final FlightRepository flightRepository;
+    private final FlightTravelClassRepository flightTravelClassRepository;
     // Lock map theo flightId
     private final ConcurrentHashMap<Long, Object> flightLocks = new ConcurrentHashMap<>();
 
@@ -104,7 +106,15 @@ public class SeatServiceImpl implements SeatService {
         // Generate and save seats in batch
         List<Seat> seats = SeatGeneratorUtil.generateSeats(flight, flight.getAircraft(), travelClasses);
         log.info("Generated {} seats total for flight {}", seats.size(), flightId);
-        return seatRepository.saveAll(seats);
+        
+        // Save seats
+        List<Seat> savedSeats = seatRepository.saveAll(seats);
+        
+        // Save updated flight travel classes with correct capacities
+        flightTravelClassRepository.saveAll(flight.getFlightTravelClasses());
+        log.info("Updated flight travel class capacities for flight {}", flightId);
+        
+        return savedSeats;
     }
     
     private List<SeatResponse> mapToSeatResponses(List<Seat> seats) {

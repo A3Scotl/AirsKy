@@ -14,6 +14,7 @@ public interface AncillaryServiceMapper {
     AncillaryService toEntity(AncillaryServiceRequest request);
     
     @Mapping(target = "serviceTypeDisplayName", expression = "java(entity.getServiceType().getVietnameseName())")
+    @Mapping(target = "isActive", source = "active")
     AncillaryServiceResponse toResponse(AncillaryService entity);
     
     void updateEntityFromRequest(AncillaryServiceRequest request, @MappingTarget AncillaryService entity);

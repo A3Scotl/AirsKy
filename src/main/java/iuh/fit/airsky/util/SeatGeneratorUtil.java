@@ -149,19 +149,8 @@ public class SeatGeneratorUtil {
         int businessSeats = (int) (totalSeats * 0.20);
         int economySeats = totalSeats - firstSeats - businessSeats;
 
-        // Update the FlightTravelClass capacities in the flight object
-        if (flight.getFlightTravelClasses() != null) {
-            for (FlightTravelClass ftc : flight.getFlightTravelClasses()) {
-                String className = ftc.getTravelClass().getClassName();
-                if ("First".equals(className)) {
-                    ftc.setCapacity(firstSeats);
-                } else if ("Business".equals(className)) {
-                    ftc.setCapacity(businessSeats);
-                } else if ("Economy".equals(className)) {
-                    ftc.setCapacity(economySeats);
-                }
-            }
-        }
+        // Update the FlightTravelClass capacities based on actual seats generated
+        // This is now done after seat generation below
 
         // Generate seats for each section (2 sections with separate row ranges)
         int sectionFirstSeats = firstSeats / totalSections;
@@ -182,6 +171,21 @@ public class SeatGeneratorUtil {
         generateSeatsForSection(seats, flight, firstClass, businessClass, economyClass,
                                16, 30, sectionFirstSeats, sectionBusinessSeats, sectionEconomySeats,
                                seatsPerRow, seatLetters, 0);
+
+        // Count actual seats generated per class
+        Map<String, Long> seatsPerClass = seats.stream()
+                .collect(Collectors.groupingBy(seat -> seat.getTravelClass().getClassName(), Collectors.counting()));
+
+        // Update FlightTravelClass capacities based on actual seats generated
+        if (flight.getFlightTravelClasses() != null) {
+            for (FlightTravelClass ftc : flight.getFlightTravelClasses()) {
+                String className = ftc.getTravelClass().getClassName();
+                Long actualSeats = seatsPerClass.get(className);
+                if (actualSeats != null) {
+                    ftc.setCapacity(actualSeats.intValue());
+                }
+            }
+        }
 
         System.out.println("Generated " + seats.size() + " seats total");
 
@@ -209,7 +213,10 @@ public class SeatGeneratorUtil {
                     }
                 });
 
-        System.out.println("Generated seats: First=" + firstSeats + ", Business=" + businessSeats + ", Economy=" + economySeats + ", Total=" + seats.size());
+        System.out.println("Generated seats: First=" + seatsPerClass.getOrDefault("First", 0L) + 
+                          ", Business=" + seatsPerClass.getOrDefault("Business", 0L) + 
+                          ", Economy=" + seatsPerClass.getOrDefault("Economy", 0L) + 
+                          ", Total=" + seats.size());
         return seats;
     }
 }

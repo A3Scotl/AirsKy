@@ -58,12 +58,18 @@ public class DealRequest {
     
     private Boolean isActive = true;
 
-    private Integer earnLoyaltyPoints;
-    private Integer redeemLoyaltyPoints;
+    // Remove old loyalty points fields
+    // private Integer earnLoyaltyPoints;
+    // private Integer redeemLoyaltyPoints;
 
     private Boolean isGuestOnly = false;
 
     private LoyaltyTier requiredLoyaltyTier;
 
     private Boolean isLoyaltyExclusive = false;
+
+    // Fields for points redemption deals
+    private Integer pointsRequired;
+    private Boolean isPointsRedemption = false;
+    private BigDecimal fixedDiscountAmount;
 }

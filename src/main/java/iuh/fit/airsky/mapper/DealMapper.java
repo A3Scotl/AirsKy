@@ -34,6 +34,9 @@ public interface DealMapper {
     @Mapping(target = "isGuestOnly", source = "isGuestOnly")
     @Mapping(target = "requiredLoyaltyTier", source = "requiredLoyaltyTier")
     @Mapping(target = "isLoyaltyExclusive", source = "isLoyaltyExclusive")
+    @Mapping(target = "pointsRequired", source = "pointsRequired")
+    @Mapping(target = "isPointsRedemption", source = "isPointsRedemption")
+    @Mapping(target = "fixedDiscountAmount", source = "fixedDiscountAmount")
     DealResponse toResponseDTO(Deal entity);
 
     List<DealResponse> toResponseDTOList(List<Deal> deals);

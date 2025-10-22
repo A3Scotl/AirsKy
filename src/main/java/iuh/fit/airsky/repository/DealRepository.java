@@ -1,5 +1,6 @@
 package iuh.fit.airsky.repository;
 
+import iuh.fit.airsky.enums.LoyaltyTier;
 import iuh.fit.airsky.model.Airport;
 import iuh.fit.airsky.model.Deal;
 import org.springframework.data.domain.Page;
@@ -45,4 +46,11 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
     @Query("SELECT d FROM Deal d WHERE d.isActive = true AND d.validFrom <= :currentTime AND d.validTo >= :currentTime " +
            "AND (d.totalUsageLimit IS NULL OR d.usedCount < d.totalUsageLimit)")
     List<Deal> findActiveDealsList(@Param("currentTime") LocalDateTime currentTime);
+
+    @Query("SELECT d FROM Deal d WHERE d.isActive = true AND d.isPointsRedemption = true " +
+           "AND d.validFrom <= :currentTime AND d.validTo >= :currentTime " +
+           "AND (d.requiredLoyaltyTier IS NULL OR d.requiredLoyaltyTier = :loyaltyTier) " +
+           "AND (d.totalUsageLimit IS NULL OR d.usedCount < d.totalUsageLimit)")
+    List<Deal> findActivePointsRedemptionDeals(@Param("loyaltyTier") LoyaltyTier loyaltyTier,
+                                              @Param("currentTime") LocalDateTime currentTime);
 }

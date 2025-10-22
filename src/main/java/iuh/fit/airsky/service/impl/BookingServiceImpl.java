@@ -6,8 +6,9 @@ import iuh.fit.airsky.dto.request.CheckinRequest;
 import iuh.fit.airsky.dto.request.FlightSegmentRequest;
 import iuh.fit.airsky.dto.request.PassengerSeatRequest;
 import iuh.fit.airsky.dto.request.PaymentRequest;
-import iuh.fit.airsky.dto.request.SeatChangeCalculationRequest;
 import iuh.fit.airsky.dto.request.UpdateBookingTotalRequest;
+import iuh.fit.airsky.dto.request.PointsRedemptionRequest;
+import iuh.fit.airsky.dto.request.SeatChangeCalculationRequest;
 import iuh.fit.airsky.dto.response.BaggageResponse;
 import iuh.fit.airsky.dto.response.BookingAncillaryServiceResponse;
 import iuh.fit.airsky.dto.response.BookingResponse;
@@ -19,6 +20,8 @@ import iuh.fit.airsky.dto.response.CheckinEligiblePassengerResponse;
 import iuh.fit.airsky.dto.response.CheckinResponse;
 import iuh.fit.airsky.dto.response.SeatChangeCalculationResponse;
 import iuh.fit.airsky.dto.response.UpdateBookingTotalResponse;
+import iuh.fit.airsky.dto.response.DealResponse;
+import iuh.fit.airsky.service.PointsRedemptionService;
 import iuh.fit.airsky.enums.BaggageType;
 import iuh.fit.airsky.enums.BaggagePackage;
 import iuh.fit.airsky.enums.BookingStatus;
@@ -31,9 +34,11 @@ import iuh.fit.airsky.enums.SeatTypePrice;
 import iuh.fit.airsky.enums.SeatTypes;
 import iuh.fit.airsky.enums.CheckinStatus;
 import iuh.fit.airsky.enums.PassengerType;
+import iuh.fit.airsky.enums.NotificationType;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.event.BookingCancelledEvent;
 import iuh.fit.airsky.mapper.BookingMapper;
+import iuh.fit.airsky.mapper.PaymentMapper;
 import iuh.fit.airsky.mapper.PassengerMapper;
 import iuh.fit.airsky.model.*;
 import iuh.fit.airsky.repository.*;
@@ -90,13 +95,14 @@ public class BookingServiceImpl implements BookingService {
     private final DealUsageRepository dealUsageRepository;
     private final PassengerRepository passengerRepository;
     private final PassengerMapper passengerMapper;
+    private final PaymentMapper paymentMapper;
     private final AncillaryServiceRepository ancillaryServiceRepository;
     private final BookingAncillaryServiceRepository bookingAncillaryServiceRepository;
     private final FlightTravelClassRepository flightTravelClassRepository;
     private final PassengerSeatAssignmentRepository passengerSeatAssignmentRepository;
     private final NotificationService notificationService;
     private final ApplicationEventPublisher eventPublisher;
-
+    private final PointsRedemptionService pointsRedemptionService;
 
 
     @PersistenceContext
@@ -121,12 +127,14 @@ public class BookingServiceImpl implements BookingService {
             DealUsageRepository dealUsageRepository,
             PassengerRepository passengerRepository,
             PassengerMapper passengerMapper,
+            PaymentMapper paymentMapper,
             AncillaryServiceRepository ancillaryServiceRepository,
             BookingAncillaryServiceRepository bookingAncillaryServiceRepository,
             FlightTravelClassRepository flightTravelClassRepository,
             PassengerSeatAssignmentRepository passengerSeatAssignmentRepository,
             NotificationService notificationService,
-            ApplicationEventPublisher eventPublisher
+            ApplicationEventPublisher eventPublisher,
+            PointsRedemptionServiceImpl pointsRedemptionService
     ) {
         this.bookingRepository = bookingRepository;
         this.bookingMapper = bookingMapper;
@@ -146,12 +154,14 @@ public class BookingServiceImpl implements BookingService {
         this.dealUsageRepository = dealUsageRepository;
         this.passengerRepository = passengerRepository;
         this.passengerMapper = passengerMapper;
+        this.paymentMapper = paymentMapper;
         this.ancillaryServiceRepository = ancillaryServiceRepository;
         this.bookingAncillaryServiceRepository = bookingAncillaryServiceRepository;
         this.flightTravelClassRepository = flightTravelClassRepository;
         this.passengerSeatAssignmentRepository = passengerSeatAssignmentRepository;
         this.notificationService = notificationService;
         this.eventPublisher = eventPublisher;
+        this.pointsRedemptionService = pointsRedemptionService;
     }
 
     /**
@@ -193,8 +203,25 @@ public class BookingServiceImpl implements BookingService {
             createSeatAssignments(request, savedBooking);
             createBookingAncillaryServices(request, savedBooking);
 
+            // Xử lý điểm thưởng trước khi tính toán tổng tiền
+            Integer pointsToRedeem = request.getPointsToRedeem();
+            DealResponse redeemedDeal = null;
+            if (pointsToRedeem != null && pointsToRedeem > 0 && request.getUserId() != null) {
+                if (!pointsRedemptionService.canRedeemPoints(request.getUserId(), pointsToRedeem)) {
+                    throw new IllegalArgumentException("Không đủ điểm để sử dụng cho booking này");
+                }
+                // Redeem points và tạo deal
+                PointsRedemptionRequest redemptionRequest = new PointsRedemptionRequest();
+                redemptionRequest.setUserId(request.getUserId());
+                redemptionRequest.setPointsToRedeem(pointsToRedeem);
+                BigDecimal discountAmount = pointsRedemptionService.calculateDiscountFromPoints(pointsToRedeem);
+                redemptionRequest.setDiscountAmount(discountAmount.longValue());
+                redeemedDeal = pointsRedemptionService.redeemPointsForDeal(redemptionRequest);
+                log.info("Successfully redeemed {} points for user {}, created deal: {}", pointsToRedeem, request.getUserId(), redeemedDeal.getDealCode());
+            }
+
             // Bước 5: Tính toán tổng số tiền cuối cùng, bao gồm các dịch vụ và giảm giá
-            BigDecimal finalAmount = calculateFinalAmount(request, savedBooking);
+            BigDecimal finalAmount = calculateFinalAmount(request, savedBooking, redeemedDeal);
             savedBooking.setTotalAmount(finalAmount);
 
             // Bước 6: Tạo bản ghi thanh toán cho booking
@@ -204,7 +231,7 @@ public class BookingServiceImpl implements BookingService {
             // Bước 7: Tạo các bản ghi check-in ban đầu với trạng thái PENDING
             createInitialCheckinRecords(savedBooking, passengers, request);
 
-            // Bước 8: Lưu lại toàn bộ các thay đổi và chuẩn bị response
+            // Bước 7: Lưu lại toàn bộ các thay đổi và chuẩn bị response
             Booking finalBooking = bookingRepository.save(savedBooking);
             log.info("Booking creation completed successfully for bookingId: {}", finalBooking.getBookingId());
 
@@ -215,7 +242,13 @@ public class BookingServiceImpl implements BookingService {
             Booking reloadedBooking = bookingRepository.findById(finalBooking.getBookingId())
                     .orElseThrow(() -> new ResourceNotFoundException("Failed to reload booking after creation"));
 
-            return buildBookingResponse(reloadedBooking);
+            BookingResponse response = buildBookingResponse(reloadedBooking);
+            // Gắn thông tin điểm đã sử dụng vào response
+            if (redeemedDeal != null) {
+                response.setPointsRedeemed(redeemedDeal.getPointsRequired());
+                response.setPointsDiscountAmount(redeemedDeal.getFixedDiscountAmount());
+            }
+            return response;
         } catch (ObjectOptimisticLockingFailureException e) {
             log.warn("Optimistic locking failure during booking creation: {}", e.getMessage());
             // Ném ra một ngoại lệ tùy chỉnh hoặc một thông báo lỗi rõ ràng hơn cho lớp controller
@@ -275,7 +308,7 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Flight not found with id: " + flightId));
     }
 
-    private BigDecimal calculateFinalAmount(BookingRequest request, Booking savedBooking) {
+    private BigDecimal calculateFinalAmount(BookingRequest request, Booking savedBooking, DealResponse redeemedDeal) {
         // 1. Base amount from flight segments - tính theo từng loại hành khách
         BigDecimal baseAmount = BigDecimal.ZERO;
         for (FlightSegment segment : savedBooking.getFlightSegments()) {
@@ -300,14 +333,24 @@ public class BookingServiceImpl implements BookingService {
 
         BigDecimal finalAmount = totalBeforeDiscounts;
 
-        // 5. Apply Deal Discount
+        // 5. Apply Deal Discount from request (if any)
         if (request.getDealCode() != null && !request.getDealCode().trim().isEmpty()) {
             finalAmount = applyDealDiscount(request.getDealCode(), request.getUserId(), savedBooking, finalAmount);
         }
 
-        // 6. Apply Tier Discount
+        // 6. Apply Points Redemption Deal (if redeemed)
+        if (redeemedDeal != null) {
+            finalAmount = applyDealDiscount(redeemedDeal.getDealCode(), request.getUserId(), savedBooking, finalAmount);
+        }
+
+        // 7. Apply Tier Discount
         if (request.getUserId() != null) {
             finalAmount = applyTierDiscount(request.getUserId(), finalAmount);
+        }
+
+        // Đảm bảo tổng tiền cuối cùng không âm
+        if (finalAmount.compareTo(BigDecimal.ZERO) < 0) {
+            finalAmount = BigDecimal.ZERO;
         }
 
         return finalAmount;
@@ -724,6 +767,9 @@ public class BookingServiceImpl implements BookingService {
             }
         }
 
+        // Hoàn điểm thưởng nếu booking đã sử dụng deal đổi điểm
+        refundPointsForCancelledBooking(booking);
+
         // Phát sự kiện BookingCancelledEvent để các listener khác xử lý (gửi email, socket,...)
         eventPublisher.publishEvent(new BookingCancelledEvent(this, booking, reason));
 
@@ -760,7 +806,7 @@ public class BookingServiceImpl implements BookingService {
                     String title = "Thông báo chuyến bay bị trễ";
                     notificationService.createAndSendNotification(
                         booking.getUserId().getId(),
-                        "FLIGHT_DELAYED",
+                        NotificationType.FLIGHT_DELAYED.toString(),
                         message,
                         flight.getFlightId(),
                         title
@@ -798,29 +844,27 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private void populateDealInformation(BookingResponse response, Booking booking) {
-        // Find deal usage for this booking
-        Optional<DealUsage> dealUsageOpt = dealUsageRepository.findByBooking(booking);
-        log.info("Looking for deal usage for booking {}: found={}, bookingId={}",
-                booking.getBookingId(), dealUsageOpt.isPresent(), booking.getBookingId());
+        // Find all deal usages for this booking
+        List<DealUsage> dealUsages = dealUsageRepository.findAllByBooking(booking);
+        log.info("Looking for deal usages for booking {}: found {} usages",
+                booking.getBookingId(), dealUsages.size());
 
-        // If not found, try to refresh the booking entity and search again
-        if (!dealUsageOpt.isPresent()) {
-            log.info("DealUsage not found initially, refreshing booking entity...");
-            booking = bookingRepository.findById(booking.getBookingId()).orElse(booking);
-            dealUsageOpt = dealUsageRepository.findByBooking(booking);
-            log.info("After refresh - Looking for deal usage for booking {}: found={}",
-                    booking.getBookingId(), dealUsageOpt.isPresent());
-        }
+        if (!dealUsages.isEmpty()) {
+            // Calculate total discount from all deals
+            BigDecimal totalDiscountAmount = dealUsages.stream()
+                    .map(DealUsage::getDiscountAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        if (dealUsageOpt.isPresent()) {
-            DealUsage dealUsage = dealUsageOpt.get();
-            log.info("Found deal usage: id={}, dealCode={}, discountAmount={}",
-                    dealUsage.getUsageId(), dealUsage.getDeal().getDealCode(), dealUsage.getDiscountAmount());
-            response.setAppliedDealCode(dealUsage.getDeal().getDealCode());
-            response.setDiscountPercentage(dealUsage.getDeal().getDiscountPercentage());
-            response.setDiscountAmount(dealUsage.getDiscountAmount());
+            // For display, use the first deal's code and percentage (or could be enhanced to show all)
+            DealUsage firstUsage = dealUsages.get(0);
+            response.setAppliedDealCode(firstUsage.getDeal().getDealCode());
+            response.setDiscountPercentage(firstUsage.getDeal().getDiscountPercentage());
+            response.setDiscountAmount(totalDiscountAmount);
+
+            log.info("Found {} deal usages for booking {}, total discount: {}",
+                    dealUsages.size(), booking.getBookingId(), totalDiscountAmount);
         } else {
-            log.warn("No deal usage found for booking {} - deal may not have been applied successfully", booking.getBookingId());
+            log.warn("No deal usages found for booking {} - deals may not have been applied successfully", booking.getBookingId());
             response.setAppliedDealCode(null);
             response.setDiscountPercentage(null);
             response.setDiscountAmount(BigDecimal.ZERO);
@@ -858,6 +902,8 @@ public class BookingServiceImpl implements BookingService {
                     log.info("Added baggage {} for checkIn {}", baggage.getBaggageId(), checkIn.getCheckInId());
                 }
             }
+        } else {
+            log.debug("No checkIns found for booking {}", booking.getBookingId());
         }
 
         response.setBaggage(baggageList);
@@ -1625,6 +1671,118 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
+    /**
+     * Scheduled job để gửi thông báo check-in
+     * Chạy mỗi 30 phút để kiểm tra và gửi thông báo check-in
+     */
+    @Scheduled(fixedRate = 1800000) // 30 phút
+    @Transactional
+    public void sendCheckinNotifications() {
+        log.debug("Checking for check-in notifications to send...");
+
+        LocalDateTime now = LocalDateTime.now();
+
+        try {
+            // 1. Gửi thông báo check-in đã mở (24 giờ trước bay)
+            sendCheckinOpenNotifications(now);
+
+            // 2. Gửi thông báo nhắc nhở check-in (3 giờ trước bay)
+            sendCheckinReminderNotifications(now);
+
+            log.debug("Check-in notifications sent successfully");
+        } catch (Exception e) {
+            log.error("Error sending check-in notifications: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Gửi thông báo khi check-in đã mở (24 giờ trước bay)
+     */
+    private void sendCheckinOpenNotifications(LocalDateTime now) {
+        try {
+            // Tìm các chuyến bay có check-in mở trong 24 giờ tới
+            LocalDateTime checkinOpensAt = now.plusHours(24);
+            LocalDateTime checkinOpensWindow = now.plusHours(24).plusMinutes(30); // Cửa sổ 30 phút
+
+            List<Booking> bookingsToNotify = bookingRepository.findBookingsForCheckinNotifications(
+                checkinOpensAt, checkinOpensWindow, BookingStatus.CONFIRMED, PaymentStatus.COMPLETED);
+
+            log.info("Found {} bookings for check-in open notifications", bookingsToNotify.size());
+
+            for (Booking booking : bookingsToNotify) {
+                try {
+                    if (booking.getUserId() != null) {
+                        String flightNumber = booking.getFlight().getFlightNumber();
+                        String departureTime = booking.getFlight().getDepartureTime().toString();
+                        String message = String.format(
+                            "Check-in cho chuyến bay %s đã mở. Thời gian bay: %s. Bạn có thể check-in online ngay bây giờ.",
+                            flightNumber, departureTime);
+                        String title = "Check-in đã mở";
+
+                        notificationService.createAndSendNotification(
+                            booking.getUserId().getId(),
+                            NotificationType.CHECKIN_OPEN.toString(),
+                            message,
+                            booking.getBookingId(),
+                            title
+                        );
+
+                        log.debug("Sent check-in open notification for booking {}", booking.getBookingCode());
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to send check-in open notification for booking {}: {}",
+                             booking.getBookingId(), e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error in sendCheckinOpenNotifications: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Gửi thông báo nhắc nhở check-in (3 giờ trước bay)
+     */
+    private void sendCheckinReminderNotifications(LocalDateTime now) {
+        try {
+            // Tìm các chuyến bay cần nhắc nhở check-in (3 giờ trước bay)
+            LocalDateTime reminderTime = now.plusHours(3);
+            LocalDateTime reminderWindow = now.plusHours(3).plusMinutes(30); // Cửa sổ 30 phút
+
+            List<Booking> bookingsToRemind = bookingRepository.findBookingsForCheckinNotifications(
+                reminderTime, reminderWindow, BookingStatus.CONFIRMED, PaymentStatus.COMPLETED);
+
+            log.info("Found {} bookings for check-in reminder notifications", bookingsToRemind.size());
+
+            for (Booking booking : bookingsToRemind) {
+                try {
+                    if (booking.getUserId() != null) {
+                        String flightNumber = booking.getFlight().getFlightNumber();
+                        String departureTime = booking.getFlight().getDepartureTime().toString();
+                        String message = String.format(
+                            "Nhắc nhở: Còn 3 giờ nữa là đến giờ bay %s. Vui lòng check-in nếu chưa thực hiện.",
+                            flightNumber);
+                        String title = "Nhắc nhở check-in";
+
+                        notificationService.createAndSendNotification(
+                            booking.getUserId().getId(),
+                            NotificationType.CHECKIN_REMINDER.toString(),
+                            message,
+                            booking.getBookingId(),
+                            title
+                        );
+
+                        log.debug("Sent check-in reminder notification for booking {}", booking.getBookingCode());
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to send check-in reminder notification for booking {}: {}",
+                             booking.getBookingId(), e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error in sendCheckinReminderNotifications: {}", e.getMessage(), e);
+        }
+    }
+
 
     @Override
     public List<CheckinEligiblePassengerResponse> getCheckinEligiblePassengers(String bookingCode, String fullName) {
@@ -2044,7 +2202,7 @@ public class BookingServiceImpl implements BookingService {
                     String title = "Check-in thành công";
                     notificationService.createAndSendNotification(
                         booking.getUserId().getId(),
-                        "CHECKIN_SUCCESSFUL",
+                        NotificationType.CHECKIN_SUCCESSFUL.toString(),
                         message,
                         checkIn.getCheckInId(),
                         title
@@ -2131,29 +2289,27 @@ public class BookingServiceImpl implements BookingService {
             AncillaryService service = ancillaryServiceRepository.findById(serviceRequest.getServiceId())
                     .orElseThrow(() -> new ResourceNotFoundException("Ancillary service not found: " + serviceRequest.getServiceId()));
 
-            // Check if service already exists for this passenger
+            // Check if service already exists for this passenger (don't add duplicates)
             List<BookingAncillaryService> existingServices = bookingAncillaryServiceRepository.findByBookingId(booking.getBookingId());
             boolean alreadyExists = existingServices.stream()
                     .anyMatch(bs -> bs.getAncillaryService().getServiceId().equals(serviceRequest.getServiceId()) &&
                                    (bs.getPassenger() == null || bs.getPassenger().equals(passenger)));
 
-            if (alreadyExists) {
-                continue; // Skip if already exists
+            if (!alreadyExists) {
+                // Create new booking ancillary service
+                BookingAncillaryService bookingService = new BookingAncillaryService();
+                bookingService.setBooking(booking);
+                bookingService.setAncillaryService(service);
+                bookingService.setPassenger(passenger);
+                bookingService.setQuantity(serviceRequest.getQuantity());
+                bookingService.setUnitPrice(service.getPrice());
+                bookingService.setTotalPrice(service.getPrice().multiply(BigDecimal.valueOf(serviceRequest.getQuantity())));
+                bookingService.setNotes(serviceRequest.getNotes());
+
+                bookingAncillaryServiceRepository.save(bookingService);
+
+                totalCharge = totalCharge.add(bookingService.getTotalPrice());
             }
-
-            // Create new booking ancillary service
-            BookingAncillaryService bookingService = new BookingAncillaryService();
-            bookingService.setBooking(booking);
-            bookingService.setAncillaryService(service);
-            bookingService.setPassenger(passenger);
-            bookingService.setQuantity(serviceRequest.getQuantity());
-            bookingService.setUnitPrice(service.getPrice());
-            bookingService.setTotalPrice(service.getPrice().multiply(BigDecimal.valueOf(serviceRequest.getQuantity())));
-            bookingService.setNotes(serviceRequest.getNotes());
-
-            bookingAncillaryServiceRepository.save(bookingService);
-
-            totalCharge = totalCharge.add(bookingService.getTotalPrice());
         }
 
         return totalCharge;
@@ -2385,5 +2541,21 @@ public class BookingServiceImpl implements BookingService {
                 .reason(request.getReason())
                 .message(String.format("Booking total updated successfully. New total: %s VND. Please proceed with payment.", newTotal))
                 .build();
+    }
+
+    private void refundPointsForCancelledBooking(Booking booking) {
+        // Tìm các dealUsage liên quan đến booking này
+        List<DealUsage> dealUsages = dealUsageRepository.findAllByBooking(booking);
+        if (dealUsages == null || dealUsages.isEmpty()) return;
+        for (DealUsage dealUsage : dealUsages) {
+            Deal deal = dealUsage.getDeal();
+            if (deal != null && Boolean.TRUE.equals(deal.getIsPointsRedemption()) && deal.getPointsRequired() != null && booking.getUserId() != null) {
+                User user = booking.getUserId();
+                Integer currentPoints = user.getLoyaltyPoints() != null ? user.getLoyaltyPoints() : 0;
+                user.setLoyaltyPoints(currentPoints + deal.getPointsRequired());
+                userRepository.save(user);
+                log.info("Refunded {} points to user {} for cancelled booking {} (deal: {})", deal.getPointsRequired(), user.getId(), booking.getBookingId(), deal.getDealCode());
+            }
+        }
     }
 }

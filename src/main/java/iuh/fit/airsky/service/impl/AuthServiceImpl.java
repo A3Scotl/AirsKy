@@ -4,6 +4,7 @@ import iuh.fit.airsky.dto.request.auth.*;
 import iuh.fit.airsky.dto.response.AuthResponse;
 import iuh.fit.airsky.dto.response.UserResponse;
 import iuh.fit.airsky.enums.AuthProvider;
+import iuh.fit.airsky.enums.LoyaltyTier;
 import iuh.fit.airsky.enums.Role;
 import iuh.fit.airsky.exception.AuthException;
 import iuh.fit.airsky.mapper.UserMapper;
@@ -96,6 +97,9 @@ public class AuthServiceImpl implements AuthService {
         user.setActive(true);
         user.setDeleted(false);
         user.setAuthProvider(AuthProvider.LOCAL);
+
+        user.setLoyaltyTier(LoyaltyTier.STANDARD);
+        user.setLoyaltyPoints(0);
 
         userRepository.save(user);
         otpService.createAndSendOtp(user.getEmail());

@@ -11,13 +11,14 @@ import iuh.fit.airsky.mapper.DealUsageMapper;
 import iuh.fit.airsky.model.*;
 import iuh.fit.airsky.repository.*;
 import iuh.fit.airsky.service.DealService;
+import iuh.fit.airsky.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.annotation.Propagation;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -40,6 +41,7 @@ public class DealServiceImpl implements DealService {
     private final UserRepository userRepository;
     private final BookingRepository bookingRepository;
     private final AirportRepository airportRepository;
+    private final NotificationService notificationService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -221,9 +223,12 @@ public class DealServiceImpl implements DealService {
                 .orElseThrow(() -> new ResourceNotFoundException("Deal không tồn tại với ID: " + id));
         
         deal.setIsActive(true);
-        dealRepository.save(deal);
+        Deal savedDeal = dealRepository.save(deal);
         
         log.info("Deal activated successfully with ID: {}", id);
+        
+        // Gửi thông báo real-time cho users đủ điều kiện khi deal được activate
+        sendDealActivatedNotification(savedDeal);
     }
 
     @Override
@@ -314,9 +319,17 @@ public class DealServiceImpl implements DealService {
         }
         
         // Calculate discount
-        log.info("Calculating discount - Order Amount: {}, Discount Percentage: {}%", orderAmount, deal.getDiscountPercentage());
-        BigDecimal discountAmount = orderAmount.multiply(deal.getDiscountPercentage().divide(BigDecimal.valueOf(100)));
-        log.info("Calculated discount amount: {}", discountAmount);
+        BigDecimal discountAmount;
+        if (deal.getIsPointsRedemption() != null && deal.getIsPointsRedemption()) {
+            // For points redemption deals, use fixed discount amount
+            discountAmount = deal.getFixedDiscountAmount() != null ? deal.getFixedDiscountAmount() : BigDecimal.ZERO;
+            log.info("Using fixed discount amount for points redemption deal: {}", discountAmount);
+        } else {
+            // For regular deals, calculate based on percentage
+            log.info("Calculating discount - Order Amount: {}, Discount Percentage: {}%", orderAmount, deal.getDiscountPercentage());
+            discountAmount = orderAmount.multiply(deal.getDiscountPercentage().divide(BigDecimal.valueOf(100)));
+            log.info("Calculated discount amount: {}", discountAmount);
+        }
         
         // Apply max discount limit
         if (deal.getMaxDiscountAmount() != null && discountAmount.compareTo(deal.getMaxDiscountAmount()) > 0) {
@@ -613,5 +626,100 @@ public class DealServiceImpl implements DealService {
                 (int) Math.ceil((double) eligibleDeals.size() / pageable.getPageSize()),
                 end >= eligibleDeals.size()
         );
+    }
+
+    /**
+     * Gửi thông báo real-time khi deal được activate
+     * Chỉ gửi cho users đủ điều kiện theo tier
+     * Sử dụng @Async để không block main transaction
+     */
+    @Async
+    public void sendDealActivatedNotification(Deal deal) {
+        try {
+            log.info("Sending deal activated notification for deal: {}", deal.getDealId());
+            
+            // Lấy danh sách users đủ điều kiện theo tier
+            List<User> eligibleUsers = getEligibleUsersForDealNotification(deal);
+            
+            if (eligibleUsers.isEmpty()) {
+                log.info("No eligible users found for deal notification: {}", deal.getDealId());
+                return;
+            }
+            
+            String discountText = deal.getDiscountPercentage() != null ? 
+                deal.getDiscountPercentage() + "%" : 
+                (deal.getFixedDiscountAmount() != null ? deal.getFixedDiscountAmount() + " VND" : "giảm giá đặc biệt");
+                
+            String message = String.format("Deal mới: %s - Giảm %s", 
+                deal.getTitle().length() > 30 ? deal.getTitle().substring(0, 27) + "..." : deal.getTitle(),
+                discountText);
+            String title = "Deal hấp dẫn đang chờ bạn!";
+            
+            // Gửi thông báo cho từng user đủ điều kiện
+            int notificationCount = 0;
+            for (User user : eligibleUsers) {
+                try {
+                    notificationService.createAndSendNotification(
+                        user.getId(),
+                        "DEAL_ACTIVATED",
+                        message,
+                        deal.getDealId(),
+                        title
+                    );
+                    notificationCount++;
+                    
+                    // Throttle để tránh quá tải hệ thống
+                    if (notificationCount % 20 == 0) {
+                        Thread.sleep(200); // 200ms delay mỗi 20 notifications
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to send deal notification to user {}: {}", user.getId(), e.getMessage());
+                    // Continue với user tiếp theo
+                }
+            }
+            
+            log.info("Sent deal activated notifications to {} eligible users for deal {}", notificationCount, deal.getDealId());
+            
+        } catch (Exception e) {
+            log.error("Error sending deal activated notification for deal {}: {}", deal.getDealId(), e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Lấy danh sách users đủ điều kiện nhận thông báo deal theo tier
+     */
+    private List<User> getEligibleUsersForDealNotification(Deal deal) {
+        // Nếu deal yêu cầu tier tối thiểu
+        if (deal.getRequiredLoyaltyTier() != null) {
+            LoyaltyTier requiredTier = deal.getRequiredLoyaltyTier();
+            log.info("Deal {} requires tier {} or higher", deal.getDealId(), requiredTier);
+            
+            return userRepository.findAll().stream()
+                .filter(user -> {
+                    LoyaltyTier userTier = user.getLoyaltyTier();
+                    return userTier != null && userTier.compareTo(requiredTier) >= 0;
+                })
+                .collect(Collectors.toList());
+        }
+        
+        // Nếu deal chỉ dành cho loyalty members
+        if (Boolean.TRUE.equals(deal.getIsLoyaltyExclusive())) {
+            log.info("Deal {} is loyalty exclusive", deal.getDealId());
+            return userRepository.findAll().stream()
+                .filter(user -> user.getLoyaltyTier() != null)
+                .collect(Collectors.toList());
+        }
+        
+        // Nếu deal dành cho tất cả (authenticated users)
+        if (!Boolean.TRUE.equals(deal.getIsGuestOnly())) {
+            log.info("Deal {} is available to all authenticated users", deal.getDealId());
+            return userRepository.findAll().stream()
+                .filter(user -> user.getId() != null) // Loại bỏ guest users
+                .collect(Collectors.toList());
+        }
+        
+        // Nếu deal chỉ dành cho guest users
+        log.info("Deal {} is guest-only, no notifications sent", deal.getDealId());
+        return List.of(); // Không gửi thông báo cho guest deals
     }
 }

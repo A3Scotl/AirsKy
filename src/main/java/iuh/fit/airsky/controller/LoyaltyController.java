@@ -17,35 +17,71 @@ import java.util.Map;
 public class LoyaltyController {
 
     private final LoyaltyService loyaltyService;
+    private final iuh.fit.airsky.service.UserService userService;
 
     /**
      * Lấy thông tin loyalty stats của user hiện tại
      */
     @GetMapping("/stats")
-    @PreAuthorize("hasRole('CUSTOMER')")
-    public ResponseEntity<Map<String, Object>> getLoyaltyStats(Authentication authentication) {
-        log.info("Getting loyalty stats for user: {}", authentication.getName());
-
-        Long userId = getUserIdFromAuthentication(authentication);
-        Map<String, Object> stats = loyaltyService.getLoyaltyStats(userId);
-
-        return ResponseEntity.ok(stats);
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> getLoyaltyStats(Authentication authentication) {
+        try {
+            String email = authentication.getName();
+            var userOpt = userService.findByEmail(email);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(401).body(Map.of(
+                    "success", false,
+                    "message", "Không tìm thấy người dùng với email: " + email,
+                    "error", "USER_NOT_FOUND"
+                ));
+            }
+            Long userId = userOpt.get().getId();
+            Map<String, Object> stats = loyaltyService.getLoyaltyStats(userId);
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", stats
+            ));
+        } catch (Exception e) {
+            log.error("Lỗi lấy loyalty stats: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                "success", false,
+                "message", "An unexpected error occurred: " + e.getMessage(),
+                "error", "UNEXPECTED_ERROR"
+            ));
+        }
     }
 
     /**
      * Kiểm tra và nâng hạng loyalty cho user hiện tại
      */
     @PostMapping("/check-upgrade")
-    @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<Map<String, Object>> checkAndUpgradeTier(Authentication authentication) {
-        log.info("Checking tier upgrade for user: {}", authentication.getName());
-
-        Long userId = getUserIdFromAuthentication(authentication);
-        loyaltyService.checkAndUpgradeTier(userId);
-
-        // Trả về stats sau khi upgrade
-        Map<String, Object> stats = loyaltyService.getLoyaltyStats(userId);
-        return ResponseEntity.ok(stats);
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> checkAndUpgradeTier(Authentication authentication) {
+        try {
+            String email = authentication.getName();
+            var userOpt = userService.findByEmail(email);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(401).body(Map.of(
+                    "success", false,
+                    "message", "Không tìm thấy người dùng với email: " + email,
+                    "error", "USER_NOT_FOUND"
+                ));
+            }
+            Long userId = userOpt.get().getId();
+            loyaltyService.checkAndUpgradeTier(userId);
+            Map<String, Object> stats = loyaltyService.getLoyaltyStats(userId);
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", stats
+            ));
+        } catch (Exception e) {
+            log.error("Lỗi nâng hạng loyalty: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                "success", false,
+                "message", "An unexpected error occurred: " + e.getMessage(),
+                "error", "UNEXPECTED_ERROR"
+            ));
+        }
     }
 
     /**
@@ -82,17 +118,5 @@ public class LoyaltyController {
             return ResponseEntity.internalServerError()
                     .body(Map.of("error", "Failed to get loyalty stats: " + e.getMessage()));
         }
-    }
-
-    /**
-     * Helper method để lấy userId từ Authentication
-     */
-    private Long getUserIdFromAuthentication(Authentication authentication) {
-        // Assuming the principal is a User object with getId() method
-        // You may need to adjust this based on your UserDetails implementation
-        if (authentication.getPrincipal() instanceof iuh.fit.airsky.model.User) {
-            return ((iuh.fit.airsky.model.User) authentication.getPrincipal()).getId();
-        }
-        throw new IllegalStateException("Unable to extract user ID from authentication");
     }
 }

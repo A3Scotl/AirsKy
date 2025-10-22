@@ -86,4 +86,15 @@ public class Deal extends BaseAuditOnlyEntity {
     @Builder.Default
     @Column(name = "is_loyalty_exclusive")
     private Boolean isLoyaltyExclusive = false;
+
+    // Fields for points redemption deals
+    @Column(name = "points_required")
+    private Integer pointsRequired;
+
+    @Builder.Default
+    @Column(name = "is_points_redemption")
+    private Boolean isPointsRedemption = false;
+
+    @Column(name = "fixed_discount_amount", precision = 12, scale = 2)
+    private BigDecimal fixedDiscountAmount;
 }

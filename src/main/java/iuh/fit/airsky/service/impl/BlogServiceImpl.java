@@ -16,15 +16,18 @@ import iuh.fit.airsky.repository.CategoryRepository;
 import iuh.fit.airsky.repository.SavedBlogRepository;
 import iuh.fit.airsky.repository.UserRepository;
 import iuh.fit.airsky.service.BlogService;
+import iuh.fit.airsky.service.NotificationService;
 import iuh.fit.airsky.util.SlugUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -40,6 +43,7 @@ public class BlogServiceImpl implements BlogService {
     private final CategoryRepository categoryRepository;
     private final CategoryMapper categoryMapper;
     private final SavedBlogRepository savedBlogRepository;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -223,8 +227,11 @@ public class BlogServiceImpl implements BlogService {
         blog.setIsPublished(true);
         blog.setPublishedDate(LocalDateTime.now());
         
-        blogRepository.save(blog);
+        Blog savedBlog = blogRepository.save(blog);
         log.info("Blog published successfully with ID: {}", id);
+        
+        // Gửi thông báo real-time cho tất cả users khi blog được publish
+        sendBlogPublishedNotification(savedBlog);
     }
 
     @Override
@@ -358,5 +365,58 @@ public class BlogServiceImpl implements BlogService {
                 blogPage.getTotalPages(),
                 blogPage.isLast()
         );
+    }
+
+    /**
+     * Gửi thông báo real-time khi blog được publish
+     * Sử dụng @Async để không block main transaction
+     */
+    @Async
+    public void sendBlogPublishedNotification(Blog blog) {
+        try {
+            log.info("Sending blog published notification for blog: {}", blog.getBlogId());
+            
+            // Lấy danh sách tất cả users để gửi thông báo
+            List<User> allUsers = userRepository.findAll();
+            
+            if (allUsers.isEmpty()) {
+                log.info("No users found to send blog notification");
+                return;
+            }
+            
+            String message = String.format("Bài viết mới: %s", 
+                blog.getTitle().length() > 50 ? blog.getTitle().substring(0, 47) + "..." : blog.getTitle());
+            String title = "Bài viết mới từ " + blog.getAuthor().getFirstName() + " " + blog.getAuthor().getLastName();
+            
+            // Gửi thông báo cho từng user (không gửi cho tác giả)
+            int notificationCount = 0;
+            for (User user : allUsers) {
+                if (!user.getId().equals(blog.getAuthor().getId())) {
+                    try {
+                        notificationService.createAndSendNotification(
+                            user.getId(),
+                            "NEW_PUBLIC_BLOG",
+                            message,
+                            blog.getBlogId(),
+                            title
+                        );
+                        notificationCount++;
+                        
+                        // Throttle để tránh quá tải hệ thống
+                        if (notificationCount % 10 == 0) {
+                            Thread.sleep(100); // 100ms delay mỗi 10 notifications
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to send blog notification to user {}: {}", user.getId(), e.getMessage());
+                        // Continue với user tiếp theo
+                    }
+                }
+            }
+            
+            log.info("Sent blog published notifications to {} users for blog {}", notificationCount, blog.getBlogId());
+            
+        } catch (Exception e) {
+            log.error("Error sending blog published notification for blog {}: {}", blog.getBlogId(), e.getMessage(), e);
+        }
     }
 }

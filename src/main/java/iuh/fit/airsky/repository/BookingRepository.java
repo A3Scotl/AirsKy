@@ -1,7 +1,9 @@
 package iuh.fit.airsky.repository;
 
 import iuh.fit.airsky.enums.BookingStatus;
+import iuh.fit.airsky.enums.BookingStatus;
 import iuh.fit.airsky.enums.FlightStatus;
+import iuh.fit.airsky.enums.PaymentStatus;
 import iuh.fit.airsky.model.Booking;
 import iuh.fit.airsky.model.Flight;
 import iuh.fit.airsky.model.User;
@@ -67,5 +69,21 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     // Method để đếm số booking hoàn thành theo user
     @Query("SELECT COUNT(b) FROM Booking b WHERE b.userId.id = :userId AND b.status = :status")
     Long countCompletedBookingsByUser(@Param("userId") Long userId, @Param("status") BookingStatus status);
+
+    // Method để tìm bookings cho thông báo check-in
+    @Query("SELECT DISTINCT b FROM Booking b " +
+           "LEFT JOIN FETCH b.userId " +
+           "LEFT JOIN FETCH b.flight f " +
+           "LEFT JOIN FETCH b.payment p " +
+           "WHERE f.departureTime BETWEEN :startTime AND :endTime " +
+           "AND b.status = :bookingStatus " +
+           "AND p.status = :paymentStatus " +
+           "AND b.userId IS NOT NULL")
+    List<Booking> findBookingsForCheckinNotifications(
+        @Param("startTime") java.time.LocalDateTime startTime,
+        @Param("endTime") java.time.LocalDateTime endTime,
+        @Param("bookingStatus") BookingStatus bookingStatus,
+        @Param("paymentStatus") PaymentStatus paymentStatus
+    );
 
 }

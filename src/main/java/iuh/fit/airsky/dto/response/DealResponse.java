@@ -48,4 +48,9 @@ public class DealResponse {
     private Boolean isGuestOnly;
     private LoyaltyTier requiredLoyaltyTier;
     private Boolean isLoyaltyExclusive;
+
+    // Points redemption fields
+    private Integer pointsRequired;
+    private Boolean isPointsRedemption;
+    private BigDecimal fixedDiscountAmount;
 }

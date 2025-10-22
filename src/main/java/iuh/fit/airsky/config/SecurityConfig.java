@@ -73,8 +73,7 @@ public class SecurityConfig {
             "/api/v1/loyalty/**",
             "/ws/**",
             "/websocket-test.html",
-            "/postman-websocket-test.json",
-            "/WEBSOCKET_TEST_README.md"
+            "/api/v1/points-redemption/**"
     };
     private static final String[] PERMISION_ROUTES = {
             "/api/v1/auth/change-password",

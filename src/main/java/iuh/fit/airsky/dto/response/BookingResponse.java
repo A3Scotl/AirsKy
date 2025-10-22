@@ -41,4 +41,8 @@ public class BookingResponse {
 
     // Enhanced: Available seats for current travel class
     private List<String> availableSeats;
+
+    // Points redemption information
+    private Integer pointsRedeemed; // Số điểm đã dùng để giảm giá
+    private BigDecimal pointsDiscountAmount; // Số tiền đã giảm từ điểm thưởng
 }

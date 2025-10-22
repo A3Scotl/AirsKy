@@ -15,7 +15,13 @@ public enum NotificationType {
     CHECKIN_SUCCESSFUL("Check-in thành công"),
     LOYALTY_POINTS_AWARDED("Tích điểm thành công"),
     LOYALTY_TIER_UPGRADE("Thăng hạng thành viên"),
-    SYSTEM_ANNOUNCEMENT("Thông báo hệ thống");
+    SYSTEM_ANNOUNCEMENT("Thông báo hệ thống"),
+    NEW_PUBLIC_BLOG("Bài viết mới"),
+    DEAL_ACTIVATED("Deal mới được kích hoạt"),
+    REVIEW_REQUEST_CREATED("Yêu cầu đánh giá chuyến bay"),
+    REVIEW_SUBMITTED("Đánh giá mới được gửi"),
+    REVIEW_APPROVED("Đánh giá đã được duyệt"),
+    REVIEW_HIDDEN("Đánh giá đã bị ẩn");
 
     private final String defaultTitle;
 

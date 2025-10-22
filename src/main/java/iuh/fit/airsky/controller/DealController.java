@@ -54,7 +54,10 @@ public class DealController {
             @RequestParam(value = "usageLimit", required = false) Integer usageLimit,
             @RequestParam(value = "usagePerUser", required = false, defaultValue = "1") Integer usagePerUser,
             @RequestParam(value = "isActive", required = false, defaultValue = "true") Boolean isActive,
-            @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail) {
+            @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail,
+            @RequestParam(value = "isGuestOnly", required = false, defaultValue = "false") Boolean isGuestOnly,
+            @RequestParam(value = "requiredLoyaltyTier", required = false) iuh.fit.airsky.enums.LoyaltyTier requiredLoyaltyTier,
+            @RequestParam(value = "isLoyaltyExclusive", required = false, defaultValue = "false") Boolean isLoyaltyExclusive) {
 
         try {
             // Create DealRequest object manually
@@ -87,6 +90,11 @@ public class DealController {
                 log.info("Thumbnail uploaded successfully: {}", imageUrl);
             }
             
+            // Set new fields for deal type
+            request.setIsGuestOnly(isGuestOnly);
+            request.setRequiredLoyaltyTier(requiredLoyaltyTier);
+            request.setIsLoyaltyExclusive(isLoyaltyExclusive);
+
             // Validate required fields
             if (dealCode == null || dealCode.trim().isEmpty()) {
                 return ApiResponseUtil.buildResponse(false, "Mã giảm giá không được để trống", null, "/api/v1/deals");

@@ -25,5 +25,6 @@ public class BookingRequest {
     private CheckInType checkInType = CheckInType.OFFLINE;
     private String dealCode; // Mã giảm giá (tùy chọn)
     private List<BookingAncillaryServiceRequest> ancillaryServices; // Dịch vụ đi kèm
+    private Integer pointsToRedeem; // Số điểm muốn sử dụng để giảm giá
 
 }

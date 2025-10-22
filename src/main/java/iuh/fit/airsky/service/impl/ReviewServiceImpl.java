@@ -4,6 +4,7 @@ import iuh.fit.airsky.dto.request.ReviewRequest;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.dto.response.ReviewResponse;
 import iuh.fit.airsky.enums.BookingStatus;
+import iuh.fit.airsky.enums.NotificationType;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.ReviewMapper;
 import iuh.fit.airsky.model.Booking;
@@ -15,10 +16,12 @@ import iuh.fit.airsky.repository.FlightRepository;
 import iuh.fit.airsky.repository.ReviewRepository;
 import iuh.fit.airsky.repository.UserRepository;
 import iuh.fit.airsky.service.EmailService;
+import iuh.fit.airsky.service.NotificationService;
 import iuh.fit.airsky.service.ReviewService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,16 +40,19 @@ public class ReviewServiceImpl implements ReviewService {
     private final BookingRepository bookingRepository;
     private final FlightRepository flightRepository;
     private final EmailService emailService;
+    private final NotificationService notificationService;
 
     public ReviewServiceImpl(ReviewRepository reviewRepository, ReviewMapper reviewMapper,
                            UserRepository userRepository, BookingRepository bookingRepository,
-                           FlightRepository flightRepository, EmailService emailService) {
+                           FlightRepository flightRepository, EmailService emailService,
+                           NotificationService notificationService) {
         this.reviewRepository = reviewRepository;
         this.reviewMapper = reviewMapper;
         this.userRepository = userRepository;
         this.bookingRepository = bookingRepository;
         this.flightRepository = flightRepository;
         this.emailService = emailService;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -112,6 +118,18 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         Review savedReview = reviewRepository.save(review);
+
+        // Gửi notification khi user submit review
+        if (request.getRating() != null) {
+            notificationService.createAndSendNotification(
+                request.getUserId(),
+                NotificationType.REVIEW_SUBMITTED.toString(),
+                "Cảm ơn bạn đã đánh giá chuyến bay " + flight.getFlightNumber() + " với " + request.getRating() + " sao.",
+                savedReview.getReviewId(),
+                "Đánh giá của bạn đã được gửi"
+            );
+        }
+
         return reviewMapper.toResponseDTO(savedReview);
     }
 
@@ -122,6 +140,10 @@ public class ReviewServiceImpl implements ReviewService {
         Review review = reviewRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Review not found"));
 
+        boolean approvalChanged = false;
+        boolean wasApproved = review.getIsApproved() != null ? review.getIsApproved() : false;
+        boolean newApproval = request.getIsApproved() != null ? request.getIsApproved() : wasApproved;
+
         if (request.getRating() != null) {
             review.setRating(request.getRating());
         }
@@ -130,9 +152,28 @@ public class ReviewServiceImpl implements ReviewService {
         }
         if (request.getIsApproved() != null) {
             review.setIsApproved(request.getIsApproved());
+            approvalChanged = !request.getIsApproved().equals(wasApproved);
         }
 
         Review updatedReview = reviewRepository.save(review);
+
+        // Gửi notification khi approval status thay đổi
+        if (approvalChanged) {
+            NotificationType notificationType = newApproval ? NotificationType.REVIEW_APPROVED : NotificationType.REVIEW_HIDDEN;
+            String title = newApproval ? "Đánh giá của bạn đã được duyệt" : "Đánh giá của bạn đã bị ẩn";
+            String message = newApproval ?
+                "Đánh giá của bạn cho chuyến bay " + review.getFlight().getFlightNumber() + " đã được duyệt và hiển thị công khai." :
+                "Đánh giá của bạn cho chuyến bay " + review.getFlight().getFlightNumber() + " đã bị ẩn theo chính sách của hệ thống.";
+
+            notificationService.createAndSendNotification(
+                review.getUser().getId(),
+                notificationType.toString(),
+                message,
+                updatedReview.getReviewId(),
+                title
+            );
+        }
+
         return reviewMapper.toResponseDTO(updatedReview);
     }
 
@@ -234,6 +275,7 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     @Transactional
+    @Async
     public void createReviewRequestsForCompletedFlights() {
         log.info("Checking for completed flights to create review requests...");
 
@@ -254,8 +296,21 @@ public class ReviewServiceImpl implements ReviewService {
                 reviewRequest.setIsApproved(false);
                 // Rating và comment để null vì đây là review request
 
-                createReview(reviewRequest);
+                ReviewResponse savedReview = createReview(reviewRequest);
                 log.info("Created review request for booking ID: {}, user ID: {}, flight ID: {}", bookingId, userId, flightId);
+
+                // Lấy thông tin flight để tạo notification
+                Flight flight = flightRepository.findById(flightId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Flight not found with id: " + flightId));
+
+                // Gửi notification cho user về review request
+                notificationService.createAndSendNotification(
+                    userId,
+                    NotificationType.REVIEW_REQUEST_CREATED.toString(),
+                    "Chuyến bay của bạn đã hoàn thành. Hãy dành chút thời gian để đánh giá trải nghiệm của bạn.",
+                    savedReview.getReviewId(),
+                    "Hãy đánh giá chuyến bay " + flight.getFlightNumber()
+                );
 
             } catch (Exception e) {
                 log.error("Error creating review request for booking ID: {}, user ID: {}, flight ID: {}", bookingId, userId, flightId, e);
