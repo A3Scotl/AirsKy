@@ -46,4 +46,8 @@ public class AncillaryService extends BaseFullSoftDeleteEntity {
     @Builder.Default
     @Column(name = "is_per_passenger", nullable = false)
     private Boolean isPerPassenger = true;
+    
+    @Builder.Default
+    @Column(name = "is_per_segment", nullable = false)
+    private Boolean isPerSegment = false;
 }

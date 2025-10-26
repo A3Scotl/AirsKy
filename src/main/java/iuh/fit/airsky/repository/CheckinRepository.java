@@ -1,6 +1,8 @@
 package iuh.fit.airsky.repository;
 
+import iuh.fit.airsky.model.Booking;
 import iuh.fit.airsky.model.CheckIn;
+import iuh.fit.airsky.model.FlightSegment;
 import iuh.fit.airsky.model.Passenger;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -42,4 +44,19 @@ public interface CheckinRepository extends JpaRepository<CheckIn, Long> {
 
     @Query("SELECT c FROM CheckIn c WHERE c.booking.bookingCode = :bookingCode AND c.passenger.passengerId = :passengerId AND c.deleted = false")
     Optional<CheckIn> findByBookingCodeAndPassengerId(@Param("bookingCode") String bookingCode, @Param("passengerId") Long passengerId);
+
+    // Segment-specific check-in queries
+    @Query("SELECT COUNT(c) > 0 FROM CheckIn c WHERE c.passenger = :passenger AND c.flightSegment = :segment AND c.status = 'COMPLETED' AND c.deleted = false")
+    boolean existsByPassengerAndSegmentAndCompleted(@Param("passenger") Passenger passenger, @Param("segment") FlightSegment segment);
+
+    @Query("SELECT c FROM CheckIn c WHERE c.passenger = :passenger AND c.flightSegment = :segment AND c.deleted = false")
+    Optional<CheckIn> findByPassengerAndSegment(@Param("passenger") Passenger passenger, @Param("segment") FlightSegment segment);
+
+    @Query("SELECT c FROM CheckIn c LEFT JOIN FETCH c.baggage WHERE c.passenger = :passenger AND c.deleted = false ORDER BY c.flightSegment.segmentOrder")
+    List<CheckIn> findByPassengerWithSegments(@Param("passenger") Passenger passenger);
+
+    @Query("SELECT c FROM CheckIn c WHERE c.booking = :booking AND c.flightSegment = :segment AND c.deleted = false")
+    List<CheckIn> findByBookingAndSegment(@Param("booking") Booking booking, @Param("segment") FlightSegment segment);
+
+
 }

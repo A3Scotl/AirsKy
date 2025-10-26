@@ -26,6 +26,9 @@ public class AncillaryServiceResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     
+    // Roundtrip pricing information
+    private Boolean isPerSegment; // true = x2 for roundtrip, false = x1 for roundtrip
+    
     public String getServiceTypeDisplayName() {
         return serviceType != null ? serviceType.getVietnameseName() : null;
     }

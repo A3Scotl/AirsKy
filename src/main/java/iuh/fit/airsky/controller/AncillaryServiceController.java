@@ -114,4 +114,15 @@ public class AncillaryServiceController {
         ancillaryServiceService.toggleActiveStatus(id);
         return ResponseEntity.ok().build();
     }
+
+    /**
+     * Sync isPerSegment flags in database based on service type logic
+     */
+    @PostMapping("/sync-per-segment-flags")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<String> syncPerSegmentFlags() {
+        log.info("Request to sync isPerSegment flags");
+        ancillaryServiceService.syncPerSegmentFlags();
+        return ResponseEntity.ok("isPerSegment flags synced successfully");
+    }
 }

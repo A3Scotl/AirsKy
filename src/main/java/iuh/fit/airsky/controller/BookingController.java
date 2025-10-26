@@ -112,7 +112,7 @@ public class BookingController {
     @GetMapping("/lookup")
     public ResponseEntity<ApiResponse<BookingResponse>> lookupBooking(
             @RequestParam String bookingCode,
-            @RequestParam String fullName) {
+            @RequestParam(required = false) String fullName) {
         try {
             Optional<BookingResponse> bookingOpt = bookingService.findByBookingCodeAndPassengerName(bookingCode, fullName);
             if (bookingOpt.isPresent()) {

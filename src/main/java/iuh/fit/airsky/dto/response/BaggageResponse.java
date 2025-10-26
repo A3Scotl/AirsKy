@@ -15,4 +15,6 @@ public class BaggageResponse {
     private BigDecimal actualWeight;
     private BigDecimal excessWeight;
     private BigDecimal excessFee;
+    private Long passengerId;
+    private String passengerName;
 }

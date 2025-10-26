@@ -38,7 +38,9 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
     @Query("SELECT CASE WHEN COUNT(f) > 0 THEN true ELSE false END FROM Flight f " +
             "WHERE f.aircraft.aircraftId = :aircraftId " +
             "AND f.departureTime < :endTime " +
-            "AND f.arrivalTime > :startTime")
+            "AND f.arrivalTime > :startTime " +
+            "AND f.status <> iuh.fit.airsky.enums.FlightStatus.DEPARTED " +
+            "AND f.status <> iuh.fit.airsky.enums.FlightStatus.CANCELLED")
     boolean existsByAircraftIdAndTimeOverlap(@Param("aircraftId") Long aircraftId,
                                              @Param("startTime") LocalDateTime startTime,
                                              @Param("endTime") LocalDateTime endTime);
@@ -167,4 +169,18 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
 //     @Query("SELECT f FROM Flight f LEFT JOIN FETCH f.aircraft LEFT JOIN FETCH f.flightTravelClasses ftc LEFT JOIN FETCH ftc.travelClass WHERE f.flightId = :flightId")
     @Query("SELECT DISTINCT f FROM Flight f LEFT JOIN FETCH f.aircraft LEFT JOIN FETCH f.flightTravelClasses ftc LEFT JOIN FETCH ftc.travelClass WHERE f.flightId = :flightId")
     Optional<Flight> findByIdWithAircraftAndTravelClasses(@Param("flightId") Long flightId);
+
+    @Query("SELECT f.departureAirport.airportId, f.arrivalAirport.airportId, FUNCTION('DATE', f.departureTime), MIN(f.basePrice) " +
+            "FROM Flight f " +
+            "WHERE f.departureAirport.airportId IN :departureAirportIds " +
+            "AND f.arrivalAirport.airportId IN :arrivalAirportIds " +
+            "AND FUNCTION('DATE', f.departureTime) IN :dates " +
+            "AND f.departureTime > :minDepartureTime " +
+            "GROUP BY f.departureAirport.airportId, f.arrivalAirport.airportId, FUNCTION('DATE', f.departureTime)")
+    List<Object[]> findMinPriceByRouteAndDatesWithMinDepartureTime(
+            @Param("departureAirportIds") List<Long> departureAirportIds,
+            @Param("arrivalAirportIds") List<Long> arrivalAirportIds,
+            @Param("dates") List<java.time.LocalDate> dates,
+            @Param("minDepartureTime") java.time.LocalDateTime minDepartureTime
+    );
 }

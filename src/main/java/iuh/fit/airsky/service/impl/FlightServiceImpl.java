@@ -713,7 +713,6 @@ public class FlightServiceImpl implements FlightService {
     @Override
     public Map<String, Object> compareFlightPrices(Map<String, Object> params) {
         // Validate and parse params
-        String type = (String) params.getOrDefault("type", "one-way");
         List<Map<String, Object>> routes = (List<Map<String, Object>>) params.get("routes");
         Integer dateRangeDays = (Integer) params.getOrDefault("dateRangeDays", 0);
         if (dateRangeDays == null) dateRangeDays = 0;
@@ -723,104 +722,39 @@ public class FlightServiceImpl implements FlightService {
         Map<String, Object> result = new java.util.HashMap<>();
         List<Map<String, Object>> priceList = new ArrayList<>();
 
-        if ("round-trip".equalsIgnoreCase(type) && routes.size() == 2) {
-            // Lấy thông tin chiều đi và về
-            Map<String, Object> outbound = routes.get(0);
-            Map<String, Object> inbound = routes.get(1);
-            Long depAirportId = ((Number) outbound.get("departureAirportId")).longValue();
-            Long arrAirportId = ((Number) outbound.get("arrivalAirportId")).longValue();
-            String outboundDateStr = (String) outbound.get("date");
-            String returnDateStr = (String) inbound.get("date");
-            java.time.LocalDate outboundDate = java.time.LocalDate.parse(outboundDateStr);
-            java.time.LocalDate returnDate = java.time.LocalDate.parse(returnDateStr);
-            List<java.time.LocalDate> outboundDates = new ArrayList<>();
-            List<java.time.LocalDate> returnDates = new ArrayList<>();
+        // Lấy thời điểm hiện tại + 4 tiếng
+        java.time.LocalDateTime nowPlus4h = java.time.LocalDateTime.now().plusHours(4);
+
+        // One-way hoặc mặc định: chỉ lấy giá thấp nhất cho các chuyến bay khởi hành sau 4 tiếng
+        List<Long> departureAirportIds = new ArrayList<>();
+        List<Long> arrivalAirportIds = new ArrayList<>();
+        List<java.time.LocalDate> allDates = new ArrayList<>();
+        for (Map<String, Object> route : routes) {
+            Long depId = ((Number) route.get("departureAirportId")).longValue();
+            Long arrId = ((Number) route.get("arrivalAirportId")).longValue();
+            String dateStr = (String) route.get("date");
+            java.time.LocalDate date = java.time.LocalDate.parse(dateStr);
+            departureAirportIds.add(depId);
+            arrivalAirportIds.add(arrId);
             for (int i = -dateRangeDays; i <= dateRangeDays; i++) {
-                outboundDates.add(outboundDate.plusDays(i));
-                returnDates.add(returnDate.plusDays(i));
+                allDates.add(date.plusDays(i));
             }
-            // Truy vấn các cặp khứ hồi
-            List<Object[]> roundTripPrices = flightRepository.findRoundTripMinPrices(
-                depAirportId, arrAirportId, outboundDates, returnDates
-            );
-            for (Object[] row : roundTripPrices) {
-                Map<String, Object> priceInfo = new java.util.HashMap<>();
-                priceInfo.put("roundTripGroupId", row[0]);
-                priceInfo.put("outboundDate", row[1].toString());
-                priceInfo.put("returnDate", row[2].toString());
-                priceInfo.put("outboundMinPrice", row[3]);
-                priceInfo.put("returnMinPrice", row[4]);
-                // Tổng giá vé khứ hồi
-                if (row[3] != null && row[4] != null) {
-                    try {
-                        java.math.BigDecimal total = new java.math.BigDecimal(row[3].toString())
-                                .add(new java.math.BigDecimal(row[4].toString()));
-                        priceInfo.put("totalPrice", total);
-                    } catch (Exception e) {
-                        priceInfo.put("totalPrice", null);
-                    }
-                } else {
-                    priceInfo.put("totalPrice", null);
-                }
-                priceList.add(priceInfo);
-            }
-            result.put("prices", priceList);
-            result.put("type", type);
-            return result;
-        } else if ("multi-city".equalsIgnoreCase(type)) {
-            // Multi-city: chỉ trả về tổng giá cho tổ hợp đã chọn, không so sánh tổ hợp giá thấp nhất
-            java.math.BigDecimal total = java.math.BigDecimal.ZERO;
-            for (Map<String, Object> route : routes) {
-                Long depId = ((Number) route.get("departureAirportId")).longValue();
-                Long arrId = ((Number) route.get("arrivalAirportId")).longValue();
-                String dateStr = (String) route.get("date");
-                java.time.LocalDate date = java.time.LocalDate.parse(dateStr);
-                List<Long> depIds = List.of(depId);
-                List<Long> arrIds = List.of(arrId);
-                List<java.time.LocalDate> dates = List.of(date);
-                List<Object[]> minPrices = flightRepository.findMinPriceByRouteAndDates(depIds, arrIds, dates);
-                if (!minPrices.isEmpty() && minPrices.get(0)[3] != null) {
-                    try {
-                        total = total.add(new java.math.BigDecimal(minPrices.get(0)[3].toString()));
-                    } catch (Exception ignored) {}
-                }
-            }
-            Map<String, Object> priceInfo = new java.util.HashMap<>();
-            priceInfo.put("totalPrice", total);
-            priceList.add(priceInfo);
-            result.put("prices", priceList);
-            result.put("type", type);
-            return result;
-        } else {
-            // One-way hoặc mặc định: giữ nguyên logic cũ
-            List<Long> departureAirportIds = new ArrayList<>();
-            List<Long> arrivalAirportIds = new ArrayList<>();
-            List<java.time.LocalDate> allDates = new ArrayList<>();
-            for (Map<String, Object> route : routes) {
-                Long depId = ((Number) route.get("departureAirportId")).longValue();
-                Long arrId = ((Number) route.get("arrivalAirportId")).longValue();
-                String dateStr = (String) route.get("date");
-                java.time.LocalDate date = java.time.LocalDate.parse(dateStr);
-                departureAirportIds.add(depId);
-                arrivalAirportIds.add(arrId);
-                for (int i = -dateRangeDays; i <= dateRangeDays; i++) {
-                    allDates.add(date.plusDays(i));
-                }
-            }
-            allDates = allDates.stream().distinct().toList();
-            List<Object[]> minPrices = flightRepository.findMinPriceByRouteAndDates(departureAirportIds, arrivalAirportIds, allDates);
-            for (Object[] row : minPrices) {
-                Map<String, Object> priceInfo = new java.util.HashMap<>();
-                priceInfo.put("departureAirportId", row[0]);
-                priceInfo.put("arrivalAirportId", row[1]);
-                priceInfo.put("date", row[2].toString());
-                priceInfo.put("minPrice", row[3]);
-                priceList.add(priceInfo);
-            }
-            result.put("prices", priceList);
-            result.put("type", type);
-            return result;
         }
+        allDates = allDates.stream().distinct().toList();
+        List<Object[]> minPrices = flightRepository.findMinPriceByRouteAndDatesWithMinDepartureTime(
+            departureAirportIds, arrivalAirportIds, allDates, nowPlus4h
+        );
+        for (Object[] row : minPrices) {
+            Map<String, Object> priceInfo = new java.util.HashMap<>();
+            priceInfo.put("departureAirportId", row[0]);
+            priceInfo.put("arrivalAirportId", row[1]);
+            priceInfo.put("date", row[2].toString());
+            priceInfo.put("minPrice", row[3]);
+            priceList.add(priceInfo);
+        }
+        result.put("prices", priceList);
+        result.put("type", "one-way");
+        return result;
     }
     
     /**

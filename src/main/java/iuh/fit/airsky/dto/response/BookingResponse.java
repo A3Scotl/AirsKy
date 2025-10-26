@@ -40,8 +40,8 @@ public class BookingResponse {
     // Enhanced: Check-in eligibility for passengers
     private List<CheckinEligiblePassengerResponse> checkinEligiblePassengers;
 
-    // Enhanced: Available seats for current travel class
-    private List<String> availableSeats;
+    // Enhanced: Available seats for current travel class grouped by segment
+    private List<AvailableSeatsResponse> availableSeats;
 
     // Points redemption information
     private Integer pointsRedeemed; // Số điểm đã dùng để giảm giá

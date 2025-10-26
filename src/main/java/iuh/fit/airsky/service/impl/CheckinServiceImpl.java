@@ -7,6 +7,8 @@ import iuh.fit.airsky.enums.BookingStatus;
 import iuh.fit.airsky.enums.CheckinStatus;
 import iuh.fit.airsky.enums.PaymentStatus;
 import iuh.fit.airsky.model.Booking;
+import iuh.fit.airsky.model.FlightSegment;
+import iuh.fit.airsky.model.Passenger;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.mapper.CheckinMapper;
 import iuh.fit.airsky.model.CheckIn;
@@ -82,21 +84,34 @@ public class CheckinServiceImpl implements CheckinService {
             throw new IllegalStateException("Passenger does not belong to this booking");
         }
 
-        // Check if already checked in (COMPLETED status)
-        if (checkinRepository.existsByPassengerAndCompleted(passenger)) {
+        // Get the specific segment for check-in (required for roundtrip)
+        FlightSegment targetSegment = null;
+        if (request.getSegmentId() != null) {
+            targetSegment = booking.getFlightSegments().stream()
+                    .filter(segment -> segment.getSegmentId().equals(request.getSegmentId()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("Segment not found in booking"));
+        }
+
+        // Check if already checked in for this specific segment
+        if (targetSegment != null && checkinRepository.existsByPassengerAndSegmentAndCompleted(passenger, targetSegment)) {
+            throw new IllegalStateException("Passenger is already checked in for this segment");
+        }
+
+        // For backward compatibility: check general check-in if no segment specified
+        if (targetSegment == null && checkinRepository.existsByPassengerAndCompleted(passenger)) {
             throw new IllegalStateException("Passenger is already checked in");
         }
 
-        // Find existing CheckIn record (should be PENDING status)
+        // Find existing CheckIn record for this specific segment
+        final FlightSegment finalTargetSegment = targetSegment; // Make final for lambda
         Optional<CheckIn> existingCheckInOpt = checkinRepository.findByBookingIdWithBaggage(booking.getBookingId()).stream()
                 .filter(ci -> ci.getPassenger().equals(passenger))
+                .filter(ci -> finalTargetSegment == null || (ci.getFlightSegment() != null && ci.getFlightSegment().equals(finalTargetSegment)))
                 .findFirst();
 
-        if (existingCheckInOpt.isEmpty()) {
-            throw new IllegalStateException("CheckIn record not found for passenger");
-        }
-
-        CheckIn checkIn = existingCheckInOpt.get();
+        CheckIn checkIn = existingCheckInOpt
+                .orElseThrow(() -> new IllegalStateException("CheckIn record not found for passenger and segment. Records should be created during booking."));
 
         // Validate that the existing checkin is in PENDING status
         if (checkIn.getStatus() != CheckinStatus.PENDING) {
@@ -193,4 +208,6 @@ public class CheckinServiceImpl implements CheckinService {
 
         return now.isAfter(checkinStartTime) && now.isBefore(checkinEndTime);
     }
+
+
 }

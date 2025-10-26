@@ -11,6 +11,9 @@ public class SeatTypePricingDetail {
     private SeatTypes seatType;
     private String seatTypeDescription;
     private BigDecimal additionalPrice;
+    private Long segmentId;
+    private Integer segmentOrder;
+    private String flightNumber;
 
     public SeatTypePricingDetail(String passengerName, String seatNumber,
                                 SeatTypes seatType, BigDecimal additionalPrice) {
@@ -19,5 +22,18 @@ public class SeatTypePricingDetail {
         this.seatType = seatType;
         this.seatTypeDescription = seatType.getDisplayName();
         this.additionalPrice = additionalPrice;
+    }
+
+    public SeatTypePricingDetail(String passengerName, String seatNumber,
+                                SeatTypes seatType, BigDecimal additionalPrice,
+                                Long segmentId, Integer segmentOrder, String flightNumber) {
+        this.passengerName = passengerName;
+        this.seatNumber = seatNumber;
+        this.seatType = seatType;
+        this.seatTypeDescription = seatType.getDisplayName();
+        this.additionalPrice = additionalPrice;
+        this.segmentId = segmentId;
+        this.segmentOrder = segmentOrder;
+        this.flightNumber = flightNumber;
     }
 }

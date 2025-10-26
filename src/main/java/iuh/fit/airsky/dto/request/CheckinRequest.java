@@ -10,7 +10,8 @@ public class CheckinRequest {
     // Booking identification - Ưu tiên dùng passengerId thay vì tên để tránh trùng
     private String bookingCode;
     private String passengerFullName; // Optional - chỉ dùng khi không có passengerId
-    private Long passengerId;         // Required - chính xác hơn tên
+    private Long passengerId;         // Required - chính xác hơn
+    private Long segmentId;          // Required for roundtrip - specific segment to check-in tên
 
     // Seat change information - Hỗ trợ cả seatId và seatNumber
     private String newSeatNumber;     // Backward compatibility

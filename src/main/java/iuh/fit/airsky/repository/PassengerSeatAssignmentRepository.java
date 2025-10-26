@@ -22,4 +22,7 @@ public interface PassengerSeatAssignmentRepository extends JpaRepository<Passeng
 
     @Query("SELECT psa FROM PassengerSeatAssignment psa WHERE psa.passenger.booking.id = :bookingId")
     List<PassengerSeatAssignment> findByBookingId(@Param("bookingId") Long bookingId);
+
+    @Query("SELECT psa FROM PassengerSeatAssignment psa WHERE psa.passenger.id = :passengerId AND psa.flightSegment.id = :segmentId")
+    List<PassengerSeatAssignment> findByPassengerAndSegment(@Param("passengerId") Long passengerId, @Param("segmentId") Long segmentId);
 }

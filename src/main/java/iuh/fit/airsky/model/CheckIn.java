@@ -35,6 +35,10 @@ public class CheckIn extends BaseFullSoftDeleteEntity {
     @JoinColumn(name = "passenger_id", nullable = false)
     private Passenger passenger;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "segment_id", nullable = true)
+    private FlightSegment flightSegment;
+
     @Column(length = 10)
     private String seatNumber;
 

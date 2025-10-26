@@ -43,7 +43,7 @@ public class FlightSearchRequest {
     private List<SearchSegment> segments;
 
     @AssertTrue(message = "Outbound departure date must be today or in the future")
-    private boolean isValidOutboundDate() {
+    public boolean isValidOutboundDate() {
         if (tripType == TripType.ONE_WAY || tripType == TripType.ROUND_TRIP) {
             return outboundDepartureDate != null && !outboundDepartureDate.isBefore(LocalDate.now());
         }
@@ -51,7 +51,7 @@ public class FlightSearchRequest {
     }
 
     @AssertTrue(message = "Required fields are missing or invalid for the selected trip type")
-    private boolean isValidFields() {
+    public boolean isValidFields() {
         if (tripType == null) {
             return false;
         }

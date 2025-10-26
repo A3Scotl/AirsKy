@@ -30,4 +30,6 @@ public interface AncillaryServiceService {
     void deleteService(Long id);
     
     void toggleActiveStatus(Long id);
+    
+    void syncPerSegmentFlags();
 }

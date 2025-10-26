@@ -7,6 +7,9 @@ public enum CheckinStatus {
     BOOKING_NOT_CONFIRMED("Booking not confirmed"),
     NOT_AVAILABLE("Check-in not available"),
     BOOKING_CANCELLED("Booking has been cancelled"),
+    FLIGHT_DEPARTED("Flight has already departed"),
+    CHECKIN_NOT_OPEN("Check-in not open yet"),
+    PREVIOUS_SEGMENT_NOT_CHECKED_IN("Previous flight segment not checked in"),
 
     // Entity statuses
     PENDING("Check-in record created, awaiting actual check-in"),

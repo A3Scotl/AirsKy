@@ -37,7 +37,7 @@ public class AncillaryServiceImpl implements AncillaryServiceService {
         iuh.fit.airsky.model.AncillaryService savedService = ancillaryServiceRepository.save(service);
         
         log.info("Ancillary service created with ID: {}", savedService.getServiceId());
-        return ancillaryServiceMapper.toResponse(savedService);
+        return enrichResponseWithRoundtripInfo(savedService);
     }
     
     @Override
@@ -62,7 +62,7 @@ public class AncillaryServiceImpl implements AncillaryServiceService {
     public Optional<AncillaryServiceResponse> findById(Long id) {
         log.debug("Finding ancillary service by ID: {}", id);
         return ancillaryServiceRepository.findById(id)
-                .map(ancillaryServiceMapper::toResponse);
+                .map(this::enrichResponseWithRoundtripInfo);
     }
     
     @Override
@@ -86,7 +86,7 @@ public class AncillaryServiceImpl implements AncillaryServiceService {
     public List<AncillaryServiceResponse> findAllActiveList() {
         log.debug("Finding all active ancillary services as list");
         return ancillaryServiceRepository.findAllActiveAndEnabledList().stream()
-                .map(ancillaryServiceMapper::toResponse)
+                .map(this::enrichResponseWithRoundtripInfo)
                 .collect(Collectors.toList());
     }
     
@@ -136,10 +136,39 @@ public class AncillaryServiceImpl implements AncillaryServiceService {
         
         log.info("Ancillary service active status toggled to: {} for ID: {}", service.isActive(), id);
     }
+
+    /**
+     * Sync isPerSegment values in database based on service type logic
+     */
+    @Override
+    @Transactional
+    public void syncPerSegmentFlags() {
+        log.info("Syncing isPerSegment flags for all ancillary services");
+        
+        List<iuh.fit.airsky.model.AncillaryService> allServices = ancillaryServiceRepository.findAll();
+        int updatedCount = 0;
+        
+        for (iuh.fit.airsky.model.AncillaryService service : allServices) {
+            boolean shouldBePerSegment = isPerSegmentAncillaryService(service);
+            
+            // Only update if different from current value
+            if (service.getIsPerSegment() == null || !service.getIsPerSegment().equals(shouldBePerSegment)) {
+                service.setIsPerSegment(shouldBePerSegment);
+                service.setUpdatedAt(LocalDateTime.now());
+                ancillaryServiceRepository.save(service);
+                updatedCount++;
+                
+                log.info("Updated service ID {}: {} - isPerSegment = {}", 
+                    service.getServiceId(), service.getServiceName(), shouldBePerSegment);
+            }
+        }
+        
+        log.info("Sync completed. Updated {} services.", updatedCount);
+    }
     
     private PageResponse<AncillaryServiceResponse> createPageResponse(Page<iuh.fit.airsky.model.AncillaryService> servicePage) {
         List<AncillaryServiceResponse> responses = servicePage.getContent().stream()
-                .map(ancillaryServiceMapper::toResponse)
+                .map(this::enrichResponseWithRoundtripInfo)
                 .collect(Collectors.toList());
         
         PageResponse<AncillaryServiceResponse> pageResponse = new PageResponse<>();
@@ -150,5 +179,37 @@ public class AncillaryServiceImpl implements AncillaryServiceService {
         pageResponse.setTotalPages(servicePage.getTotalPages());
         pageResponse.setLast(servicePage.isLast());
         return pageResponse;
+    }
+
+    /**
+     * Enrich AncillaryServiceResponse with roundtrip pricing information
+     */
+    private AncillaryServiceResponse enrichResponseWithRoundtripInfo(iuh.fit.airsky.model.AncillaryService service) {
+        AncillaryServiceResponse response = ancillaryServiceMapper.toResponse(service);
+        response.setIsPerSegment(isPerSegmentAncillaryService(service));
+        return response;
+    }
+
+    /**
+     * Determine if an ancillary service should be charged per segment (roundtrip x2)
+     * or per booking (roundtrip x1)
+     */
+    private boolean isPerSegmentAncillaryService(iuh.fit.airsky.model.AncillaryService ancillaryService) {
+        // Services that should be charged per segment (need for each flight)
+        return switch (ancillaryService.getServiceType()) {
+            case MEAL -> true;              // Meals needed for each flight
+            case SEAT -> true;              // Seat selection for each flight  
+            case PRIORITY_BOARDING -> true; // Priority boarding for each flight
+            case WIFI -> true;              // WiFi for each flight
+            case EXTRA_LEGROOM -> true;     // Extra legroom for each flight
+            case INFANT_MEAL -> true;       // Infant meals for each flight
+            // Services that are per booking (once for entire journey)
+            case TRAVEL_INSURANCE -> false; // Insurance covers entire trip
+            case LOUNGE_ACCESS -> false;    // Usually covers entire journey
+            case ENTERTAINMENT -> false;    // Usually per journey
+            case PET_TRANSPORT -> false;    // Once per journey
+            case SPECIAL_ASSISTANCE -> false; // Usually per journey
+            case OTHER -> false;            // Default to per booking
+        };
     }
 }

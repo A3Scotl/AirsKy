@@ -292,7 +292,7 @@ public class ReviewServiceImpl implements ReviewService {
                 reviewRequest.setBookingId(bookingId);
                 reviewRequest.setUserId(userId);
                 reviewRequest.setFlightId(flightId);
-                reviewRequest.setEligibleAt(LocalDateTime.now().plusHours(24)); // Đủ điều kiện review sau 24h
+                reviewRequest.setEligibleAt(LocalDateTime.now().plusMinutes(1)); // Đủ điều kiện review sau 1 phút
                 reviewRequest.setIsApproved(false);
                 // Rating và comment để null vì đây là review request
 
@@ -345,8 +345,8 @@ public class ReviewServiceImpl implements ReviewService {
 
         for (Review review : pendingReviews) {
             try {
-                // Kiểm tra xem đã đủ thời gian chờ chưa (24h sau khi eligible)
-                if (review.getEligibleAt().isAfter(LocalDateTime.now().minusHours(24))) {
+                // Kiểm tra xem đã đủ thời gian chờ chưa (1 phút sau khi eligible)
+                if (review.getEligibleAt().isAfter(LocalDateTime.now())) {
                     log.debug("Review {} not yet eligible for email (eligible at: {})", review.getReviewId(), review.getEligibleAt());
                     continue;
                 }
