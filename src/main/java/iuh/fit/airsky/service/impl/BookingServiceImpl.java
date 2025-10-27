@@ -25,6 +25,7 @@ import iuh.fit.airsky.dto.response.CheckinResponse;
 import iuh.fit.airsky.dto.response.SeatChangeCalculationResponse;
 import iuh.fit.airsky.dto.response.UpdateBookingTotalResponse;
 import iuh.fit.airsky.dto.response.DealResponse;
+import iuh.fit.airsky.dto.response.MembershipValidationResponse;
 import iuh.fit.airsky.service.PointsRedemptionService;
 import iuh.fit.airsky.enums.BaggageType;
 import iuh.fit.airsky.enums.BaggagePackage;
@@ -78,6 +79,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import iuh.fit.airsky.service.impl.EmailTemplateGenerator;
+import iuh.fit.airsky.util.MembershipCodeGenerator;
 @Service
 @Slf4j
 public class BookingServiceImpl implements BookingService {
@@ -215,22 +217,54 @@ public class BookingServiceImpl implements BookingService {
             // Xử lý điểm thưởng trước khi tính toán tổng tiền
             Integer pointsToRedeem = request.getPointsToRedeem();
             DealResponse redeemedDeal = null;
-            if (pointsToRedeem != null && pointsToRedeem > 0 && request.getUserId() != null) {
-                if (!pointsRedemptionService.canRedeemPoints(request.getUserId(), pointsToRedeem)) {
+            Long effectiveUserId = request.getUserId();
+            
+            // Nếu guest booking với membership code, tìm user từ membership code
+            if (effectiveUserId == null && request.getMembershipCodeForPoints() != null && !request.getMembershipCodeForPoints().isBlank()) {
+                try {
+                    User memberUser = userRepository.findByMembershipCode(request.getMembershipCodeForPoints())
+                        .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản với mã hội viên: " + request.getMembershipCodeForPoints()));
+                    effectiveUserId = memberUser.getId();
+                    log.info("Using membership code {} for points redemption, found user: {} with {} loyalty points", 
+                        request.getMembershipCodeForPoints(), effectiveUserId, memberUser.getLoyaltyPoints());
+                } catch (Exception e) {
+                    log.warn("Failed to find user with membership code {}: {}", request.getMembershipCodeForPoints(), e.getMessage());
+                    throw e; // Re-throw để ngăn booking nếu không tìm thấy user
+                }
+            }
+            
+            // Xử lý points redemption cho cả user đăng nhập và guest với membership code
+            Integer actualPointsToRedeem = pointsToRedeem;
+            
+            // Nếu có membershipCodeForPoints nhưng không có pointsToRedeem, tự động áp dụng tất cả điểm có sẵn
+            if (actualPointsToRedeem == null && effectiveUserId != null && request.getMembershipCodeForPoints() != null) {
+                try {
+                    User user = userRepository.findById(effectiveUserId).orElse(null);
+                    if (user != null && user.getLoyaltyPoints() != null && user.getLoyaltyPoints() > 0) {
+                        actualPointsToRedeem = user.getLoyaltyPoints();
+                        log.info("Auto-applying all available points ({}) for membership code: {}", actualPointsToRedeem, request.getMembershipCodeForPoints());
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to get loyalty points for user {}: {}", effectiveUserId, e.getMessage());
+                }
+            }
+            
+            if (actualPointsToRedeem != null && actualPointsToRedeem > 0 && effectiveUserId != null) {
+                if (!pointsRedemptionService.canRedeemPoints(effectiveUserId, actualPointsToRedeem)) {
                     throw new IllegalArgumentException("Không đủ điểm để sử dụng cho booking này");
                 }
                 // Redeem points và tạo deal
                 PointsRedemptionRequest redemptionRequest = new PointsRedemptionRequest();
-                redemptionRequest.setUserId(request.getUserId());
-                redemptionRequest.setPointsToRedeem(pointsToRedeem);
-                BigDecimal discountAmount = pointsRedemptionService.calculateDiscountFromPoints(pointsToRedeem);
+                redemptionRequest.setUserId(effectiveUserId);
+                redemptionRequest.setPointsToRedeem(actualPointsToRedeem);
+                BigDecimal discountAmount = pointsRedemptionService.calculateDiscountFromPoints(actualPointsToRedeem);
                 redemptionRequest.setDiscountAmount(discountAmount.longValue());
                 redeemedDeal = pointsRedemptionService.redeemPointsForDeal(redemptionRequest);
-                log.info("Successfully redeemed {} points for user {}, created deal: {}", pointsToRedeem, request.getUserId(), redeemedDeal.getDealCode());
+                log.info("Successfully redeemed {} points for user {}, created deal: {}", actualPointsToRedeem, effectiveUserId, redeemedDeal.getDealCode());
             }
 
             // Bước 5: Tính toán tổng số tiền cuối cùng, bao gồm các dịch vụ và giảm giá
-            BigDecimal finalAmount = calculateFinalAmount(request, savedBooking, redeemedDeal);
+            BigDecimal finalAmount = calculateFinalAmount(request, savedBooking, redeemedDeal, effectiveUserId);
             savedBooking.setTotalAmount(finalAmount);
 
             // Bước 6: Tạo bản ghi thanh toán cho booking
@@ -244,6 +278,11 @@ public class BookingServiceImpl implements BookingService {
             Booking finalBooking = bookingRepository.save(savedBooking);
             log.info("Booking creation completed successfully for bookingId: {}", finalBooking.getBookingId());
 
+            // Bước 8: Cộng điểm loyalty cho booking thành công (chỉ cho user thực hiện booking, không phải membership code user)
+            if (request.getUserId() != null) {
+                awardLoyaltyPointsForBooking(finalBooking, finalAmount, request.getUserId());
+            }
+
             // Dọn dẹp EntityManager để đảm bảo response trả về dữ liệu mới nhất từ DB
             entityManager.flush();
             entityManager.clear();
@@ -256,6 +295,23 @@ public class BookingServiceImpl implements BookingService {
             if (redeemedDeal != null) {
                 response.setPointsRedeemed(redeemedDeal.getPointsRequired());
                 response.setPointsDiscountAmount(redeemedDeal.getFixedDiscountAmount());
+                
+                // Set thông tin membership code nếu có
+                if (request.getMembershipCodeForPoints() != null && !request.getMembershipCodeForPoints().isBlank()) {
+                    response.setMembershipCodeUsed(request.getMembershipCodeForPoints());
+                    
+                    // Lấy số điểm còn lại của user
+                    try {
+                        User memberUser = userRepository.findByMembershipCode(request.getMembershipCodeForPoints()).orElse(null);
+                        if (memberUser != null) {
+                            Integer currentPoints = memberUser.getLoyaltyPoints() != null ? memberUser.getLoyaltyPoints() : 0;
+                            response.setAvailableLoyaltyPoints(currentPoints);
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to get available loyalty points for membership code {}: {}", 
+                            request.getMembershipCodeForPoints(), e.getMessage());
+                    }
+                }
             }
             return response;
         } catch (ObjectOptimisticLockingFailureException e) {
@@ -297,6 +353,9 @@ public class BookingServiceImpl implements BookingService {
         if (request.getContactName() == null || request.getContactName().isBlank()) {
             throw new IllegalArgumentException("Tên người liên hệ là bắt buộc đối với đặt vé của khách.");
         }
+
+        // Validate membership codes cho từng passenger
+        validatePassengerMembershipCodes(request);
     }
     }
 
@@ -336,7 +395,7 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Flight not found with id: " + flightId));
     }
 
-    private BigDecimal calculateFinalAmount(BookingRequest request, Booking savedBooking, DealResponse redeemedDeal) {
+    private BigDecimal calculateFinalAmount(BookingRequest request, Booking savedBooking, DealResponse redeemedDeal, Long effectiveUserId) {
         // 1. Base amount from flight segments - tính theo từng loại hành khách
         BigDecimal baseAmount = BigDecimal.ZERO;
         for (FlightSegment segment : savedBooking.getFlightSegments()) {
@@ -369,12 +428,15 @@ public class BookingServiceImpl implements BookingService {
 
         // 6. Apply Points Redemption Deal (if redeemed)
         if (redeemedDeal != null) {
-            finalAmount = applyDealDiscount(redeemedDeal.getDealCode(), request.getUserId(), savedBooking, finalAmount);
+            finalAmount = applyDealDiscount(redeemedDeal.getDealCode(), effectiveUserId, savedBooking, finalAmount);
         }
 
         // 7. Apply Tier Discount
-        if (request.getUserId() != null) {
-            finalAmount = applyTierDiscount(request.getUserId(), finalAmount);
+        if (effectiveUserId != null) {
+            finalAmount = applyTierDiscount(effectiveUserId, finalAmount);
+        } else {
+            // Apply tier discount dựa trên membership codes của passengers
+            finalAmount = applyPassengerMembershipDiscount(request, finalAmount);
         }
 
         // Đảm bảo tổng tiền cuối cùng không âm
@@ -503,6 +565,7 @@ public class BookingServiceImpl implements BookingService {
             request.getPassengers().forEach(passengerRequest -> {
                 Passenger passenger = passengerMapper.toEntity(passengerRequest);
                 passenger.setBooking(existingBooking);
+
                 existingBooking.getPassengers().add(passenger);
             });
         }
@@ -971,6 +1034,11 @@ public class BookingServiceImpl implements BookingService {
             passenger.setEmail(p.getEmail());
             passenger.setPhone(p.getPhone());
             passenger.setBooking(booking);
+            passenger.setMembershipCode(p.getMembershipCode()); // Set membership code từ request
+
+            // Set nationality và current residence từ request
+            passenger.setNationality(p.getNationality());
+            passenger.setCurrentResidence(p.getCurrentResidence());
 
             // LƯU Ý: Không gán seat hoặc baggage package trực tiếp ở đây.
             // Việc này sẽ được xử lý trong các phương thức `createSeatAssignments` và `createInitialCheckinRecords`
@@ -1578,15 +1646,39 @@ public class BookingServiceImpl implements BookingService {
         }
     }
     private void awardLoyaltyPointsForCompletedBooking(Booking booking) {
-        User user = booking.getUserId();
-        if (user == null) {
-            log.debug("Skipping loyalty points for guest booking: {}", booking.getBookingId());
-            return;
-        }
-
         BigDecimal bookingAmount = booking.getTotalAmount();
 
-        // Base points: 1 point per 1000 VND (cải thiện từ rate quá thấp)
+        // Tích điểm cho từng passenger có membership code
+        for (Passenger passenger : booking.getPassengers()) {
+            String membershipCode = passenger.getMembershipCode();
+            if (membershipCode != null && !membershipCode.isBlank()) {
+                try {
+                    User member = userRepository.findByMembershipCode(membershipCode).orElse(null);
+                    if (member != null && member.isActive()) {
+                        awardPointsToPassenger(member, bookingAmount, passenger, booking);
+                    } else {
+                        log.warn("Membership code {} not found or inactive for passenger {} {}",
+                            membershipCode, passenger.getFirstName(), passenger.getLastName());
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to award points for passenger {} {} with membership code {}: {}",
+                        passenger.getFirstName(), passenger.getLastName(), membershipCode, e.getMessage());
+                }
+            }
+        }
+
+        // Tích điểm cho user đăng nhập (nếu có)
+        User loggedInUser = booking.getUserId();
+        if (loggedInUser != null) {
+            awardPointsToPassenger(loggedInUser, bookingAmount, null, booking);
+        }
+    }
+
+    /**
+     * Tích điểm cho một passenger cụ thể
+     */
+    private void awardPointsToPassenger(User user, BigDecimal bookingAmount, Passenger passenger, Booking booking) {
+        // Base points: 1 point per 1000 VND
         int basePoints = bookingAmount.divide(BigDecimal.valueOf(1000)).intValue();
 
         // Tier multiplier bonus
@@ -1604,16 +1696,19 @@ public class BookingServiceImpl implements BookingService {
             user.setLoyaltyPoints(currentPoints + totalPoints);
             userRepository.save(user);
 
-            log.info("Awarded {} loyalty points ({} base * {}x tier + {} bonus) for completed booking {} to {} ({})",
-                    totalPoints, basePoints, tierMultiplier, bookingBonus, booking.getBookingId(),
-                    user.getEmail(), userTier);
+            String passengerInfo = passenger != null ?
+                passenger.getFirstName() + " " + passenger.getLastName() :
+                "logged-in user";
+
+            log.info("Awarded {} loyalty points ({} base * {}x tier + {} bonus) to {} ({}) via membership code",
+                    totalPoints, basePoints, tierMultiplier, bookingBonus, passengerInfo, userTier);
 
             // Check for tier upgrade after awarding points
             try {
                 loyaltyService.checkAndUpgradeTier(user.getId());
             } catch (Exception e) {
-                log.error("Failed to check tier upgrade for user {} after completing booking {}: {}",
-                        user.getId(), booking.getBookingId(), e.getMessage());
+                log.error("Failed to check tier upgrade for user {} after awarding points: {}",
+                        user.getId(), e.getMessage());
             }
         }
     }
@@ -3632,15 +3727,216 @@ public class BookingServiceImpl implements BookingService {
         // Tìm các dealUsage liên quan đến booking này
         List<DealUsage> dealUsages = dealUsageRepository.findAllByBooking(booking);
         if (dealUsages == null || dealUsages.isEmpty()) return;
+        
         for (DealUsage dealUsage : dealUsages) {
             Deal deal = dealUsage.getDeal();
-            if (deal != null && Boolean.TRUE.equals(deal.getIsPointsRedemption()) && deal.getPointsRequired() != null && booking.getUserId() != null) {
-                User user = booking.getUserId();
-                Integer currentPoints = user.getLoyaltyPoints() != null ? user.getLoyaltyPoints() : 0;
-                user.setLoyaltyPoints(currentPoints + deal.getPointsRequired());
-                userRepository.save(user);
-                log.info("Refunded {} points to user {} for cancelled booking {} (deal: {})", deal.getPointsRequired(), user.getId(), booking.getBookingId(), deal.getDealCode());
+            if (deal != null && Boolean.TRUE.equals(deal.getIsPointsRedemption()) && deal.getPointsRequired() != null) {
+                User user = null;
+                
+                // Tìm user để hoàn điểm - ưu tiên userId của booking, nếu không có thì tìm từ membership code của passengers
+                if (booking.getUserId() != null) {
+                    user = booking.getUserId();
+                } else {
+                    // Tìm user từ membership code trong passengers
+                    for (Passenger passenger : booking.getPassengers()) {
+                        if (passenger.getMembershipCode() != null && !passenger.getMembershipCode().isBlank()) {
+                            user = userRepository.findByMembershipCode(passenger.getMembershipCode()).orElse(null);
+                            if (user != null) break;
+                        }
+                    }
+                }
+                
+                if (user != null) {
+                    Integer currentPoints = user.getLoyaltyPoints() != null ? user.getLoyaltyPoints() : 0;
+                    user.setLoyaltyPoints(currentPoints + deal.getPointsRequired());
+                    userRepository.save(user);
+                    log.info("Refunded {} points to user {} for cancelled booking {} (deal: {})", 
+                        deal.getPointsRequired(), user.getId(), booking.getBookingId(), deal.getDealCode());
+                }
             }
         }
+    }
+
+    /**
+     * Cộng điểm loyalty cho booking thành công
+     */
+    private void awardLoyaltyPointsForBooking(Booking booking, BigDecimal totalAmount, Long effectiveUserId) {
+        if (effectiveUserId == null) return;
+        
+        try {
+            User user = userRepository.findById(effectiveUserId).orElse(null);
+            if (user == null) return;
+            
+            // Tính điểm loyalty dựa trên số tiền booking (1% = 1 điểm cho mỗi 1000 VND)
+            int loyaltyPointsToAward = totalAmount.divide(BigDecimal.valueOf(1000), 0, BigDecimal.ROUND_DOWN).intValue();
+            
+            if (loyaltyPointsToAward > 0) {
+                Integer currentPoints = user.getLoyaltyPoints() != null ? user.getLoyaltyPoints() : 0;
+                user.setLoyaltyPoints(currentPoints + loyaltyPointsToAward);
+                userRepository.save(user);
+                
+                log.info("Awarded {} loyalty points to user {} for booking {} (amount: {})", 
+                    loyaltyPointsToAward, effectiveUserId, booking.getBookingId(), totalAmount);
+            }
+        } catch (Exception e) {
+            log.error("Failed to award loyalty points for booking {}: {}", booking.getBookingId(), e.getMessage(), e);
+            // Không throw exception để không ảnh hưởng đến booking process
+        }
+    }
+
+    /**
+     * Validate membership codes cho từng passenger trong guest booking
+     */
+    private void validatePassengerMembershipCodes(BookingRequest request) {
+        for (PassengerSeatRequest passengerReq : request.getPassengers()) {
+            String membershipCode = passengerReq.getMembershipCode();
+            if (membershipCode != null && !membershipCode.isBlank()) {
+                // Validate format
+                if (!MembershipCodeGenerator.isValidFormat(membershipCode)) {
+                    throw new IllegalArgumentException("Mã hội viên không đúng định dạng cho hành khách " +
+                        passengerReq.getFirstName() + " " + passengerReq.getLastName() + ". Mã phải có format AK + 10 chữ số.");
+                }
+
+                // Kiểm tra membership code có tồn tại không
+                User member = userRepository.findByMembershipCode(membershipCode)
+                    .orElseThrow(() -> new IllegalArgumentException("Mã hội viên không tồn tại cho hành khách " +
+                        passengerReq.getFirstName() + " " + passengerReq.getLastName() + "."));
+
+                // Kiểm tra user có active không
+                if (!member.isActive()) {
+                    throw new IllegalArgumentException("Tài khoản hội viên đã bị khóa cho hành khách " +
+                        passengerReq.getFirstName() + " " + passengerReq.getLastName() + ".");
+                }
+
+                log.info("Validated membership code {} for passenger: {} {}",
+                    membershipCode, passengerReq.getFirstName(), passengerReq.getLastName());
+            }
+        }
+    }
+
+
+
+    /**
+     * Áp dụng tier discount dựa trên membership codes của passengers
+     * Áp dụng tier cao nhất từ tất cả membership codes
+     */
+    private BigDecimal applyPassengerMembershipDiscount(BookingRequest request, BigDecimal amount) {
+        LoyaltyTier highestTier = LoyaltyTier.STANDARD; // Default tier
+
+        // Tìm tier cao nhất từ tất cả membership codes của passengers
+        for (PassengerSeatRequest passengerReq : request.getPassengers()) {
+            String membershipCode = passengerReq.getMembershipCode();
+            if (membershipCode != null && !membershipCode.isBlank()) {
+                try {
+                    User member = userRepository.findByMembershipCode(membershipCode).orElse(null);
+                    if (member != null && member.isActive()) {
+                        LoyaltyTier memberTier = member.getLoyaltyTier() != null ?
+                            member.getLoyaltyTier() : LoyaltyTier.STANDARD;
+
+                        // So sánh và lấy tier cao hơn
+                        if (memberTier.getDiscountRate().compareTo(highestTier.getDiscountRate()) > 0) {
+                            highestTier = memberTier;
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to get tier for membership code {}: {}", membershipCode, e.getMessage());
+                }
+            }
+        }
+
+        // Áp dụng discount với tier cao nhất
+        BigDecimal discountRate = highestTier.getDiscountRate();
+        if (discountRate.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal discountAmount = amount.multiply(discountRate);
+            BigDecimal finalAmount = amount.subtract(discountAmount);
+
+            log.info("Applied {}% tier discount (highest tier: {}) for passengers with membership codes: {}",
+                discountRate.multiply(BigDecimal.valueOf(100)), highestTier,
+                request.getPassengers().stream()
+                    .filter(p -> p.getMembershipCode() != null && !p.getMembershipCode().isBlank())
+                    .map(p -> p.getMembershipCode())
+                    .collect(Collectors.joining(", ")));
+
+            return finalAmount;
+        }
+
+        return amount;
+    }
+
+    /**
+     * Áp dụng tier discount cho guest booking với membership code
+     */
+    private BigDecimal applyMembershipTierDiscount(String membershipCode, BigDecimal amount) {
+        try {
+            User member = userRepository.findByMembershipCode(membershipCode)
+                .orElseThrow(() -> new IllegalArgumentException("Membership code not found"));
+
+            LoyaltyTier tier = member.getLoyaltyTier() != null ? member.getLoyaltyTier() : LoyaltyTier.STANDARD;
+            BigDecimal discountRate = tier.getDiscountRate();
+
+            if (discountRate.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal discountAmount = amount.multiply(discountRate);
+                BigDecimal finalAmount = amount.subtract(discountAmount);
+
+                log.info("Applied {}% tier discount for membership code {} (tier: {}): {} -> {}",
+                    discountRate.multiply(BigDecimal.valueOf(100)), membershipCode, tier, amount, finalAmount);
+
+                return finalAmount;
+            }
+
+            return amount;
+        } catch (Exception e) {
+            log.warn("Failed to apply membership tier discount for code {}: {}", membershipCode, e.getMessage());
+            return amount; // Return original amount if discount application fails
+        }
+    }
+
+    /**
+     * Validate membership code và trả về thông tin user
+     */
+    @Override
+    public MembershipValidationResponse validateMembershipCode(String code) {
+        // Validate format first
+        if (!MembershipCodeGenerator.isValidFormat(code)) {
+            return MembershipValidationResponse.builder()
+                .valid(false)
+                .membershipCode(code)
+                .message("Mã hội viên không đúng định dạng. Mã phải có format AK + 10 chữ số.")
+                .build();
+        }
+
+        // Find user by membership code
+        User user = userRepository.findByMembershipCode(code).orElse(null);
+        if (user == null) {
+            return MembershipValidationResponse.builder()
+                .valid(false)
+                .membershipCode(code)
+                .message("Mã hội viên không tồn tại.")
+                .build();
+        }
+
+        // Check if user is active
+        if (!user.isActive()) {
+            return MembershipValidationResponse.builder()
+                .valid(false)
+                .membershipCode(code)
+                .message("Tài khoản hội viên đã bị khóa.")
+                .build();
+        }
+
+        // Return valid response with user info
+        LoyaltyTier tier = user.getLoyaltyTier() != null ? user.getLoyaltyTier() : LoyaltyTier.STANDARD;
+        Integer points = user.getLoyaltyPoints() != null ? user.getLoyaltyPoints() : 0;
+
+        return MembershipValidationResponse.builder()
+            .valid(true)
+            .membershipCode(code)
+            .userName(user.getDisplayName())
+            .userEmail(user.getEmail())
+            .tier(tier)
+            .currentPoints(points)
+            .discountRate(tier.getDiscountRate())
+            .message("Mã hội viên hợp lệ. " + tier.getDisplayName() + " - " + points + " điểm")
+            .build();
     }
 }

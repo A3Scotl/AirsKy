@@ -29,4 +29,5 @@ public class UserResponse {
     private Integer loyaltyPoints;
     private LoyaltyTier loyaltyTier;
     private AuthProvider authProvider;
+    private String membershipCode;
 }

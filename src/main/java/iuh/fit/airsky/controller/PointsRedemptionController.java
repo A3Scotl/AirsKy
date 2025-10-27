@@ -48,6 +48,21 @@ public class PointsRedemptionController {
         return ResponseEntity.ok(new ApiResponse<>(true, "Giá trị giảm giá cho " + points + " điểm", discount, null, null, null));
     }
 
+    @GetMapping("/calculate-discount-by-membership")
+    public ResponseEntity<ApiResponse<BigDecimal>> calculateDiscountFromPointsByMembership(
+            @RequestParam String membershipCode,
+            @RequestParam Integer points) {
+        try {
+            BigDecimal discount = pointsRedemptionService.calculateDiscountFromPointsByMembershipCode(membershipCode, points);
+            return ResponseEntity.ok(new ApiResponse<>(true, "Giá trị giảm giá cho " + points + " điểm của mã hội viên " + membershipCode, discount, null, null, null));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(new ApiResponse<>(false, e.getMessage(), null, e.getMessage(), null, null));
+        } catch (Exception e) {
+            log.error("Error calculating discount by membership code", e);
+            return ResponseEntity.internalServerError().body(new ApiResponse<>(false, "Có lỗi xảy ra khi tính giảm giá", null, "Internal server error", null, null));
+        }
+    }
+
     @GetMapping("/user/{userId}/deals")
     @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
     public ResponseEntity<ApiResponse<List<DealResponse>>> getUserPointsRedemptionDeals(
@@ -69,5 +84,14 @@ public class PointsRedemptionController {
             @RequestParam Integer pointsRequired) {
         boolean canRedeem = pointsRedemptionService.canRedeemPoints(userId, pointsRequired);
         return ResponseEntity.ok(new ApiResponse<>(true, canRedeem ? "Có thể đổi điểm" : "Không đủ điểm để đổi", canRedeem, null, null, null));
+    }
+
+    @GetMapping("/can-redeem-by-membership")
+    public ResponseEntity<ApiResponse<Boolean>> canRedeemPointsByMembership(
+            @RequestParam String membershipCode,
+            @RequestParam Integer pointsRequired) {
+        boolean canRedeem = pointsRedemptionService.canRedeemPointsByMembershipCode(membershipCode, pointsRequired);
+        String message = canRedeem ? "Có thể đổi điểm với mã hội viên " + membershipCode : "Không đủ điểm để đổi với mã hội viên " + membershipCode;
+        return ResponseEntity.ok(new ApiResponse<>(true, message, canRedeem, null, null, null));
     }
 }

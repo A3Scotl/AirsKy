@@ -10,6 +10,7 @@ import iuh.fit.airsky.repository.DealRepository;
 import iuh.fit.airsky.repository.UserRepository;
 import iuh.fit.airsky.service.PointsRedemptionService;
 import iuh.fit.airsky.util.GenerateCodeUtil;
+import iuh.fit.airsky.util.MembershipCodeGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -107,6 +108,35 @@ public class PointsRedemptionServiceImpl implements PointsRedemptionService {
     }
 
     @Override
+    public BigDecimal calculateDiscountFromPointsByMembershipCode(String membershipCode, Integer points) {
+        if (points < MIN_POINTS_REDEMPTION) {
+            return BigDecimal.ZERO;
+        }
+
+        // Validate membership code
+        if (!MembershipCodeGenerator.isValidFormat(membershipCode)) {
+            throw new IllegalArgumentException("Mã hội viên không đúng định dạng.");
+        }
+
+        User user = userRepository.findByMembershipCode(membershipCode)
+                .orElseThrow(() -> new IllegalArgumentException("Mã hội viên không tồn tại."));
+
+        if (!user.isActive()) {
+            throw new IllegalArgumentException("Tài khoản hội viên đã bị khóa.");
+        }
+
+        // Check if user has enough points
+        Integer currentPoints = user.getLoyaltyPoints() != null ? user.getLoyaltyPoints() : 0;
+        if (currentPoints < points) {
+            throw new IllegalArgumentException("Không đủ điểm để đổi. Cần " + points + " điểm, hiện có " + currentPoints + " điểm.");
+        }
+
+        // 100 điểm = 10,000 VND
+        return VND_PER_100_POINTS.multiply(BigDecimal.valueOf(points))
+                .divide(BigDecimal.valueOf(POINTS_PER_10K_VND));
+    }
+
+    @Override
     public List<DealResponse> getUserPointsRedemptionDeals(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -144,6 +174,21 @@ public class PointsRedemptionServiceImpl implements PointsRedemptionService {
     public boolean canRedeemPoints(Long userId, Integer pointsRequired) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        Integer currentPoints = user.getLoyaltyPoints() != null ? user.getLoyaltyPoints() : 0;
+        return currentPoints >= pointsRequired && pointsRequired >= MIN_POINTS_REDEMPTION;
+    }
+
+    @Override
+    public boolean canRedeemPointsByMembershipCode(String membershipCode, Integer pointsRequired) {
+        if (!MembershipCodeGenerator.isValidFormat(membershipCode)) {
+            return false;
+        }
+
+        User user = userRepository.findByMembershipCode(membershipCode).orElse(null);
+        if (user == null || !user.isActive()) {
+            return false;
+        }
 
         Integer currentPoints = user.getLoyaltyPoints() != null ? user.getLoyaltyPoints() : 0;
         return currentPoints >= pointsRequired && pointsRequired >= MIN_POINTS_REDEMPTION;

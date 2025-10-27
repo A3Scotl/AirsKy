@@ -60,6 +60,16 @@ public class Passenger {
     @Enumerated(EnumType.STRING)
     private Gender gender;
 
+    @Column(name = "membership_code", length = 12)
+    private String membershipCode;
+
+    // Thêm thông tin quốc gia và nơi ở
+    @Column(name = "nationality", length = 100)
+    private String nationality; // Quốc tịch (tên quốc gia)
+
+    @Column(name = "current_residence", length = 100)
+    private String currentResidence; // Nơi ở hiện tại
+
     // Helper methods để tương thích ngược
     public Seat getPrimarySeat() {
         return seatAssignments.stream()

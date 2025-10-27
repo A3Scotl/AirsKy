@@ -12,6 +12,7 @@ import iuh.fit.airsky.dto.response.CheckinEligiblePassengerResponse;
 import iuh.fit.airsky.dto.response.CheckinResponse;
 import iuh.fit.airsky.dto.response.SeatChangeCalculationResponse;
 import iuh.fit.airsky.dto.response.UpdateBookingTotalResponse;
+import iuh.fit.airsky.dto.response.MembershipValidationResponse;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.service.BookingService;
 import iuh.fit.airsky.util.ApiResponseUtil;
@@ -219,6 +220,18 @@ public class BookingController {
         } catch (Exception ex) {
             ex.printStackTrace();
             return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Check-in processing failed", ex.getMessage(), "/api/v1/bookings/checkin");
+        }
+    }
+
+    @GetMapping("/validate-membership/{code}")
+    public ResponseEntity<ApiResponse<MembershipValidationResponse>> validateMembershipCode(@PathVariable String code) {
+        try {
+            MembershipValidationResponse response = bookingService.validateMembershipCode(code);
+            return ApiResponseUtil.buildResponse(true, "Membership code validated successfully", response, "/api/v1/bookings/validate-membership/" + code);
+        } catch (IllegalArgumentException ex) {
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), "INVALID_MEMBERSHIP_CODE", "/api/v1/bookings/validate-membership/" + code);
+        } catch (Exception ex) {
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to validate membership code", ex.getMessage(), "/api/v1/bookings/validate-membership/" + code);
         }
     }
 }

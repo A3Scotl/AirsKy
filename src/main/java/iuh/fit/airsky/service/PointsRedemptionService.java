@@ -20,6 +20,11 @@ public interface PointsRedemptionService {
     BigDecimal calculateDiscountFromPoints(Integer points);
     
     /**
+     * Tính toán số tiền giảm giá từ số điểm cho membership code (không cần đăng nhập)
+     */
+    BigDecimal calculateDiscountFromPointsByMembershipCode(String membershipCode, Integer points);
+    
+    /**
      * Lấy danh sách deal đổi điểm của user
      */
     List<DealResponse> getUserPointsRedemptionDeals(Long userId);
@@ -33,4 +38,9 @@ public interface PointsRedemptionService {
      * Kiểm tra user có đủ điểm để đổi không
      */
     boolean canRedeemPoints(Long userId, Integer pointsRequired);
+    
+    /**
+     * Kiểm tra membership code có đủ điểm để đổi không (không cần đăng nhập)
+     */
+    boolean canRedeemPointsByMembershipCode(String membershipCode, Integer pointsRequired);
 }

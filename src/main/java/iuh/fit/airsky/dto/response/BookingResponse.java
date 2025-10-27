@@ -46,4 +46,8 @@ public class BookingResponse {
     // Points redemption information
     private Integer pointsRedeemed; // Số điểm đã dùng để giảm giá
     private BigDecimal pointsDiscountAmount; // Số tiền đã giảm từ điểm thưởng
+    
+    // Membership code information
+    private String membershipCodeUsed; // Mã hội viên đã sử dụng
+    private Integer availableLoyaltyPoints; // Số điểm thưởng có sẵn của user
 }

@@ -28,6 +28,8 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
     boolean existsByEmail(String email);
+    boolean existsByMembershipCode(String membershipCode);
+    Optional<User> findByMembershipCode(String membershipCode);
     @Query("SELECT u FROM User u WHERE u.deleted = false")
     Page<User> findAll(Pageable pageable);
 

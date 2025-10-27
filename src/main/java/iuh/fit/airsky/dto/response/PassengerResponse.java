@@ -17,4 +17,9 @@ public class PassengerResponse {
     private String email;
     private String phone;
     private Gender gender;
+    private String membershipCode;
+
+    // Thêm thông tin quốc gia và nơi ở
+    private String nationality;
+    private String currentResidence;
 }

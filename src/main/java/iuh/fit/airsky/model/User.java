@@ -51,6 +51,9 @@ public class User  extends BaseFullSoftDeleteEntity implements UserDetails {
     @Enumerated(EnumType.STRING)
     private LoyaltyTier loyaltyTier;
 
+    @Column(unique = true, length = 12)
+    private String membershipCode;
+
     @Enumerated(EnumType.STRING)
     private AuthProvider authProvider;
 

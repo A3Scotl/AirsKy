@@ -14,6 +14,7 @@ import iuh.fit.airsky.repository.VerificationTokenRepository;
 import iuh.fit.airsky.service.AuthService;
 import iuh.fit.airsky.service.JwtService;
 import iuh.fit.airsky.service.OtpService;
+import iuh.fit.airsky.util.MembershipCodeGenerator;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -100,6 +101,13 @@ public class AuthServiceImpl implements AuthService {
 
         user.setLoyaltyTier(LoyaltyTier.STANDARD);
         user.setLoyaltyPoints(0);
+
+        // Sinh membership code unique
+        String membershipCode;
+        do {
+            membershipCode = MembershipCodeGenerator.generateMembershipCode();
+        } while (userRepository.existsByMembershipCode(membershipCode));
+        user.setMembershipCode(membershipCode);
 
         userRepository.save(user);
         otpService.createAndSendOtp(user.getEmail());

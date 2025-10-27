@@ -29,6 +29,11 @@ public class PassengerSeatRequest {
     private String email;
     private String phone;
     private Gender gender;
+    private String membershipCode; // Mã hội viên cho passenger này (optional)
+
+    // Thêm thông tin quốc gia và nơi ở
+    private String nationality; // Tên quốc gia quốc tịch
+    private String currentResidence; // Nơi ở hiện tại
 
     @Data
     public static class SeatAssignmentRequest {

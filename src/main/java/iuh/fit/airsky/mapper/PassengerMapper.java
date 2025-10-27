@@ -29,6 +29,8 @@ public interface PassengerMapper {
     @Mapping(target = "gender", source = "gender")
     @Mapping(target = "email", source = "email")
     @Mapping(target = "phone", source = "phone")
+    @Mapping(target = "nationality", source = "nationality")
+    @Mapping(target = "currentResidence", source = "currentResidence")
     PassengerSeatResponse toPassengerSeatResponse(Passenger passenger);
 
     @Mapping(target = "segmentOrder", expression = "java(assignment.getFlightSegment().getSegmentOrder())")
