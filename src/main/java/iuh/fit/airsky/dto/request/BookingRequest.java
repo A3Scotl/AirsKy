@@ -29,5 +29,6 @@ public class BookingRequest {
     private String membershipCodeForPoints; // Mã hội viên để sử dụng điểm (cho guest booking)
     private String contactEmail; // Email để nhận thông tin booking
     private String contactName; // Tên người liên hệ
+    private String clientType; // "WEB" hoặc "MOBILE"
 
 }

@@ -402,6 +402,15 @@ public class FlightServiceImpl implements FlightService {
         log.info("Searching flights with departureAirportId: {}, arrivalAirportId: {}, startTime: {}, endTime: {}, status: {}, tripType: {}",
                 departureAirportId, arrivalAirportId, startTime, endTime, status, tripType);
 
+        // Tối ưu: Luôn chỉ tìm các chuyến bay có thể đặt vé
+        // 1. Trạng thái phải là ON_TIME
+        status = FlightStatus.ON_TIME;
+        // 2. Thời gian khởi hành phải sau thời điểm hiện tại ít nhất 4 tiếng
+        LocalDateTime minDepartureTime = LocalDateTime.now().plusHours(4);
+        if (startTime == null || startTime.isBefore(minDepartureTime)) {
+            startTime = minDepartureTime;
+        }
+
         // If no search parameters are provided, return all flights
         if (departureAirportId == null &&
                 arrivalAirportId == null &&

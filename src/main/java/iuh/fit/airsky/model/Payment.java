@@ -48,7 +48,11 @@ public class Payment {
     @Column(columnDefinition = "TEXT")
     private String checkoutUrl;
 
+    @Column(name = "payer_account_number")
+    private String payerAccountNumber;
 
+    @Column(name = "payer_bank_name")
+    private String payerBankName;
 
 
 }

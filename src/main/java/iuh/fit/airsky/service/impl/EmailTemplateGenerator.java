@@ -3,6 +3,7 @@ package iuh.fit.airsky.service.impl;
 import freemarker.template.Configuration;
 import freemarker.template.Template;
 import freemarker.template.TemplateException;
+import iuh.fit.airsky.dto.response.BookingResponse;
 import iuh.fit.airsky.model.Booking;
 import iuh.fit.airsky.model.Flight;
 import iuh.fit.airsky.model.Passenger;
@@ -25,65 +26,82 @@ public class EmailTemplateGenerator {
     @Autowired
     private Configuration freemarkerConfig;
 
-    public String generateEmailTemplate(Booking booking) {
+    public String generateEmailTemplate(BookingResponse bookingResponse) {
         try {
             // Load template từ classpath: templates/email/ConfirmBooking.html
             Template template = freemarkerConfig.getTemplate("ConfirmBooking.html");
 
             // Chuẩn bị data model từ booking
-            Map<String, Object> dataModel = prepareDataModel(booking);
+            Map<String, Object> dataModel = prepareDataModel(bookingResponse);
 
             // Render template thành HTML string
             return FreeMarkerTemplateUtils.processTemplateIntoString(template, dataModel);
 
         } catch (IOException | TemplateException e) {
-            log.error("Error generating email template for booking {}: {}", booking.getBookingId(), e.getMessage(), e);
+            log.error("Error generating email template for booking {}: {}", bookingResponse.getBookingId(), e.getMessage(), e);
             // Fallback: Trả về body đơn giản nếu render fail
-            return "<h3>Xác nhận đặt vé thành công</h3><p>Mã đặt vé: " + booking.getBookingCode() + "</p>";
+            return "<h3>Xác nhận đặt vé thành công</h3><p>Mã đặt vé: " + bookingResponse.getBookingCode() + "</p>";
         }
     }
 
-    private Map<String, Object> prepareDataModel(Booking booking) {
+    private Map<String, Object> prepareDataModel(BookingResponse bookingResponse) {
         Map<String, Object> dataModel = new HashMap<>();
 
         // Thông tin cơ bản
-        dataModel.put("bookingCode", Optional.ofNullable(booking.getBookingCode()).orElse("N/A"));
-        dataModel.put("bookingDate", Optional.ofNullable(booking.getBookingDate()).map(d -> d.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))).orElse("N/A"));
-        Passenger primaryPassenger = booking.getPassengers().isEmpty() ? null : booking.getPassengers().get(0);
-        dataModel.put("passengerName", primaryPassenger != null ? String.format("%s %s", primaryPassenger.getFirstName(), primaryPassenger.getLastName()) : "Guest");
-        dataModel.put("phone", primaryPassenger != null ? Optional.ofNullable(primaryPassenger.getPhone()).orElse("N/A") : "N/A");
-        dataModel.put("email", primaryPassenger != null ? Optional.ofNullable(primaryPassenger.getEmail()).orElse("N/A") : "N/A");
+        dataModel.put("contactName", Optional.ofNullable(bookingResponse.getContactName()).orElse("Guest"));
+        dataModel.put("bookingCode", Optional.ofNullable(bookingResponse.getBookingCode()).orElse("N/A"));
+        dataModel.put("bookingDate", Optional.ofNullable(bookingResponse.getBookingDate()).map(d -> d.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))).orElse("N/A"));
 
-        // Thông tin chuyến bay (dùng flight chính)
-        Flight flight = booking.getFlight();
-        dataModel.put("flightNumber", flight.getFlightNumber());
-        dataModel.put("flightDate", flight.getDepartureTime().format(DateTimeFormatter.ofPattern("MMM dd, yyyy")));
-        dataModel.put("departureTime", flight.getDepartureTime().format(DateTimeFormatter.ofPattern("HH:mm")));
-        dataModel.put("departureAirport", flight.getDepartureAirport().getAirportName());
-        dataModel.put("arrivalTime", flight.getArrivalTime().format(DateTimeFormatter.ofPattern("HH:mm")));
-        dataModel.put("arrivalAirport", flight.getArrivalAirport().getAirportName());
-        dataModel.put("travelClass", booking.getTravelClass() != null ? booking.getTravelClass().getClassName() : "N/A");
+        // Thông tin chuyến bay (lặp qua các chặng)
+        List<Map<String, Object>> flightSegments = bookingResponse.getFlightSegments().stream()
+                .map(segment -> {
+                    Map<String, Object> segMap = new HashMap<>();
+                    segMap.put("segmentOrder", segment.getSegmentOrder());
+                    segMap.put("flightNumber", segment.getFlightNumber());
+                    segMap.put("airlineName",  "VietNam Airlines");
+                    segMap.put("flightDate", segment.getDepartureTime().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+                    segMap.put("departureTime", segment.getDepartureTime().format(DateTimeFormatter.ofPattern("HH:mm")));
+                    segMap.put("departureCode", segment.getDepartureAirport().getAirportCode());
+                    segMap.put("departureAirport", segment.getDepartureAirport().getAirportName());
+                    segMap.put("arrivalTime", segment.getArrivalTime().format(DateTimeFormatter.ofPattern("HH:mm")));
+                    segMap.put("arrivalCode", segment.getArrivalAirport().getAirportCode());
+                    segMap.put("arrivalAirport", segment.getArrivalAirport().getAirportName());
+                    segMap.put("duration", segment.getDuration() != null ? segment.getDuration() : "N/A");
+                    segMap.put("travelClass", segment.getClassName());
+                    return segMap;
+                }).collect(Collectors.toList());
+        dataModel.put("flightSegments", flightSegments);
 
         // Danh sách hành khách
-        List<Map<String, Object>> passengersList = booking.getPassengers().stream()
+        List<Map<String, Object>> passengersList = bookingResponse.getPassengers().stream()
                 .map(p -> {
                     Map<String, Object> pMap = new HashMap<>();
                     pMap.put("firstName", p.getFirstName());
                     pMap.put("lastName", p.getLastName());
-                    pMap.put("seatNumber", p.getSeat() != null ? p.getSeat().getSeatNumber() : "--");
+                    // Lấy ghế từ chặng đầu tiên làm ví dụ
+                    String seatNumber = p.getSeatAssignments() != null && !p.getSeatAssignments().isEmpty() ?
+                                        p.getSeatAssignments().get(0).getSeatNumber() : "Chưa chọn";
+                    pMap.put("seatNumber", seatNumber);
                     return pMap;
                 })
                 .collect(Collectors.toList());
         dataModel.put("passengers", passengersList);
 
         // Thanh toán
-        Payment payment = booking.getPayment();
-        dataModel.put("paymentDate", payment != null
-                ? payment.getPaymentDate().format(DateTimeFormatter.ofPattern("dd MMMM yyyy"))
+        var payment = bookingResponse.getPayment();
+        dataModel.put("paymentDate", payment != null && payment.getPaymentDate() != null
+                ? payment.getPaymentDate().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy"))
                 : LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd MMMM yyyy")));
-        dataModel.put("paymentMethod", payment != null ? payment.getPaymentMethod().name() : "Agency Credit");
+        dataModel.put("paymentMethod", payment != null ? payment.getPaymentMethod().name() : "N/A");
         
-        String formattedAmount = Optional.ofNullable(booking.getTotalAmount())
+        // Chi tiết giá
+        dataModel.put("baseFare", String.format("%,.0f VND", bookingResponse.getBaseFare() != null ? bookingResponse.getBaseFare() : 0));
+        dataModel.put("taxesAndFees", String.format("%,.0f VND", bookingResponse.getTaxesAndFees() != null ? bookingResponse.getTaxesAndFees() : 0));
+        dataModel.put("extrasTotal", String.format("%,.0f VND", bookingResponse.getAncillaryServicesAmount() != null ? bookingResponse.getAncillaryServicesAmount() : 0));
+        dataModel.put("discountAmount", String.format("%,.0f VND", bookingResponse.getDiscountAmount() != null ? bookingResponse.getDiscountAmount() : 0));
+        dataModel.put("appliedDealCode", bookingResponse.getAppliedDealCode());
+
+        String formattedAmount = Optional.ofNullable(bookingResponse.getTotalAmount())
                 .map(amount -> String.format("%,.0f", amount) + " VND").orElse("0 VND");
         dataModel.put("totalAmount", formattedAmount);
 

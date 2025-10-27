@@ -19,4 +19,7 @@ public class PaymentResponse {
     private String transactionId;
     private String payerId;
     private String checkoutUrl;
+    private String payerAccountNumber;
+    private String payerBankName;
+
 }

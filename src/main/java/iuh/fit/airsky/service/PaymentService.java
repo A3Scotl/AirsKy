@@ -56,7 +56,7 @@ public interface PaymentService {
     @Transactional
     boolean checkSepayTransaction(String bookingCode);
 
-    void updateSepayPaymentStatus(String orderCode, String status, Double amount);
+    void updateSepayPaymentStatus(String orderCode, String status, Double amount, String payerAccountNumber, String payerBankName);
 
     /**
      * Process refund for cancelled booking

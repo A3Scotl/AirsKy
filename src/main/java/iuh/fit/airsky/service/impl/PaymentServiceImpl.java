@@ -31,6 +31,7 @@ import iuh.fit.airsky.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -44,6 +45,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -51,6 +53,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -66,12 +70,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final NotificationService notificationService; 
     private final ApplicationEventPublisher eventPublisher;
 
-    @Value("${paypal.success-url}")
-    private String successUrl;
-
-    @Value("${paypal.cancel-url}")
-    private String cancelUrl;
-
+    @Autowired
+    private Environment env;
 
     @Value("${sepay.api-key:}")
     private String sepayApiKey;
@@ -325,15 +325,21 @@ public class PaymentServiceImpl implements PaymentService {
 
                 for (Map<String, Object> tx : transactions) {
                     String content = tx.get("transaction_content").toString();
+                    String bankBrandName = tx.get("bank_brand_name").toString();
+                    log.debug("Checking transaction content: '{}'", content);
                     if (content.contains(bookingCode)) {
                         Double amount = Double.parseDouble(tx.get("amount_in").toString());
-                        log.info("Found transaction for booking {} with amount {}", bookingCode, amount);
+                        String payerAccountNumber = parsePayerAccount(content, bankBrandName);
+                        log.info("Found transaction for booking {} with amount {}. Payer Account: {}", bookingCode, amount, payerAccountNumber);
 
-                        updateSepayPaymentStatus("PAYBOOKING" + bookingCode, "SUCCESS", amount);
+                        updateSepayPaymentStatus("PAYBOOKING" + bookingCode, "SUCCESS", amount, payerAccountNumber, bankBrandName);
                         return true;
                     }
-                }
+                } 
             }
+            else {
+                    log.debug("Transaction content does not contain booking code '{}'", bookingCode);
+                }
 
             log.info(" No transaction found for booking {}", bookingCode);
             return false;
@@ -341,6 +347,35 @@ public class PaymentServiceImpl implements PaymentService {
             log.error("Error checking SePay transaction: {}", e.getMessage(), e);
             return false;
         }
+    }
+
+    private String parsePayerAccount(String transactionContent, String bankBrandName) {
+        // Example: "103585261141-PAYBOOKINGUIOHNHZ6-CHUYEN TIEN..."
+        // Example: "103584692791 0964133949 PAYBOOKING8VX234SD..."
+        // Example: "NGUYEN TRUONG AN chuyen tien- Ma GD ACSP/ S8181697"
+
+        // Regex to find a sequence of 9 to 14 digits that appears before "PAYBOOKING" or at the start.
+        // This helps avoid picking up other numbers in the content string.
+        Pattern pattern = Pattern.compile("(\\d{9,14}).*?(PAYBOOKING|chuyen tien|Ma GD)");
+        Matcher matcher = pattern.matcher(transactionContent);
+
+        if (matcher.find()) {
+            return matcher.group(1).trim();
+        }
+
+        // Fallback regex: find the first sequence of 9-14 digits if the primary pattern fails.
+        pattern = Pattern.compile("(\\d{9,14})");
+        matcher = pattern.matcher(transactionContent);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+
+        // If no account number is found, return the bank brand name as a fallback.
+        if (bankBrandName != null && !bankBrandName.isBlank()) {
+            return bankBrandName;
+        }
+
+        return "N/A";
     }
 
 
@@ -431,8 +466,8 @@ public class PaymentServiceImpl implements PaymentService {
         transaction.setDescription(String.format("Payment for booking #%s", booking.getBookingCode()));
 
         RedirectUrls redirectUrls = new RedirectUrls()
-                .setCancelUrl(String.format("%s?bookingId=%d", cancelUrl, booking.getBookingId()))
-                .setReturnUrl(String.format("%s?bookingId=%d", successUrl, booking.getBookingId()));
+                .setCancelUrl(String.format("%s?bookingId=%d", getCancelUrl(booking), booking.getBookingId()))
+                .setReturnUrl(String.format("%s?bookingId=%d", getSuccessUrl(booking), booking.getBookingId()));
 
         com.paypal.api.payments.Payment paypalPayment = new com.paypal.api.payments.Payment()
                 .setIntent("sale")
@@ -441,6 +476,16 @@ public class PaymentServiceImpl implements PaymentService {
                 .setRedirectUrls(redirectUrls);
 
         return paypalPayment.create(paypalApiContext);
+    }
+
+    private String getSuccessUrl(Booking booking) {
+        boolean isMobile = "MOBILE".equalsIgnoreCase(booking.getClientType());
+        return env.getProperty(isMobile ? "paypal.success-url-mobile" : "paypal.success-url-web");
+    }
+
+    private String getCancelUrl(Booking booking) {
+        boolean isMobile = "MOBILE".equalsIgnoreCase(booking.getClientType());
+        return env.getProperty(isMobile ? "paypal.cancel-url-mobile" : "paypal.cancel-url-web");
     }
 
     private String getApprovalUrl(com.paypal.api.payments.Payment paypalPayment) {
@@ -476,14 +521,22 @@ public class PaymentServiceImpl implements PaymentService {
             throw new PaymentProcessingException("Payment not approved. Status: " + executedPayment.getState());
         }
         payment.setPayerId(payerId);
+        payment.setPayerBankName("PayPal"); // Đặt tên ngân hàng là PayPal
         
+        // Lấy thông tin người thanh toán từ PayPal
+        PayerInfo payerInfo = executedPayment.getPayer().getPayerInfo();
+        if (payerInfo != null && payerInfo.getEmail() != null) {
+            payment.setPayerAccountNumber(payerInfo.getEmail());
+            log.info("PayPal Payer Email: {}", payerInfo.getEmail());
+        }
+
         return processSuccessfulPayment(payment);
     }
 
     @Transactional
     @Override
-    public void updateSepayPaymentStatus(String orderCode, String status, Double amount) {
-        log.info("Updating SePay payment with order_code: {}, status: {}, amount: {}", orderCode, status, amount);
+    public void updateSepayPaymentStatus(String orderCode, String status, Double amount, String payerAccountNumber, String payerBankName) {
+        log.info("Updating SePay payment with order_code: {}, status: {}, amount: {}, payerAccount: {}, payerBank: {}", orderCode, status, amount, payerAccountNumber, payerBankName);
 
         Optional<Payment> opt = paymentRepository.findByTransactionId(orderCode);
         if (opt.isEmpty()) {
@@ -492,6 +545,16 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         Payment payment = opt.get();
+
+        // Save payer account number
+        if (payerAccountNumber != null && !payerAccountNumber.isBlank()) {
+            payment.setPayerAccountNumber(payerAccountNumber);
+        }
+
+        // Save payer bank name
+        if (payerBankName != null && !payerBankName.isBlank()) {
+            payment.setPayerBankName(payerBankName);
+        }
 
         // Optional: verify amount (if amount provided)
         if (amount != null) {
@@ -531,8 +594,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
-    @Transactional
-    protected PaymentResponse processSuccessfulPayment(Payment payment) {
+    private PaymentResponse processSuccessfulPayment(Payment payment) {
         payment.setStatus(PaymentStatus.COMPLETED);
         payment.setPaymentDate(LocalDateTime.now());
         paymentRepository.save(payment);
@@ -588,8 +650,7 @@ public class PaymentServiceImpl implements PaymentService {
         log.error("Payment failed: {}", payment.getPaymentId());
     }
 
-    @Transactional
-    protected void updatePassengerSeats(Booking booking) {
+    private void updatePassengerSeats(Booking booking) {
         log.info("Updating seat statuses to OCCUPIED for booking {} after successful payment", booking.getBookingId());
 
         // Cập nhật trạng thái ghế từ PENDING_PAYMENT thành OCCUPIED khi thanh toán thành công
