@@ -98,8 +98,10 @@ paypal:
   client-id: ${PAYPAL_CLIENT_ID:}
   client-secret: ${PAYPAL_CLIENT_SECRET:}
   mode: ${PAYPAL_MODE:sandbox} # or 'live' for production
-  success-url: http://localhost:5173/payment-success
-  cancel-url: http://localhost:5173/payment-cancel
+  success-url-web: ${PAYPAL_SUCCESS_URL_WEB:http://localhost:5173/payment-success}
+  cancel-url-web: ${PAYPAL_CANCEL_URL_WEB:http://localhost:5173/payment-cancel}
+  success-url-mobile: ${PAYPAL_SUCCESS_URL_MOBILE:exp://192.168.1.87:8081/--/payment-result}
+  cancel-url-mobile: ${PAYPAL_CANCEL_URL_MOBILE:exp://192.168.1.87:8081/--/payment-result}
 
 # sepay Configuration
 sepay:

@@ -31,6 +31,7 @@ import iuh.fit.airsky.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -69,12 +70,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final NotificationService notificationService; 
     private final ApplicationEventPublisher eventPublisher;
 
-    @Value("${paypal.success-url}")
-    private String successUrl;
-
-    @Value("${paypal.cancel-url}")
-    private String cancelUrl;
-
+    @Autowired
+    private Environment env;
 
     @Value("${sepay.api-key:}")
     private String sepayApiKey;
@@ -469,8 +466,8 @@ public class PaymentServiceImpl implements PaymentService {
         transaction.setDescription(String.format("Payment for booking #%s", booking.getBookingCode()));
 
         RedirectUrls redirectUrls = new RedirectUrls()
-                .setCancelUrl(String.format("%s?bookingId=%d", cancelUrl, booking.getBookingId()))
-                .setReturnUrl(String.format("%s?bookingId=%d", successUrl, booking.getBookingId()));
+                .setCancelUrl(String.format("%s?bookingId=%d", getCancelUrl(booking), booking.getBookingId()))
+                .setReturnUrl(String.format("%s?bookingId=%d", getSuccessUrl(booking), booking.getBookingId()));
 
         com.paypal.api.payments.Payment paypalPayment = new com.paypal.api.payments.Payment()
                 .setIntent("sale")
@@ -479,6 +476,16 @@ public class PaymentServiceImpl implements PaymentService {
                 .setRedirectUrls(redirectUrls);
 
         return paypalPayment.create(paypalApiContext);
+    }
+
+    private String getSuccessUrl(Booking booking) {
+        boolean isMobile = "MOBILE".equalsIgnoreCase(booking.getClientType());
+        return env.getProperty(isMobile ? "paypal.success-url-mobile" : "paypal.success-url-web");
+    }
+
+    private String getCancelUrl(Booking booking) {
+        boolean isMobile = "MOBILE".equalsIgnoreCase(booking.getClientType());
+        return env.getProperty(isMobile ? "paypal.cancel-url-mobile" : "paypal.cancel-url-web");
     }
 
     private String getApprovalUrl(com.paypal.api.payments.Payment paypalPayment) {
@@ -587,8 +594,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
-    @Transactional
-    protected PaymentResponse processSuccessfulPayment(Payment payment) {
+    private PaymentResponse processSuccessfulPayment(Payment payment) {
         payment.setStatus(PaymentStatus.COMPLETED);
         payment.setPaymentDate(LocalDateTime.now());
         paymentRepository.save(payment);
@@ -644,8 +650,7 @@ public class PaymentServiceImpl implements PaymentService {
         log.error("Payment failed: {}", payment.getPaymentId());
     }
 
-    @Transactional
-    protected void updatePassengerSeats(Booking booking) {
+    private void updatePassengerSeats(Booking booking) {
         log.info("Updating seat statuses to OCCUPIED for booking {} after successful payment", booking.getBookingId());
 
         // Cập nhật trạng thái ghế từ PENDING_PAYMENT thành OCCUPIED khi thanh toán thành công

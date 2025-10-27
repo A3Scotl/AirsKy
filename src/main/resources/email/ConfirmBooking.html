@@ -232,7 +232,7 @@
         </div>
 
         <div class="main-content">
-            <p class="greeting">Chào ${contactName},</p>
+            <p class="greeting">Chào ${contactName!"Quý khách"},</p>
             <p class="sub-greeting">Cảm ơn bạn đã đặt vé tại AirSky. Chuyến bay của bạn đã được xác nhận thành công!</p>
 
             <div class="booking-code-wrapper">
@@ -254,26 +254,26 @@
                 <#list flightSegments as segment>
                     <div style="border: 1px solid #e9ebee; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
                         <div style="font-size: 14px; font-weight: 600; color: #606770; margin-bottom: 12px;">
-                            Chặng ${segment.segmentOrder}: ${segment.flightNumber}
+                            Chặng ${segment.segmentOrder!"N/A"}: ${segment.flightNumber!"N/A"}
                         </div>
                         <div class="flight-details">
                             <div class="flight-point">
-                                <div class="time">${segment.departureTime}</div>
-                                <div class="code">${segment.departureCode}</div>
-                                <div class="airport">${segment.departureAirport}</div>
+                                <div class="time">${segment.departureTime!"--:--"}</div>
+                                <div class="code">${segment.departureCode!"N/A"}</div>
+                                <div class="airport">${segment.departureAirport!"N/A"}</div>
                             </div>
                             <div class="flight-arrow">
-                                <div class="duration">${segment.duration}</div>
+                                <div class="duration">${segment.duration!"--"}</div>
                                 <div class="plane-icon">✈</div>
-                                <div style="font-size: 12px;">${segment.airlineName}</div>
+                                <div style="font-size: 12px;">${segment.airlineName!"AirSky"}</div>
                             </div>
                             <div class="flight-point" style="text-align: right;">
-                                <div class="time">${segment.arrivalTime}</div>
-                                <div class="code">${segment.arrivalCode}</div>
-                                <div class="airport">${segment.arrivalAirport}</div>
+                                <div class="time">${segment.arrivalTime!"--:--"}</div>
+                                <div class="code">${segment.arrivalCode!"N/A"}</div>
+                                <div class="airport">${segment.arrivalAirport!"N/A"}</div>
                             </div>
                         </div>
-                        <div style="font-size: 13px; color: #606770; margin-top: 12px; text-align: center;">Ngày: ${segment.flightDate} | Hạng vé: ${segment.travelClass}</div>
+                        <div style="font-size: 13px; color: #606770; margin-top: 12px; text-align: center;">Ngày: ${segment.flightDate!"--/--/----"} | Hạng vé: ${segment.travelClass!"N/A"}</div>
                     </div>
                 </#list>
             </div>
@@ -295,29 +295,29 @@
                 <div class="price-summary">
                     <div class="price-row">
                         <span>Giá vé cơ bản</span>
-                        <span>${baseFare}</span>
+                        <span>${baseFare!"0 VND"}</span>
                     </div>
                     <div class="price-row">
                         <span>Thuế và phí</span>
-                        <span>${taxesAndFees}</span>
+                        <span>${taxesAndFees!"0 VND"}</span>
                     </div>
                     <div class="price-row">
                         <span>Dịch vụ bổ sung (ghế, hành lý,...)</span>
-                        <span>${extrasTotal}</span>
+                        <span>${extrasTotal!"0 VND"}</span>
                     </div>
-                    <#if discountAmount?has_content && discountAmount != "0">
+                    <#if appliedDealCode?has_content>
                         <div class="price-row" style="color: #28a745;">
-                            <span>Giảm giá (${appliedDealCode})</span>
-                            <span>-${discountAmount}</span>
+                            <span>Giảm giá (${appliedDealCode!"KHUYENMAI"})</span>
+                            <span>-${discountAmount!"0 VND"}</span>
                         </div>
                     </#if>
                     <div class="price-row total">
                         <span>Tổng cộng</span>
-                        <span>${totalAmount}</span>
+                        <span>${totalAmount!"0 VND"}</span>
                     </div>
                 </div>
                 <div style="font-size: 14px; color: #606770; margin-top: 12px;">
-                    Đã thanh toán qua: <strong>${paymentMethod}</strong> vào lúc ${paymentDate}.
+                    Đã thanh toán qua: <strong>${paymentMethod!"N/A"}</strong> vào lúc ${paymentDate!"N/A"}.
                 </div>
             </div>
 

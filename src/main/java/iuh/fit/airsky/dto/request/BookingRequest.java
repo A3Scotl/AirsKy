@@ -28,5 +28,6 @@ public class BookingRequest {
     private Integer pointsToRedeem; // Số điểm muốn sử dụng để giảm giá
     private String contactEmail; // Email để nhận thông tin booking
     private String contactName; // Tên người liên hệ
+    private String clientType; // "WEB" hoặc "MOBILE"
 
 }

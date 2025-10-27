@@ -87,4 +87,6 @@ public class Booking extends BaseAuditOnlyEntity {
     // Thêm payment
     @OneToOne(mappedBy = "booking", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private Payment payment;
+
+    private String clientType; // "WEB" hoặc "MOBILE"
 }

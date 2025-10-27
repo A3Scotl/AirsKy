@@ -316,6 +316,11 @@ public class BookingServiceImpl implements BookingService {
             booking.setContactName(request.getContactName());
         }
 
+        // Thêm client type từ request
+        if (request.getClientType() != null && !request.getClientType().isBlank()) {
+            booking.setClientType(request.getClientType());
+        }
+
         Flight firstFlight = findFlightById(request.getFlightSegments().get(0).getFlightId());
         booking.setFlight(firstFlight);
 
@@ -3443,14 +3448,20 @@ public class BookingServiceImpl implements BookingService {
 
     private void populateContactInformation(BookingResponse response, Booking booking) {
         // Ưu tiên thông tin liên hệ từ booking entity
-        if (booking.getContactName() != null && !booking.getContactName().isBlank()) {
+        if (booking.getContactEmail() != null && !booking.getContactEmail().isBlank()) {
             response.setContactName(booking.getContactName());
             response.setContactEmail(booking.getContactEmail());
         }
         // Fallback về thông tin người dùng nếu có
         else if (booking.getUserId() != null) {
-            response.setContactName(booking.getUserId().getFirstName() + " " + booking.getUserId().getLastName());
+            String contactName = (booking.getUserId().getFirstName() != null ? booking.getUserId().getFirstName() : "") + " " +
+                                 (booking.getUserId().getLastName() != null ? booking.getUserId().getLastName() : "");
+            response.setContactName(contactName.trim());
             response.setContactEmail(booking.getUserId().getEmail());
+        } else {
+            // Fallback cho trường hợp không có cả hai (hiếm khi xảy ra)
+            response.setContactName("Guest");
+            response.setContactEmail("N/A");
         }
     }
 
