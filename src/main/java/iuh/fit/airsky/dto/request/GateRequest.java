@@ -4,7 +4,7 @@ import lombok.Data;
 
 @Data
 public class GateRequest {
-    private Long airportId;
     private String gateName;
     private String terminal;
+    private Long airportId;
 }

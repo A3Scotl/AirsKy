@@ -220,18 +220,19 @@ public class BlogServiceImpl implements BlogService {
     @Transactional
     public void publish(Long id) {
         log.info("Publishing blog with ID: {}", id);
-        
         Blog blog = blogRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Blog không tồn tại với ID: " + id));
-        
+        log.info("Current isPublished: {}, publishedDate: {}", blog.getIsPublished(), blog.getPublishedDate());
         blog.setIsPublished(true);
         blog.setPublishedDate(LocalDateTime.now());
-        
         Blog savedBlog = blogRepository.save(blog);
         log.info("Blog published successfully with ID: {}", id);
-        
         // Gửi thông báo real-time cho tất cả users khi blog được publish
-        sendBlogPublishedNotification(savedBlog);
+        try {
+            sendBlogPublishedNotification(savedBlog);
+        } catch (Exception e) {
+            log.error("[SAFE] Error while sending blog published notification for blog {}: {}", id, e.getMessage(), e);
+        }
     }
 
     @Override
@@ -375,23 +376,18 @@ public class BlogServiceImpl implements BlogService {
     public void sendBlogPublishedNotification(Blog blog) {
         try {
             log.info("Sending blog published notification for blog: {}", blog.getBlogId());
-            
-            // Lấy danh sách tất cả users để gửi thông báo
             List<User> allUsers = userRepository.findAll();
-            
             if (allUsers.isEmpty()) {
                 log.info("No users found to send blog notification");
                 return;
             }
-            
-            String message = String.format("Bài viết mới: %s", 
+            String message = String.format("Bài viết mới: %s",
                 blog.getTitle().length() > 50 ? blog.getTitle().substring(0, 47) + "..." : blog.getTitle());
             String title = "Bài viết mới từ " + blog.getAuthor().getFirstName() + " " + blog.getAuthor().getLastName();
-            
-            // Gửi thông báo cho từng user (không gửi cho tác giả)
             int notificationCount = 0;
             for (User user : allUsers) {
-                if (!user.getId().equals(blog.getAuthor().getId())) {
+                // Chỉ gửi cho user có id hợp lệ và không phải tác giả
+                if (user.getId() != null && !user.getId().equals(blog.getAuthor().getId())) {
                     try {
                         notificationService.createAndSendNotification(
                             user.getId(),
@@ -401,20 +397,15 @@ public class BlogServiceImpl implements BlogService {
                             title
                         );
                         notificationCount++;
-                        
-                        // Throttle để tránh quá tải hệ thống
                         if (notificationCount % 10 == 0) {
                             Thread.sleep(100); // 100ms delay mỗi 10 notifications
                         }
                     } catch (Exception e) {
                         log.error("Failed to send blog notification to user {}: {}", user.getId(), e.getMessage());
-                        // Continue với user tiếp theo
                     }
                 }
             }
-            
             log.info("Sent blog published notifications to {} users for blog {}", notificationCount, blog.getBlogId());
-            
         } catch (Exception e) {
             log.error("Error sending blog published notification for blog {}: {}", blog.getBlogId(), e.getMessage(), e);
         }

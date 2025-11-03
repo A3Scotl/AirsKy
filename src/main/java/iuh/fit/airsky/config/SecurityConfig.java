@@ -1,4 +1,3 @@
-
 /*
  * @ (#) SecurityConfig.java 1.0 7/12/2025
  *
@@ -21,6 +20,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -63,7 +63,7 @@ public class SecurityConfig {
             "/api/v1/travel-classes/**",
             "/api/v1/users/**",
             "/api/v1/checkins/**",
-            "/api/v1/export/**",
+
             "/api/v1/reviews/**",
             "/api/v1/payments/**",
             "/api/v1/notifications/**",
@@ -73,7 +73,8 @@ public class SecurityConfig {
             "/api/v1/loyalty/**",
             "/ws/**",
             "/websocket-test.html",
-            "/api/v1/points-redemption/**"
+            "/api/v1/points-redemption/**",
+            "/api/v1/analytics/**",
     };
     private static final String[] PERMISION_ROUTES = {
             "/api/v1/auth/change-password",
@@ -118,5 +119,10 @@ public class SecurityConfig {
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
         return authConfig.getAuthenticationManager();
+    }
+
+    @Bean
+    public RestTemplate restTemplate() {
+        return new org.springframework.web.client.RestTemplate();
     }
 }

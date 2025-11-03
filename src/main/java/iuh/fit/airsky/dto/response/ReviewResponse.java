@@ -29,4 +29,5 @@ public class ReviewResponse {
     private LocalDateTime sentAt;
     private Integer retryCount;
     private String lastError;
+    private String status;
 }

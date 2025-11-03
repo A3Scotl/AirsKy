@@ -1,6 +1,7 @@
 package iuh.fit.airsky.service.impl;
 
 import iuh.fit.airsky.dto.request.AirportRequest;
+import iuh.fit.airsky.dto.request.GateRequest;
 import iuh.fit.airsky.dto.response.AirportResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
@@ -93,17 +94,32 @@ public class AirportServiceImpl implements AirportService {
             airport.setCountry(country);
         }
         if (request.getGates() != null) {
-            boolean allEmpty = request.getGates().isEmpty() || request.getGates().stream().allMatch(g ->
-                (g == null) ||
-                ((g.getGateName() == null || g.getGateName().trim().isEmpty()) &&
-                 (g.getTerminal() == null || g.getTerminal().trim().isEmpty()))
-            );
-            if (airport.getGates() != null) {
-                airport.getGates().clear();
+            // So sánh danh sách gates hiện tại và request
+            boolean isChanged = false;
+            List<Gate> currentGates = airport.getGates();
+            List<GateRequest> requestGates = request.getGates();
+            if (currentGates == null) {
+                isChanged = !requestGates.isEmpty();
+            } else if (currentGates.size() != requestGates.size()) {
+                isChanged = true;
             } else {
-                airport.setGates(new java.util.ArrayList<>());
+                for (int i = 0; i < currentGates.size(); i++) {
+                    Gate g = currentGates.get(i);
+                    GateRequest rg = requestGates.get(i);
+                    if (g == null && rg == null) continue;
+                    if (g == null || rg == null) { isChanged = true; break; }
+                    if (!safeEquals(g.getGateName(), rg.getGateName()) || !safeEquals(g.getTerminal(), rg.getTerminal())) {
+                        isChanged = true;
+                        break;
+                    }
+                }
             }
-            if (!allEmpty) {
+            if (isChanged) {
+                if (airport.getGates() != null) {
+                    airport.getGates().clear();
+                } else {
+                    airport.setGates(new java.util.ArrayList<>());
+                }
                 for (var gateReq : request.getGates()) {
                     if (gateReq == null) continue;
                     if ((gateReq.getGateName() == null || gateReq.getGateName().trim().isEmpty()) &&
@@ -124,6 +140,13 @@ public class AirportServiceImpl implements AirportService {
         log.info("Airport updated with ID: {}", updated.getAirportId());
 
         return airportMapper.toResponseDTO(updated);
+    }
+
+    // Thêm hàm so sánh an toàn cho String
+    private boolean safeEquals(String a, String b) {
+        if (a == null && b == null) return true;
+        if (a == null || b == null) return false;
+        return a.trim().equals(b.trim());
     }
 
     @Override

@@ -18,6 +18,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -51,6 +52,7 @@ public class NotificationServiceImpl implements NotificationService {
      * @return NotificationResponse
      */
     @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public NotificationResponse createAndSendNotification(Long userId, String type, String message, Long relatedId, String title) {
         try {
             log.info("🚀 Starting createAndSendNotification: userId={}, type={}, message={}, relatedId={}, title={}",
@@ -90,6 +92,9 @@ public class NotificationServiceImpl implements NotificationService {
                     .relatedId(relatedId)
                     .isRead(false)
                     .build();
+            log.info("[DEBUG] Notification before save: userId={}, title={}, message={}, type={}, relatedId={}",
+                notification.getUser() != null ? notification.getUser().getId() : null,
+                notification.getTitle(), notification.getMessage(), notification.getType(), notification.getRelatedId());
 
             log.info("💾 Saving notification to database...");
             try {

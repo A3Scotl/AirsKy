@@ -293,7 +293,7 @@ public class ReviewServiceImpl implements ReviewService {
                 reviewRequest.setUserId(userId);
                 reviewRequest.setFlightId(flightId);
                 reviewRequest.setEligibleAt(LocalDateTime.now().plusMinutes(1)); // Đủ điều kiện review sau 1 phút
-                reviewRequest.setIsApproved(false);
+                reviewRequest.setIsApproved(true); // Luôn approved khi tạo tự động
                 // Rating và comment để null vì đây là review request
 
                 ReviewResponse savedReview = createReview(reviewRequest);
@@ -427,3 +427,4 @@ public class ReviewServiceImpl implements ReviewService {
         log.info("Finished retrying failed review emails. Success: {}, Permanent failures: {}", successCount, permanentFailureCount);
     }
 }
+

@@ -95,8 +95,8 @@ public class EmailTemplateGenerator {
         dataModel.put("paymentMethod", payment != null ? payment.getPaymentMethod().name() : "N/A");
         
         // Chi tiết giá
-        dataModel.put("baseFare", String.format("%,.0f VND", bookingResponse.getBaseFare() != null ? bookingResponse.getBaseFare() : 0));
-        dataModel.put("taxesAndFees", String.format("%,.0f VND", bookingResponse.getTaxesAndFees() != null ? bookingResponse.getTaxesAndFees() : 0));
+        // dataModel.put("baseFare", String.format("%,.0f VND", bookingResponse.getBaseFare() != null ? bookingResponse.getBaseFare() : 0));
+        // dataModel.put("taxesAndFees", String.format("%,.0f VND", bookingResponse.getTaxesAndFees() != null ? bookingResponse.getTaxesAndFees() : 0));
         dataModel.put("extrasTotal", String.format("%,.0f VND", bookingResponse.getAncillaryServicesAmount() != null ? bookingResponse.getAncillaryServicesAmount() : 0));
         dataModel.put("discountAmount", String.format("%,.0f VND", bookingResponse.getDiscountAmount() != null ? bookingResponse.getDiscountAmount() : 0));
         dataModel.put("appliedDealCode", bookingResponse.getAppliedDealCode());

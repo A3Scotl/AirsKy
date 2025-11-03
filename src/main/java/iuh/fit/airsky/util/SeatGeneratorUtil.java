@@ -25,26 +25,46 @@ public class SeatGeneratorUtil {
      * @param travelClasses danh sách hạng ghế
      * @return danh sách Seat đã tạo
      */
-    private static SeatTypes determineSeatType(String className, int row, int totalRows, int seatIndex, int totalSeatsInRow) {
+    private static SeatTypes determineSeatTypeForRow(String className, int row, int totalRows) {
         Random random = new Random();
-        // Tỷ lệ phần trăm cho mỗi loại ghế
-        double standardChance = 0.7; // 70% cơ hội là ghế tiêu chuẩn
-        double specialChance = 0.15;  // 15% cơ hội cho mỗi loại đặc biệt
 
-        double randomValue = random.nextDouble();
-        
-        if (randomValue < standardChance) {
-            return SeatTypes.STANDARD;
-        } else if (randomValue < standardChance + specialChance) {
-            // Loại ghế đặc biệt phụ thuộc vào hạng ghế
-            if ("Economy".equalsIgnoreCase(className)) {
-                return random.nextBoolean() ? SeatTypes.EXTRA_LEGROOM : SeatTypes.EXIT_ROW;
+        if ("First".equalsIgnoreCase(className)) {
+            // First Class: ưu tiên FRONT_ROW và ACCESSIBLE
+            double frontRowChance = 0.7;  // 70% FRONT_ROW
+            double accessibleChance = 0.3; // 30% ACCESSIBLE
+
+            double randomValue = random.nextDouble();
+            if (randomValue < frontRowChance) {
+                return SeatTypes.FRONT_ROW;
             } else {
-                return random.nextBoolean() ? SeatTypes.FRONT_ROW : SeatTypes.ACCESSIBLE;
+                return SeatTypes.ACCESSIBLE;
             }
+
+        } else if ("Business".equalsIgnoreCase(className)) {
+            // Business Class: ưu tiên EXTRA_LEGROOM và FRONT_ROW
+            double extraLegroomChance = 0.6;  // 60% EXTRA_LEGROOM
+            double frontRowChance = 0.4;      // 40% FRONT_ROW
+
+            double randomValue = random.nextDouble();
+            if (randomValue < extraLegroomChance) {
+                return SeatTypes.EXTRA_LEGROOM;
+            } else {
+                return SeatTypes.FRONT_ROW;
+            }
+
         } else {
-            // Loại ghế đặc biệt thứ hai
-            if ("Economy".equalsIgnoreCase(className)) {
+            // Economy Class: hỗn hợp các loại ghế
+            double standardChance = 0.5;      // 50% STANDARD
+            double extraLegroomChance = 0.25; // 25% EXTRA_LEGROOM
+            double exitRowChance = 0.15;      // 15% EXIT_ROW
+            double accessibleChance = 0.1;    // 10% ACCESSIBLE
+
+            double randomValue = random.nextDouble();
+            if (randomValue < standardChance) {
+                return SeatTypes.STANDARD;
+            } else if (randomValue < standardChance + extraLegroomChance) {
+                return SeatTypes.EXTRA_LEGROOM;
+            } else if (randomValue < standardChance + extraLegroomChance + exitRowChance) {
                 return SeatTypes.EXIT_ROW;
             } else {
                 return SeatTypes.ACCESSIBLE;
@@ -100,17 +120,18 @@ public class SeatGeneratorUtil {
         // Generate Economy Class seats (remaining rows of section)
         if (economyClass != null && sectionEconomySeats > 0) {
             while (currentRow <= endRow) {
+                // Random loại ghế cho cả hàng thay vì từng ghế
+                SeatTypes rowSeatType = determineSeatTypeForRow("Economy", currentRow, endRow - startRow + 1);
+
                 for (int s = 0; s < seatsPerRow; s++) {
                     String seatNumber = currentRow + String.valueOf(seatLetters[s]);
-                    SeatTypes seatType = determineSeatType("Economy", currentRow, endRow - startRow + 1,
-                            (currentRow - startRow) * seatsPerRow + s, seatsPerRow);
 
                     Seat seat = Seat.builder()
                             .seatNumber(seatNumber)
                             .flight(flight)
                             .travelClass(economyClass)
                             .status(SeatStatus.AVAILABLE)
-                            .type(seatType)
+                            .type(rowSeatType)
                             .build();
                     seats.add(seat);
                 }

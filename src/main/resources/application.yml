@@ -117,3 +117,12 @@ app:
   boarding-pass:
     storage-path: ${BOARDING_PASS_STORAGE_PATH:boarding-passes}
     base-url: ${BOARDING_PASS_BASE_URL:http://localhost:8080/api/v1/boarding-passes}
+
+# Data Mining Service Configuration
+data-mining:
+  service:
+    url: ${DATA_MINING_SERVICE_URL:http://localhost:5000}
+    timeout: 30000 # 30 seconds timeout for API calls
+    retry:
+      max-attempts: 3
+      backoff-multiplier: 2.0

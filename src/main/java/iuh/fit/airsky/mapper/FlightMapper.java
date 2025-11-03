@@ -11,11 +11,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Mapper(componentModel = "spring", uses = {StopMapper.class, AirportMapper.class, AirlineMapper.class, AircraftMapper.class})
+@Mapper(componentModel = "spring", uses = {StopMapper.class, AirportMapper.class, AirlineMapper.class, AircraftMapper.class, FlightTravelClassMapper.class})
 public abstract class FlightMapper {
 
     @Autowired
     protected AircraftMapper aircraftMapper;
+
+    @Autowired
+    protected FlightTravelClassMapper flightTravelClassMapper;
 
     @Mapping(target = "businessName",
             expression = "java(entity.getBusiness() != null ? (entity.getBusiness().getBusinessName() != null ? entity.getBusiness().getBusinessName() : entity.getBusiness().getFirstName() + ' ' + entity.getBusiness().getLastName()) : null)")
@@ -29,6 +32,7 @@ public abstract class FlightMapper {
     @Mapping(target = "arrivalAirport", source = "arrivalAirport")
     @Mapping(target = "airline", source = "airline")
     @Mapping(target = "stopsList", source = "stopsList")
+    @Mapping(target = "flightTravelClasses", expression = "java(entity.getFlightTravelClasses() != null ? flightTravelClassMapper.toResponseDTOList(entity.getFlightTravelClasses()) : null)")
     public abstract FlightResponse toResponseDTO(Flight entity);
 
     @Mapping(target = "business.id", source = "businessId")

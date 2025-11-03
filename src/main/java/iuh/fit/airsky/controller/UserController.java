@@ -161,19 +161,7 @@ public class UserController {
     }
 
     @GetMapping("/{id}/bookings")
-    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<BookingResponse>>> getBookingsByUserId(@PathVariable Long id) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        boolean isAdmin = authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ADMIN"));
-        String currentUsername = authentication.getName();
-        // Nếu không phải admin, chỉ cho phép lấy booking của chính mình
-        if (!isAdmin) {
-            Optional<UserResponse> userOpt = userService.findById(id);
-            if (userOpt.isEmpty() || !userOpt.get().getEmail().equals(currentUsername)) {
-                throw new AccessDeniedException("You are not authorized to view these bookings.");
-            }
-        }
         List<BookingResponse> bookings = userService.getBookingsByUserId(id);
         return ApiResponseUtil.buildResponse(true, "Get bookings by user successful", bookings, "/api/v1/users/" + id + "/bookings");
     }

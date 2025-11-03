@@ -28,6 +28,7 @@ public interface ReviewMapper {
     @Mapping(target = "sentAt", source = "sentAt")
     @Mapping(target = "retryCount", source = "retryCount")
     @Mapping(target = "lastError", source = "lastError")
+    @Mapping(target = "status", expression = "java(entity.getStatus() != null ? entity.getStatus().name() : null)")
     ReviewResponse toResponseDTO(Review entity);
 
     List<ReviewResponse> toResponseDTOList(List<Review> reviews);

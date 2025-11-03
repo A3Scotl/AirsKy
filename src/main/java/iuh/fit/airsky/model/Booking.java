@@ -89,4 +89,17 @@ public class Booking extends BaseAuditOnlyEntity {
     private Payment payment;
 
     private String clientType; // "WEB" hoặc "MOBILE"
+
+    // Points redemption information for refund purposes when booking is cancelled
+    @Column(name = "points_redeemed")
+    private Integer pointsRedeemed; // Số điểm đã sử dụng để giảm giá trong booking này
+
+    @Column(name = "effective_user_id")
+    private Long effectiveUserId; // User ID thực hiện thanh toán điểm (có thể khác với userId nếu là guest booking với membership code)
+
+    @Column(name = "membership_code_used", length = 20)
+    private String membershipCodeUsed; // Mã hội viên đã sử dụng (nếu có)
+
+    @Column(name = "points_discount_amount", precision = 10, scale = 2)
+    private BigDecimal pointsDiscountAmount; // Số tiền đã giảm từ điểm thưởng
 }

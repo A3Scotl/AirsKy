@@ -12,6 +12,8 @@ import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.service.FlightService;
 import iuh.fit.airsky.service.SeatService;
+import iuh.fit.airsky.service.UserBehaviorTrackingService;
+import iuh.fit.airsky.service.UserService;
 import iuh.fit.airsky.util.ApiResponseUtil;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +23,8 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
@@ -29,9 +33,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @RestController
@@ -41,10 +43,14 @@ public class FlightController {
 
     private final FlightService flightService;
     private final SeatService seatService;
+    private final UserBehaviorTrackingService behaviorTrackingService;
+    private final UserService userService;
 
-    public FlightController(FlightService flightService, SeatService seatService) {
+    public FlightController(FlightService flightService, SeatService seatService, UserBehaviorTrackingService behaviorTrackingService, UserService userService) {
         this.flightService = flightService;
         this.seatService = seatService;
+        this.behaviorTrackingService = behaviorTrackingService;
+        this.userService = userService;
     }
 
     @PostMapping
@@ -304,6 +310,52 @@ public class FlightController {
             Pageable pageable) {
         try {
             UnifiedFlightSearchResponse response = flightService.searchUnifiedFlights(request, pageable);
+
+            // Track user search behavior for data mining
+            try {
+                Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+                if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+                    // Get user ID from authentication
+                    Long userId = null;
+                    if (auth.getPrincipal() instanceof org.springframework.security.core.userdetails.User) {
+                        org.springframework.security.core.userdetails.User userDetails =
+                            (org.springframework.security.core.userdetails.User) auth.getPrincipal();
+                        // Get user by username/email
+                        try {
+                            Optional<iuh.fit.airsky.model.User> userOpt = userService.findByEmail(userDetails.getUsername());
+                            if (userOpt.isPresent()) {
+                                userId = userOpt.get().getId();
+                            }
+                        } catch (Exception e) {
+                            log.warn("Could not find user by email: {}", userDetails.getUsername());
+                        }
+                    }
+
+                    if (userId != null) {
+                        // Generate session ID (you might want to use a proper session management)
+                        String sessionId = "session_" + System.currentTimeMillis();
+
+                        // Prepare search data for tracking
+                        Map<String, Object> searchData = new HashMap<>();
+                        searchData.put("departureAirportId", request.getDepartureAirportId());
+                        searchData.put("arrivalAirportId", request.getArrivalAirportId());
+                        searchData.put("outboundDepartureDate", request.getOutboundDepartureDate());
+                        searchData.put("returnDate", request.getReturnDate());
+                        searchData.put("tripType", request.getTripType());
+                        searchData.put("adultCount", request.getAdultCount());
+                        searchData.put("childCount", request.getChildCount());
+                        searchData.put("infantCount", request.getInfantCount());
+                        searchData.put("travelClass", request.getTravelClass());
+
+                        // Track the search
+                        behaviorTrackingService.trackSearch(userId, sessionId, searchData);
+                    }
+                }
+            } catch (Exception trackingEx) {
+                log.warn("Failed to track user search behavior", trackingEx);
+                // Don't fail the search if tracking fails
+            }
+
             return ApiResponseUtil.buildResponse(true, "Flights searched successfully", response, "/api/v1/flights/search-unified");
         } catch (Exception ex) {
             log.error("Error in unified flight search: ", ex);

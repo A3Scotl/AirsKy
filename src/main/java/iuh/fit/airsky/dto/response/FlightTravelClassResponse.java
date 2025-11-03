@@ -11,4 +11,5 @@ public class FlightTravelClassResponse {
     private BigDecimal price;
     private Integer capacity;
     private Integer bookedSeat;
+    private Integer availableSeats; // Số ghế trống thực tế (tính từ status AVAILABLE)
 }

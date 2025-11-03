@@ -10,6 +10,7 @@ import iuh.fit.airsky.model.User;
 import iuh.fit.airsky.repository.BookingRepository;
 import iuh.fit.airsky.service.CloudinaryService;
 import iuh.fit.airsky.service.DealService;
+import iuh.fit.airsky.service.UserBehaviorTrackingService;
 import iuh.fit.airsky.service.UserService;
 import iuh.fit.airsky.util.ApiResponseUtil;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -34,6 +37,7 @@ public class DealController {
 
     private final DealService dealService;
     private final UserService userService;
+    private final UserBehaviorTrackingService behaviorTrackingService;
     private final CloudinaryService cloudinaryService;
     private final BookingRepository bookingRepository;
 
@@ -285,6 +289,24 @@ public class DealController {
                     .orElseThrow(() -> new RuntimeException("Booking not found with ID: " + bookingId));
             
             DealUsageResponse response = dealService.applyDeal(dealCode, user.getId(), booking, orderAmount);
+            
+            // Track deal application behavior for data mining
+            try {
+                String sessionId = "session_" + System.currentTimeMillis();
+                
+                Map<String, Object> dealData = new HashMap<>();
+                dealData.put("dealCode", dealCode);
+                dealData.put("bookingId", bookingId);
+                dealData.put("orderAmount", orderAmount);
+                dealData.put("discountApplied", response.getDiscountAmount());
+                dealData.put("finalAmount", response.getFinalAmount());
+                
+                behaviorTrackingService.trackDealApplication(user.getId(), sessionId, dealData);
+            } catch (Exception trackingEx) {
+                log.warn("Failed to track deal application behavior", trackingEx);
+                // Don't fail the deal application if tracking fails
+            }
+            
             return ApiResponseUtil.buildResponse(true, "Áp dụng mã giảm giá thành công", response, "/api/v1/deals/apply");
         } catch (IllegalArgumentException e) {
             return ApiResponseUtil.buildResponse(false, e.getMessage(), null, "/api/v1/deals/apply");

@@ -101,6 +101,7 @@ public class BookingServiceImpl implements BookingService {
     private final BoardingPassService boardingPassService;
     private final LoyaltyService loyaltyService;
     private final DealUsageRepository dealUsageRepository;
+    private final DealRepository dealRepository;
     private final PassengerRepository passengerRepository;
     private final PassengerMapper passengerMapper;
     private final PaymentMapper paymentMapper;
@@ -144,7 +145,8 @@ public class BookingServiceImpl implements BookingService {
             PassengerSeatAssignmentRepository passengerSeatAssignmentRepository,
             NotificationService notificationService,
             ApplicationEventPublisher eventPublisher,
-            PointsRedemptionServiceImpl pointsRedemptionService
+            PointsRedemptionServiceImpl pointsRedemptionService,
+            DealRepository dealRepository
     ) {
         this.bookingRepository = bookingRepository;
         this.bookingMapper = bookingMapper;
@@ -173,6 +175,7 @@ public class BookingServiceImpl implements BookingService {
         this.notificationService = notificationService;
         this.eventPublisher = eventPublisher;
         this.pointsRedemptionService = pointsRedemptionService;
+        this.dealRepository = dealRepository;
     }
 
     /**
@@ -235,6 +238,7 @@ public class BookingServiceImpl implements BookingService {
             
             // Xử lý points redemption cho cả user đăng nhập và guest với membership code
             Integer actualPointsToRedeem = pointsToRedeem;
+            BigDecimal pointsDiscountAmount = BigDecimal.ZERO;
             
             // Nếu có membershipCodeForPoints nhưng không có pointsToRedeem, tự động áp dụng tất cả điểm có sẵn
             if (actualPointsToRedeem == null && effectiveUserId != null && request.getMembershipCodeForPoints() != null) {
@@ -253,18 +257,29 @@ public class BookingServiceImpl implements BookingService {
                 if (!pointsRedemptionService.canRedeemPoints(effectiveUserId, actualPointsToRedeem)) {
                     throw new IllegalArgumentException("Không đủ điểm để sử dụng cho booking này");
                 }
-                // Redeem points và tạo deal
-                PointsRedemptionRequest redemptionRequest = new PointsRedemptionRequest();
-                redemptionRequest.setUserId(effectiveUserId);
-                redemptionRequest.setPointsToRedeem(actualPointsToRedeem);
-                BigDecimal discountAmount = pointsRedemptionService.calculateDiscountFromPoints(actualPointsToRedeem);
-                redemptionRequest.setDiscountAmount(discountAmount.longValue());
-                redeemedDeal = pointsRedemptionService.redeemPointsForDeal(redemptionRequest);
-                log.info("Successfully redeemed {} points for user {}, created deal: {}", actualPointsToRedeem, effectiveUserId, redeemedDeal.getDealCode());
+                
+                // Tính discount amount và trừ điểm trực tiếp
+                pointsDiscountAmount = pointsRedemptionService.calculateDiscountFromPoints(actualPointsToRedeem);
+                
+                // Trừ điểm từ user
+                User user = userRepository.findById(effectiveUserId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                Integer currentPoints = user.getLoyaltyPoints() != null ? user.getLoyaltyPoints() : 0;
+                user.setLoyaltyPoints(currentPoints - actualPointsToRedeem);
+                userRepository.save(user);
+                
+                // Lưu thông tin điểm thưởng đã sử dụng vào booking để có thể hoàn lại khi hủy
+                savedBooking.setPointsRedeemed(actualPointsToRedeem);
+                savedBooking.setEffectiveUserId(effectiveUserId);
+                savedBooking.setPointsDiscountAmount(pointsDiscountAmount);
+                if (request.getMembershipCodeForPoints() != null && !request.getMembershipCodeForPoints().isBlank()) {
+                    savedBooking.setMembershipCodeUsed(request.getMembershipCodeForPoints());
+                }
+                
+                log.info("Successfully redeemed {} points for user {}, discount amount: {}", actualPointsToRedeem, effectiveUserId, pointsDiscountAmount);
             }
 
             // Bước 5: Tính toán tổng số tiền cuối cùng, bao gồm các dịch vụ và giảm giá
-            BigDecimal finalAmount = calculateFinalAmount(request, savedBooking, redeemedDeal, effectiveUserId);
+            BigDecimal finalAmount = calculateFinalAmount(request, savedBooking, pointsDiscountAmount, effectiveUserId);
             savedBooking.setTotalAmount(finalAmount);
 
             // Bước 6: Tạo bản ghi thanh toán cho booking
@@ -279,9 +294,11 @@ public class BookingServiceImpl implements BookingService {
             log.info("Booking creation completed successfully for bookingId: {}", finalBooking.getBookingId());
 
             // Bước 8: Cộng điểm loyalty cho booking thành công (chỉ cho user thực hiện booking, không phải membership code user)
-            if (request.getUserId() != null) {
-                awardLoyaltyPointsForBooking(finalBooking, finalAmount, request.getUserId());
-            }
+            // Tạm thời disable để tránh trùng lặp với completeBooking
+            // if (request.getUserId() != null) {
+            //     Integer pointsRedeemed = redeemedDeal != null ? redeemedDeal.getPointsRequired() : null;
+            //     awardLoyaltyPointsForBooking(finalBooking, finalAmount, request.getUserId(), pointsRedeemed);
+            // }
 
             // Dọn dẹp EntityManager để đảm bảo response trả về dữ liệu mới nhất từ DB
             entityManager.flush();
@@ -292,9 +309,9 @@ public class BookingServiceImpl implements BookingService {
 
             BookingResponse response = buildBookingResponse(reloadedBooking);
             // Gắn thông tin điểm đã sử dụng vào response
-            if (redeemedDeal != null) {
-                response.setPointsRedeemed(redeemedDeal.getPointsRequired());
-                response.setPointsDiscountAmount(redeemedDeal.getFixedDiscountAmount());
+            if (actualPointsToRedeem != null && actualPointsToRedeem > 0) {
+                response.setPointsRedeemed(actualPointsToRedeem);
+                response.setPointsDiscountAmount(pointsDiscountAmount);
                 
                 // Set thông tin membership code nếu có
                 if (request.getMembershipCodeForPoints() != null && !request.getMembershipCodeForPoints().isBlank()) {
@@ -342,6 +359,12 @@ public class BookingServiceImpl implements BookingService {
                     .orElseThrow(() -> new ResourceNotFoundException("Flight not found for segment"));
             if (segFlight.getAvailableSeats() < totalPassengers) {
                 throw new IllegalStateException("Không đủ ghế trống cho chặng bay " + segment.getSegmentOrder());
+            }
+
+            // Kiểm tra capacity của travel class
+            int availableSeatsInClass = getAvailableSeatsForTravelClass(segment.getClassId());
+            if (availableSeatsInClass < totalPassengers) {
+                throw new IllegalStateException("Không đủ ghế trống cho hạng vé đã chọn trong chặng bay " + segment.getSegmentOrder());
             }
         }
 
@@ -400,7 +423,7 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Flight not found with id: " + flightId));
     }
 
-    private BigDecimal calculateFinalAmount(BookingRequest request, Booking savedBooking, DealResponse redeemedDeal, Long effectiveUserId) {
+    private BigDecimal calculateFinalAmount(BookingRequest request, Booking savedBooking, BigDecimal pointsDiscountAmount, Long effectiveUserId) {
         // 1. Base amount from flight segments - tính theo từng loại hành khách
         BigDecimal baseAmount = BigDecimal.ZERO;
         for (FlightSegment segment : savedBooking.getFlightSegments()) {
@@ -431,9 +454,10 @@ public class BookingServiceImpl implements BookingService {
             finalAmount = applyDealDiscount(request.getDealCode(), request.getUserId(), savedBooking, finalAmount);
         }
 
-        // 6. Apply Points Redemption Deal (if redeemed)
-        if (redeemedDeal != null) {
-            finalAmount = applyDealDiscount(redeemedDeal.getDealCode(), effectiveUserId, savedBooking, finalAmount);
+        // 6. Apply Points Redemption Discount (if any)
+        if (pointsDiscountAmount != null && pointsDiscountAmount.compareTo(BigDecimal.ZERO) > 0) {
+            finalAmount = finalAmount.subtract(pointsDiscountAmount);
+            log.info("Applied points redemption discount: {} (new amount: {})", pointsDiscountAmount, finalAmount);
         }
 
         // 7. Apply Tier Discount
@@ -720,6 +744,9 @@ public class BookingServiceImpl implements BookingService {
             checkinRepository.deleteByPassenger(passenger, LocalDateTime.now());
             baggageRepository.deleteByPassenger(passenger);
         });
+
+        // Refund loyalty points and restore deal usage before deleting
+        refundPointsForCancelledBooking(booking);
 
         // Delete deal usage if exists
         dealUsageRepository.findByBooking(booking).ifPresent(dealUsage -> {
@@ -1056,6 +1083,24 @@ public class BookingServiceImpl implements BookingService {
     private void updateAvailableSeats(Flight flight, int passengerCount) {
         flight.setAvailableSeats(flight.getAvailableSeats() - passengerCount);
         flightRepository.save(flight);
+    }
+
+    /**
+     * Lấy số ghế trống của một travel class trong chuyến bay
+     * @param flightTravelClassId ID của FlightTravelClass
+     * @return số ghế trống
+     */
+    private int getAvailableSeatsForTravelClass(Long flightTravelClassId) {
+        FlightTravelClass flightTravelClass = flightTravelClassRepository.findById(flightTravelClassId)
+                .orElseThrow(() -> new ResourceNotFoundException("FlightTravelClass not found with id: " + flightTravelClassId));
+
+        // Đếm số ghế có status AVAILABLE trong travel class này
+        Long availableCount = seatRepository.countAvailableSeatsByFlightIdAndTravelClassId(
+                flightTravelClass.getFlight().getFlightId(),
+                flightTravelClass.getTravelClass().getId()
+        );
+
+        return availableCount.intValue();
     }
 
     /**
@@ -1653,6 +1698,9 @@ public class BookingServiceImpl implements BookingService {
     private void awardLoyaltyPointsForCompletedBooking(Booking booking) {
         BigDecimal bookingAmount = booking.getTotalAmount();
 
+        // Tích điểm dựa trên số tiền thực tế user trả (đã bao gồm discount từ points redemption)
+        BigDecimal amountForPoints = bookingAmount;
+
         // Tích điểm cho từng passenger có membership code
         for (Passenger passenger : booking.getPassengers()) {
             String membershipCode = passenger.getMembershipCode();
@@ -1660,7 +1708,7 @@ public class BookingServiceImpl implements BookingService {
                 try {
                     User member = userRepository.findByMembershipCode(membershipCode).orElse(null);
                     if (member != null && member.isActive()) {
-                        awardPointsToPassenger(member, bookingAmount, passenger, booking);
+                        awardPointsToPassenger(member, amountForPoints, passenger, booking);
                     } else {
                         log.warn("Membership code {} not found or inactive for passenger {} {}",
                             membershipCode, passenger.getFirstName(), passenger.getLastName());
@@ -1673,9 +1721,8 @@ public class BookingServiceImpl implements BookingService {
         }
 
         // Tích điểm cho user đăng nhập (nếu có)
-        User loggedInUser = booking.getUserId();
-        if (loggedInUser != null) {
-            awardPointsToPassenger(loggedInUser, bookingAmount, null, booking);
+        if (booking.getUserId() != null) {
+            awardPointsToPassenger(booking.getUserId(), amountForPoints, null, booking);
         }
     }
 
@@ -1683,14 +1730,14 @@ public class BookingServiceImpl implements BookingService {
      * Tích điểm cho một passenger cụ thể
      */
     private void awardPointsToPassenger(User user, BigDecimal bookingAmount, Passenger passenger, Booking booking) {
-        // Base points: 1 point per 1000 VND
-        int basePoints = bookingAmount.divide(BigDecimal.valueOf(1000)).intValue();
+        // Base points: 1 point per 10,000 VND (giảm từ 1000 VND để hợp lý hơn)
+        int basePoints = bookingAmount.divide(BigDecimal.valueOf(10000)).intValue();
 
-        // Tier multiplier bonus
+        // Tier multiplier bonus (giảm xuống)
         LoyaltyTier userTier = user.getLoyaltyTier() != null ? user.getLoyaltyTier() : LoyaltyTier.STANDARD;
         double tierMultiplier = getTierPointsMultiplier(userTier);
 
-        // Booking type bonus (domestic vs international)
+        // Booking type bonus (giảm xuống)
         int bookingBonus = calculateBookingTypeBonus(booking);
 
         // Total points calculation
@@ -1724,9 +1771,9 @@ public class BookingServiceImpl implements BookingService {
     private double getTierPointsMultiplier(LoyaltyTier tier) {
         switch (tier) {
             case STANDARD: return 1.0;
-            case SILVER: return 1.2;    // +20% bonus
-            case GOLD: return 1.5;      // +50% bonus
-            case PLATINUM: return 2.0;  // +100% bonus
+            case SILVER: return 1.1;    // Giảm từ 1.2 xuống 1.1
+            case GOLD: return 1.25;     // Giảm từ 1.5 xuống 1.25
+            case PLATINUM: return 1.5;  // Giảm từ 2.0 xuống 1.5
             default: return 1.0;
         }
     }
@@ -1735,15 +1782,15 @@ public class BookingServiceImpl implements BookingService {
      * Tính bonus theo loại booking
      */
     private int calculateBookingTypeBonus(Booking booking) {
-        // Bonus cho international flights
+        // Bonus cho international flights (giảm từ 50 xuống 20)
         boolean isInternational = !booking.getFlight().getDepartureAirport().getCountry().getCountryCode()
                 .equals(booking.getFlight().getArrivalAirport().getCountry().getCountryCode());
 
         if (isInternational) {
-            return 50; // Bonus 50 points cho international
+            return 20; // Bonus 20 points cho international
         }
 
-        return 10; // Bonus 10 points cho domestic
+        return 5; // Bonus 5 points cho domestic (giảm từ 10)
     }
 
     @Override
@@ -3735,59 +3782,113 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private void refundPointsForCancelledBooking(Booking booking) {
-        // Tìm các dealUsage liên quan đến booking này
-        List<DealUsage> dealUsages = dealUsageRepository.findAllByBooking(booking);
-        if (dealUsages == null || dealUsages.isEmpty()) return;
+        log.info("Processing refunds for cancelled booking {}", booking.getBookingId());
         
-        for (DealUsage dealUsage : dealUsages) {
-            Deal deal = dealUsage.getDeal();
-            if (deal != null && Boolean.TRUE.equals(deal.getIsPointsRedemption()) && deal.getPointsRequired() != null) {
-                User user = null;
-                
-                // Tìm user để hoàn điểm - ưu tiên userId của booking, nếu không có thì tìm từ membership code của passengers
-                if (booking.getUserId() != null) {
-                    user = booking.getUserId();
-                } else {
-                    // Tìm user từ membership code trong passengers
-                    for (Passenger passenger : booking.getPassengers()) {
-                        if (passenger.getMembershipCode() != null && !passenger.getMembershipCode().isBlank()) {
-                            user = userRepository.findByMembershipCode(passenger.getMembershipCode()).orElse(null);
-                            if (user != null) break;
-                        }
-                    }
-                }
-                
+        // 1. Hoàn điểm thưởng trực tiếp đã sử dụng trong booking (pointsToRedeem)
+        if (booking.getPointsRedeemed() != null && booking.getPointsRedeemed() > 0 && booking.getEffectiveUserId() != null) {
+            try {
+                User user = userRepository.findById(booking.getEffectiveUserId()).orElse(null);
                 if (user != null) {
                     Integer currentPoints = user.getLoyaltyPoints() != null ? user.getLoyaltyPoints() : 0;
-                    user.setLoyaltyPoints(currentPoints + deal.getPointsRequired());
+                    user.setLoyaltyPoints(currentPoints + booking.getPointsRedeemed());
                     userRepository.save(user);
-                    log.info("Refunded {} points to user {} for cancelled booking {} (deal: {})", 
-                        deal.getPointsRequired(), user.getId(), booking.getBookingId(), deal.getDealCode());
+                    log.info("Refunded {} loyalty points to user {} for cancelled booking {} (direct points redemption)", 
+                        booking.getPointsRedeemed(), user.getId(), booking.getBookingId());
+                } else {
+                    log.warn("User {} not found for points refund in cancelled booking {}", 
+                        booking.getEffectiveUserId(), booking.getBookingId());
+                }
+            } catch (Exception e) {
+                log.error("Failed to refund loyalty points for cancelled booking {}: {}", 
+                    booking.getBookingId(), e.getMessage(), e);
+            }
+        }
+        
+        // 2. Hoàn lại lượt sử dụng deal và hoàn điểm từ deals đổi điểm
+        List<DealUsage> dealUsages = dealUsageRepository.findAllByBooking(booking);
+        if (dealUsages != null && !dealUsages.isEmpty()) {
+            for (DealUsage dealUsage : dealUsages) {
+                try {
+                    Deal deal = dealUsage.getDeal();
+                    if (deal != null) {
+                        // Giảm used count của deal (hoàn lại lượt sử dụng)
+                        Integer currentUsedCount = deal.getUsedCount() != null ? deal.getUsedCount() : 0;
+                        if (currentUsedCount > 0) {
+                            deal.setUsedCount(currentUsedCount - 1);
+                            dealRepository.save(deal);
+                            log.info("Restored deal usage count for deal {} (booking {}): {} -> {}", 
+                                deal.getDealCode(), booking.getBookingId(), currentUsedCount, deal.getUsedCount());
+                        }
+                        
+                        // Hoàn điểm nếu là deal đổi điểm (points redemption deal)
+                        if (Boolean.TRUE.equals(deal.getIsPointsRedemption()) && deal.getPointsRequired() != null) {
+                            User user = null;
+                            
+                            // Tìm user để hoàn điểm - ưu tiên userId của booking, nếu không có thì tìm từ membership code của passengers
+                            if (booking.getUserId() != null) {
+                                user = booking.getUserId();
+                            } else {
+                                // Tìm user từ membership code trong passengers
+                                for (Passenger passenger : booking.getPassengers()) {
+                                    if (passenger.getMembershipCode() != null && !passenger.getMembershipCode().isBlank()) {
+                                        user = userRepository.findByMembershipCode(passenger.getMembershipCode()).orElse(null);
+                                        if (user != null) break;
+                                    }
+                                }
+                            }
+                            
+                            if (user != null) {
+                                Integer currentPoints = user.getLoyaltyPoints() != null ? user.getLoyaltyPoints() : 0;
+                                user.setLoyaltyPoints(currentPoints + deal.getPointsRequired());
+                                userRepository.save(user);
+                                log.info("Refunded {} points to user {} for cancelled booking {} (deal: {})", 
+                                    deal.getPointsRequired(), user.getId(), booking.getBookingId(), deal.getDealCode());
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to process deal refund for dealUsage {}: {}", 
+                        dealUsage.getUsageId(), e.getMessage(), e);
                 }
             }
         }
+        
+        log.info("Completed refund processing for cancelled booking {}", booking.getBookingId());
     }
 
     /**
      * Cộng điểm loyalty cho booking thành công
+     * Chỉ tính điểm dựa trên số tiền thực tế user trả (sau khi trừ discount từ points redemption)
+     * Nhưng không tích điểm cho phần discount từ points redemption để tránh "tặng điểm"
      */
-    private void awardLoyaltyPointsForBooking(Booking booking, BigDecimal totalAmount, Long effectiveUserId) {
+    private void awardLoyaltyPointsForBooking(Booking booking, BigDecimal totalAmount, Long effectiveUserId, Integer pointsRedeemed) {
         if (effectiveUserId == null) return;
-        
+
         try {
             User user = userRepository.findById(effectiveUserId).orElse(null);
             if (user == null) return;
-            
-            // Tính điểm loyalty dựa trên số tiền booking (1% = 1 điểm cho mỗi 1000 VND)
-            int loyaltyPointsToAward = totalAmount.divide(BigDecimal.valueOf(1000), 0, BigDecimal.ROUND_DOWN).intValue();
-            
+
+            // Tính điểm loyalty dựa trên số tiền booking thực tế user trả
+            // (đã bao gồm discount từ points redemption)
+            BigDecimal amountForPoints = totalAmount;
+
+            // Nếu có dùng points redemption, điều chỉnh amount để không tích điểm cho discount
+            if (pointsRedeemed != null && pointsRedeemed > 0) {
+                BigDecimal discountAmount = pointsRedemptionService.calculateDiscountFromPoints(pointsRedeemed);
+                amountForPoints = totalAmount.add(discountAmount); // Thêm lại discount để tính điểm trên giá gốc
+                log.info("Adjusting points calculation for user {}: totalAmount={} + discount={} = amountForPoints={}",
+                    effectiveUserId, totalAmount, discountAmount, amountForPoints);
+            }
+
+            int loyaltyPointsToAward = amountForPoints.divide(BigDecimal.valueOf(1000), 0, BigDecimal.ROUND_DOWN).intValue();
+
             if (loyaltyPointsToAward > 0) {
                 Integer currentPoints = user.getLoyaltyPoints() != null ? user.getLoyaltyPoints() : 0;
                 user.setLoyaltyPoints(currentPoints + loyaltyPointsToAward);
                 userRepository.save(user);
-                
-                log.info("Awarded {} loyalty points to user {} for booking {} (amount: {})", 
-                    loyaltyPointsToAward, effectiveUserId, booking.getBookingId(), totalAmount);
+
+                log.info("Awarded {} loyalty points to user {} for booking {} (amount for points: {}, points redeemed: {})",
+                    loyaltyPointsToAward, effectiveUserId, booking.getBookingId(), amountForPoints, pointsRedeemed);
             }
         } catch (Exception e) {
             log.error("Failed to award loyalty points for booking {}: {}", booking.getBookingId(), e.getMessage(), e);
