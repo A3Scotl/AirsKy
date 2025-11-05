@@ -30,6 +30,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -233,11 +234,21 @@ public class FlightServiceImpl implements FlightService {
         // Đã set basePrice ở trên, chỉ tăng giá nếu gần giờ bay
         // WARNING: This will increase basePrice by 20% if departure is within 24 hours!
         // Comment out the next 3 lines if you don't want dynamic pricing
-        if (Duration.between(LocalDateTime.now(), request.getDepartureTime()).toHours() <= 24) {
+        boolean wasWithin24h = Duration.between(LocalDateTime.now(), flight.getDepartureTime()).toHours() <= 24;
+        boolean isWithin24h = Duration.between(LocalDateTime.now(), request.getDepartureTime()).toHours() <= 24;
+
+        if (!wasWithin24h && isWithin24h) {
+            // Only increase price when transitioning from >24h to <=24h
             BigDecimal increasedPrice = flight.getBasePrice().multiply(BigDecimal.valueOf(1.2)); // 20% increase
             log.warn("Dynamic pricing applied: basePrice increased from {} to {} (departure within 24h)",
                     flight.getBasePrice(), increasedPrice);
             flight.setBasePrice(increasedPrice);
+        } else if (wasWithin24h && !isWithin24h) {
+            // Decrease price when transitioning from <=24h to >24h
+            BigDecimal decreasedPrice = flight.getBasePrice().divide(BigDecimal.valueOf(1.2), 2, RoundingMode.HALF_UP);
+            log.warn("Dynamic pricing removed: basePrice decreased from {} to {} (departure now >24h)",
+                    flight.getBasePrice(), decreasedPrice);
+            flight.setBasePrice(decreasedPrice);
         }
 
         // Set availableSeats và duration tự động
@@ -403,10 +414,22 @@ public class FlightServiceImpl implements FlightService {
         }
 
         // Dynamic pricing: increase price if within 24h of departure
-        if (flight.getBasePrice() != null && Duration.between(LocalDateTime.now(), request.getDepartureTime()).toHours() <= 24) {
+        // Only apply when transitioning from >24h to <=24h, or remove when transitioning from <=24h to >24h
+        boolean wasWithin24h = Duration.between(LocalDateTime.now(), flight.getDepartureTime()).toHours() <= 24;
+        boolean isWithin24h = Duration.between(LocalDateTime.now(), request.getDepartureTime()).toHours() <= 24;
+
+        if (!wasWithin24h && isWithin24h) {
+            // Only increase price when transitioning from >24h to <=24h
             BigDecimal basePrice = flight.getBasePrice();
             basePrice = basePrice.multiply(BigDecimal.valueOf(1.2));
             flight.setBasePrice(basePrice);
+            log.warn("Dynamic pricing applied during update: basePrice increased to {} (departure within 24h)", basePrice);
+        } else if (wasWithin24h && !isWithin24h) {
+            // Decrease price when transitioning from <=24h to >24h
+            BigDecimal basePrice = flight.getBasePrice();
+            basePrice = basePrice.divide(BigDecimal.valueOf(1.2), 2, RoundingMode.HALF_UP);
+            flight.setBasePrice(basePrice);
+            log.warn("Dynamic pricing removed during update: basePrice decreased to {} (departure now >24h)", basePrice);
         }
 
         // Set availableSeats và duration tự động

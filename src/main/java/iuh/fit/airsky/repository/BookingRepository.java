@@ -43,7 +43,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     @Query("SELECT b FROM Booking b WHERE b.bookingCode = :bookingCode")
     Optional<Booking> findByBookingCode(@Param("bookingCode") String bookingCode);
 
-    @Query("SELECT b FROM Booking b JOIN b.passengers p WHERE b.bookingCode = :bookingCode AND CONCAT(p.firstName, ' ', p.lastName) = :fullName")
+    @Query("SELECT b FROM Booking b JOIN b.passengers p WHERE b.bookingCode = :bookingCode AND LOWER(CONCAT(p.lastName, ' ', p.firstName)) = LOWER(:fullName)")
     Optional<Booking> findByBookingCodeAndPassengerFullName(@Param("bookingCode") String bookingCode, @Param("fullName") String fullName);
 
     @Query("SELECT b FROM Booking b JOIN FETCH b.userId u LEFT JOIN FETCH b.flight f LEFT JOIN FETCH f.departureAirport da LEFT JOIN FETCH f.arrivalAirport aa LEFT JOIN FETCH b.travelClass tc LEFT JOIN FETCH b.passengers p WHERE b.status = 'CONFIRMED'")

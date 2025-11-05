@@ -51,4 +51,18 @@ public class AircraftController {
         AircraftResponse response = aircraftService.getAircraftById(id);
         return ApiResponseUtil.buildResponse(true, "Aircraft retrieved successfully", response, "/api/v1/aircrafts/" + id);
     }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
+    public ResponseEntity<ApiResponse<AircraftResponse>> updateAircraft(@PathVariable Long id, @RequestBody AircraftRequest request) {
+        AircraftResponse response = aircraftService.updateAircraft(id, request);
+        return ApiResponseUtil.buildResponse(true, "Aircraft updated successfully", response, "/api/v1/aircrafts/" + id);
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
+    public ResponseEntity<ApiResponse<Void>> deleteAircraft(@PathVariable Long id) {
+        aircraftService.deleteAircraft(id);
+        return ApiResponseUtil.buildResponse(true, "Aircraft deleted successfully", null, "/api/v1/aircrafts/" + id);
+    }
 }

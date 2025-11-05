@@ -103,9 +103,17 @@ public class BoardingPassServiceImpl implements BoardingPassService {
     private byte[] generateBoardingPassImage(CheckIn checkIn) throws IOException {
         try {
             // Validate required data
-            if (checkIn == null || checkIn.getPassenger() == null || checkIn.getBooking() == null ||
-                    checkIn.getBooking().getFlight() == null) {
+            if (checkIn == null || checkIn.getPassenger() == null || checkIn.getBooking() == null) {
                 throw new IllegalArgumentException("CheckIn data is incomplete for boarding pass generation");
+            }
+            
+            // Get flight info from segment if available, otherwise use booking flight
+            var flight = (checkIn.getFlightSegment() != null && checkIn.getFlightSegment().getFlight() != null) 
+                ? checkIn.getFlightSegment().getFlight() 
+                : checkIn.getBooking().getFlight();
+                
+            if (flight == null) {
+                throw new IllegalArgumentException("Flight information is missing for boarding pass generation");
             }
 
             // Increase size for better readability, similar to major airlines
@@ -143,15 +151,15 @@ public class BoardingPassServiceImpl implements BoardingPassService {
             g2d.drawString("FLIGHT", 50, 120);
             g2d.setFont(new Font("Arial", Font.BOLD, 24));
             g2d.setColor(new Color(25, 118, 210));
-            g2d.drawString(checkIn.getBooking().getFlight().getFlightNumber() != null ? checkIn.getBooking().getFlight().getFlightNumber() : "", 50, 150);
+            g2d.drawString(flight.getFlightNumber() != null ? flight.getFlightNumber() : "", 50, 150);
             g2d.setColor(Color.BLACK);
 
             // Route - prominent route
             g2d.setFont(new Font("Arial", Font.BOLD, 18));
             g2d.drawString("FROM - TO", 50, 185);
             g2d.setFont(new Font("Arial", Font.BOLD, 20));
-            String route = (checkIn.getBooking().getFlight().getDepartureAirport() != null && checkIn.getBooking().getFlight().getDepartureAirport().getAirportCode() != null ? checkIn.getBooking().getFlight().getDepartureAirport().getAirportCode() : "") +
-                    " → " + (checkIn.getBooking().getFlight().getArrivalAirport() != null && checkIn.getBooking().getFlight().getArrivalAirport().getAirportCode() != null ? checkIn.getBooking().getFlight().getArrivalAirport().getAirportCode() : "");
+            String route = (flight.getDepartureAirport() != null && flight.getDepartureAirport().getAirportCode() != null ? flight.getDepartureAirport().getAirportCode() : "") +
+                    " → " + (flight.getArrivalAirport() != null && flight.getArrivalAirport().getAirportCode() != null ? flight.getArrivalAirport().getAirportCode() : "");
             g2d.drawString(route, 50, 215);
 
             // Passenger information
@@ -172,7 +180,8 @@ public class BoardingPassServiceImpl implements BoardingPassService {
             g2d.drawString("SEAT", 550, 130);
             g2d.setFont(new Font("Arial", Font.BOLD, 32));
             g2d.setColor(new Color(25, 118, 210));
-            g2d.drawString(checkIn.getSeatNumber() != null ? checkIn.getSeatNumber() : "", 550, 170);
+            String seatNumber = getCorrectSeatNumber(checkIn);
+            g2d.drawString(seatNumber != null ? seatNumber : "", 550, 170);
             g2d.setColor(Color.BLACK);
 
             // Class - large and in English
@@ -190,8 +199,8 @@ public class BoardingPassServiceImpl implements BoardingPassService {
             g2d.drawString("BOARDING TIME", 550, 280);
             g2d.setFont(new Font("Arial", Font.PLAIN, 16));
             String boardingTime = "";
-            if (checkIn.getBooking().getFlight().getDepartureTime() != null) {
-                LocalDateTime departure = checkIn.getBooking().getFlight().getDepartureTime();
+            if (flight.getDepartureTime() != null) {
+                LocalDateTime departure = flight.getDepartureTime();
                 LocalDateTime boarding = departure.minusMinutes(45);
                 boardingTime = boarding.format(DateTimeFormatter.ofPattern("HH:mm"));
             }
@@ -201,8 +210,8 @@ public class BoardingPassServiceImpl implements BoardingPassService {
             g2d.setFont(new Font("Arial", Font.BOLD, 16));
             g2d.drawString("DEPARTURE TIME", 550, 335);
             g2d.setFont(new Font("Arial", Font.PLAIN, 16));
-            String departureTime = checkIn.getBooking().getFlight().getDepartureTime() != null
-                    ? checkIn.getBooking().getFlight().getDepartureTime().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy"))
+            String departureTime = flight.getDepartureTime() != null
+                    ? flight.getDepartureTime().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy"))
                     : "";
             g2d.drawString(departureTime, 550, 360);
 
@@ -211,8 +220,8 @@ public class BoardingPassServiceImpl implements BoardingPassService {
             g2d.drawString("GATE", 550, 390);
             g2d.setFont(new Font("Arial", Font.BOLD, 20));
             g2d.setColor(new Color(25, 118, 210));
-            String gate = checkIn.getBooking().getFlight().getGate() != null
-                    ? checkIn.getBooking().getFlight().getGate().getGateName() : "TBA";
+            String gate = flight.getGate() != null
+                    ? flight.getGate().getGateName() : "TBA";
             g2d.drawString(gate, 550, 415);
             g2d.setColor(Color.BLACK);
 
@@ -220,8 +229,8 @@ public class BoardingPassServiceImpl implements BoardingPassService {
             g2d.setFont(new Font("Arial", Font.BOLD, 16));
             g2d.drawString("ARRIVAL TIME", 50, 360);
             g2d.setFont(new Font("Arial", Font.PLAIN, 16));
-            String arrivalTime = checkIn.getBooking().getFlight().getArrivalTime() != null
-                    ? checkIn.getBooking().getFlight().getArrivalTime().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy"))
+            String arrivalTime = flight.getArrivalTime() != null
+                    ? flight.getArrivalTime().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy"))
                     : "";
             g2d.drawString(arrivalTime, 50, 385);
 
@@ -263,9 +272,17 @@ public class BoardingPassServiceImpl implements BoardingPassService {
 
     private BufferedImage generateQRCodeImage(CheckIn checkIn) throws WriterException, IOException {
         // Validate required data
-        if (checkIn == null || checkIn.getBooking() == null || checkIn.getPassenger() == null ||
-                checkIn.getBooking().getFlight() == null) {
+        if (checkIn == null || checkIn.getBooking() == null || checkIn.getPassenger() == null) {
             throw new IllegalArgumentException("CheckIn data is incomplete for QR code generation");
+        }
+        
+        // Get flight info from segment if available, otherwise use booking flight
+        var flight = (checkIn.getFlightSegment() != null && checkIn.getFlightSegment().getFlight() != null) 
+            ? checkIn.getFlightSegment().getFlight() 
+            : checkIn.getBooking().getFlight();
+            
+        if (flight == null) {
+            throw new IllegalArgumentException("Flight information is missing for QR code generation");
         }
         // Create QR code content as JSON and encode as Base64 for security
         String jsonContent = String.format("""
@@ -285,11 +302,11 @@ public class BoardingPassServiceImpl implements BoardingPassService {
                 checkIn.getBooking().getBookingCode() != null ? checkIn.getBooking().getBookingCode() : "",
                 checkIn.getPassenger().getPassengerId() != null ? checkIn.getPassenger().getPassengerId() : 0L,
                 checkIn.getCheckInId() != null ? checkIn.getCheckInId() : 0L,
-                checkIn.getBooking().getFlight().getFlightNumber() != null ? checkIn.getBooking().getFlight().getFlightNumber() : "",
-                checkIn.getSeatNumber() != null ? checkIn.getSeatNumber() : "",
-                checkIn.getBooking().getFlight().getDepartureTime() != null ? checkIn.getBooking().getFlight().getDepartureTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) : "",
-                checkIn.getBooking().getFlight().getDepartureAirport() != null && checkIn.getBooking().getFlight().getDepartureAirport().getAirportCode() != null ? checkIn.getBooking().getFlight().getDepartureAirport().getAirportCode() : "",
-                checkIn.getBooking().getFlight().getArrivalAirport() != null && checkIn.getBooking().getFlight().getArrivalAirport().getAirportCode() != null ? checkIn.getBooking().getFlight().getArrivalAirport().getAirportCode() : "",
+                flight.getFlightNumber() != null ? flight.getFlightNumber() : "",
+                getCorrectSeatNumber(checkIn) != null ? getCorrectSeatNumber(checkIn) : "",
+                flight.getDepartureTime() != null ? flight.getDepartureTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) : "",
+                flight.getDepartureAirport() != null && flight.getDepartureAirport().getAirportCode() != null ? flight.getDepartureAirport().getAirportCode() : "",
+                flight.getArrivalAirport() != null && flight.getArrivalAirport().getAirportCode() != null ? flight.getArrivalAirport().getAirportCode() : "",
                 (checkIn.getPassenger().getFirstName() != null ? checkIn.getPassenger().getFirstName() : "") + " " + (checkIn.getPassenger().getLastName() != null ? checkIn.getPassenger().getLastName() : ""),
                 LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         );
@@ -301,6 +318,11 @@ public class BoardingPassServiceImpl implements BoardingPassService {
     }
 
     private String buildEmailContent(CheckIn checkIn, String pdfUrl) {
+        // Get flight info from segment if available, otherwise use booking flight
+        var flight = (checkIn.getFlightSegment() != null && checkIn.getFlightSegment().getFlight() != null) 
+            ? checkIn.getFlightSegment().getFlight() 
+            : checkIn.getBooking().getFlight();
+            
         String passengerName = (checkIn.getPassenger().getFirstName() != null ? checkIn.getPassenger().getFirstName() : "") + " " +
                 (checkIn.getPassenger().getLastName() != null ? checkIn.getPassenger().getLastName() : "");
         return String.format("""
@@ -388,13 +410,13 @@ public class BoardingPassServiceImpl implements BoardingPassService {
                 """,
                 passengerName,
                 checkIn.getBooking().getBookingCode() != null ? checkIn.getBooking().getBookingCode() : "",
-                checkIn.getBooking().getFlight().getFlightNumber() != null ? checkIn.getBooking().getFlight().getFlightNumber() : "",
-                checkIn.getBooking().getFlight().getDepartureAirport() != null && checkIn.getBooking().getFlight().getDepartureAirport().getCityName() != null ? checkIn.getBooking().getFlight().getDepartureAirport().getCityName() : "",
-                checkIn.getBooking().getFlight().getArrivalAirport() != null && checkIn.getBooking().getFlight().getArrivalAirport().getCityName() != null ? checkIn.getBooking().getFlight().getArrivalAirport().getCityName() : "",
-                checkIn.getBooking().getFlight().getDepartureTime() != null ? checkIn.getBooking().getFlight().getDepartureTime().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")) : "",
-                checkIn.getSeatNumber() != null ? checkIn.getSeatNumber() : "",
+                flight != null && flight.getFlightNumber() != null ? flight.getFlightNumber() : "",
+                flight != null && flight.getDepartureAirport() != null && flight.getDepartureAirport().getCityName() != null ? flight.getDepartureAirport().getCityName() : "",
+                flight != null && flight.getArrivalAirport() != null && flight.getArrivalAirport().getCityName() != null ? flight.getArrivalAirport().getCityName() : "",
+                flight != null && flight.getDepartureTime() != null ? flight.getDepartureTime().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")) : "",
+                getCorrectSeatNumber(checkIn) != null ? getCorrectSeatNumber(checkIn) : "",
                 checkIn.getBooking().getTravelClass() != null && checkIn.getBooking().getTravelClass().getClassName() != null ? checkIn.getBooking().getTravelClass().getClassName() : "",
-                checkIn.getBooking().getFlight().getGate() != null ? checkIn.getBooking().getFlight().getGate().getGateName() : "TBA",
+                flight != null && flight.getGate() != null ? flight.getGate().getGateName() : "TBA",
                 pdfUrl != null ? pdfUrl : ""
         );
     }
@@ -441,6 +463,11 @@ public class BoardingPassServiceImpl implements BoardingPassService {
                         .message("Check-in not completed")
                         .build();
             }
+            // Get correct flight info from segment if available
+            var flight = (checkIn.getFlightSegment() != null && checkIn.getFlightSegment().getFlight() != null) 
+                ? checkIn.getFlightSegment().getFlight() 
+                : checkIn.getBooking().getFlight();
+                
             // Return verification response with details
             return QRVerificationResponse.builder()
                     .valid(true)
@@ -448,11 +475,11 @@ public class BoardingPassServiceImpl implements BoardingPassService {
                     .bookingCode(checkIn.getBooking().getBookingCode())
                     .passengerId(checkIn.getPassenger().getPassengerId())
                     .passengerName(checkIn.getPassenger().getFirstName() + " " + checkIn.getPassenger().getLastName())
-                    .flightNumber(checkIn.getBooking().getFlight().getFlightNumber())
-                    .seatNumber(checkIn.getSeatNumber())
-                    .route(checkIn.getBooking().getFlight().getDepartureAirport().getAirportCode() + " → " +
-                            checkIn.getBooking().getFlight().getArrivalAirport().getAirportCode())
-                    .departureTime(checkIn.getBooking().getFlight().getDepartureTime())
+                    .flightNumber(flight.getFlightNumber())
+                    .seatNumber(getCorrectSeatNumber(checkIn))
+                    .route(flight.getDepartureAirport().getAirportCode() + " → " +
+                            flight.getArrivalAirport().getAirportCode())
+                    .departureTime(flight.getDepartureTime())
                     .checkedAt(checkIn.getCheckedAt())
                     .status("VERIFIED")
                     .build();
@@ -488,5 +515,33 @@ public class BoardingPassServiceImpl implements BoardingPassService {
             }
             return json.substring(startIndex, endIndex).trim();
         }
+    }
+
+    /**
+     * Get the correct seat number for the check-in segment
+     * For roundtrip flights, this ensures we get the seat for the specific segment being checked in
+     */
+    private String getCorrectSeatNumber(CheckIn checkIn) {
+        // First priority: Use seat number stored in CheckIn entity (segment-specific)
+        if (checkIn.getSeatNumber() != null && !checkIn.getSeatNumber().trim().isEmpty()) {
+            return checkIn.getSeatNumber();
+        }
+        
+        // If CheckIn doesn't have seat number, try to get from passenger seat assignments for this segment
+        if (checkIn.getFlightSegment() != null && checkIn.getPassenger() != null) {
+            // This would require access to PassengerSeatAssignmentRepository
+            // For now, log a warning and return empty
+            log.warn("CheckIn {} doesn't have seat number, segment-specific lookup not available in this context", 
+                    checkIn.getCheckInId());
+        }
+        
+        // Fallback: Use passenger's main seat (may not be accurate for roundtrip)
+        if (checkIn.getPassenger() != null && checkIn.getPassenger().getSeat() != null) {
+            log.warn("Using passenger's main seat as fallback for CheckIn {}, may not be segment-specific", 
+                    checkIn.getCheckInId());
+            return checkIn.getPassenger().getSeat().getSeatNumber();
+        }
+        
+        return ""; // No seat information available
     }
 }

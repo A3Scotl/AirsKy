@@ -9,4 +9,6 @@ public class AircraftResponse {
     private String aircraftName;
     private Integer totalSeats;
     private String seatLayout;
+    private Boolean isActive;
+    private Boolean isInFlight;
 }

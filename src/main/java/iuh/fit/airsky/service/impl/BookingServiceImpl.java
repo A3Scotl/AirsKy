@@ -203,9 +203,13 @@ public class BookingServiceImpl implements BookingService {
             booking.setPassengers(passengers);
 
             // Bước 3: Giữ chỗ bằng cách giảm số lượng ghế trống trên các chuyến bay
+            // Chỉ giảm available seats cho passengers cần ghế (ADULT và CHILD), không giảm cho INFANT
+            long passengersNeedingSeats = passengers.stream()
+                    .filter(p -> p.getType() != PassengerType.INFANT)
+                    .count();
             for (FlightSegmentRequest segment : request.getFlightSegments()) {
                 Flight segFlight = findFlightById(segment.getFlightId());
-                updateAvailableSeats(segFlight, passengers.size());
+                updateAvailableSeats(segFlight, (int) passengersNeedingSeats);
             }
 
             // Lưu Booking để lấy ID, cần thiết cho các thực thể liên quan
@@ -858,7 +862,10 @@ public class BookingServiceImpl implements BookingService {
         bookingRepository.save(booking);
 
         // Giải phóng ghế và cập nhật availableSeats
-        int passengerCount = booking.getPassengers().size();
+        // Chỉ tính passengers có ghế (ADULT và CHILD), không tính INFANT
+        long passengersWithSeats = booking.getPassengers().stream()
+                .filter(p -> p.getType() != PassengerType.INFANT)
+                .count();
 
         // Giải phóng ghế thông qua các bản ghi gán ghế (PassengerSeatAssignment)
         for (Passenger passenger : booking.getPassengers()) {
@@ -878,12 +885,13 @@ public class BookingServiceImpl implements BookingService {
         }
 
         // Cập nhật số lượng ghế trống cho tất cả các chặng bay của booking
-        if (passengerCount > 0 && booking.getFlightSegments() != null) {
+        // Chỉ cộng lại cho passengers có ghế
+        if (passengersWithSeats > 0 && booking.getFlightSegments() != null) {
             for (FlightSegment segment : booking.getFlightSegments()) {
                 Flight flight = segment.getFlight();
-                flight.setAvailableSeats(flight.getAvailableSeats() + passengerCount);
+                flight.setAvailableSeats(flight.getAvailableSeats() + (int) passengersWithSeats);
                 flightRepository.save(flight);
-                log.info("Updated available seats for flight {}: +{}", flight.getFlightNumber(), passengerCount);
+                log.info("Updated available seats for flight {}: +{}", flight.getFlightNumber(), passengersWithSeats);
             }
         }
 
@@ -913,7 +921,7 @@ public class BookingServiceImpl implements BookingService {
         // Phát sự kiện BookingCancelledEvent để các listener khác xử lý (gửi email, socket,...)
         eventPublisher.publishEvent(new BookingCancelledEvent(this, booking, reason));
 
-        log.info("Successfully cancelled booking {} and released {} seats", booking.getBookingId(), passengerCount);
+        log.info("Successfully cancelled booking {} and released {} seats", booking.getBookingId(), passengersWithSeats);
     }
 
     private void updateFlightStatuses(LocalDateTime now) {
@@ -1111,21 +1119,31 @@ public class BookingServiceImpl implements BookingService {
         log.info("Creating seat assignments for {} passengers and {} segments",
                 savedBooking.getPassengers().size(), savedBooking.getFlightSegments().size());
 
-        // Validate that each passenger has seat assignments for all segments
-        boolean seatsProvided = request.getPassengers().stream()
-                .allMatch(p -> p.getSeatAssignments() != null && !p.getSeatAssignments().isEmpty());
-
+        // Validate seat assignments: ADULT and CHILD must have seats, INFANT don't need seats
         for (int i = 0; i < request.getPassengers().size(); i++) {
             PassengerSeatRequest passengerReq = request.getPassengers().get(i);
             Passenger passenger = savedBooking.getPassengers().get(i);
 
+            // INFANT passengers don't need seat assignments
+            if (passenger.getType() == PassengerType.INFANT) {
+                log.debug("Skipping seat assignment for INFANT passenger: {} {}",
+                        passenger.getFirstName(), passenger.getLastName());
+                continue;
+            }
+
+            // ADULT and CHILD passengers must have seat assignments
+            if (passengerReq.getSeatAssignments() == null || passengerReq.getSeatAssignments().isEmpty()) {
+                throw new IllegalArgumentException("Passenger " + passenger.getFirstName() + " " + passenger.getLastName() +
+                        " (" + passenger.getType() + ") must have seat assignments for all segments.");
+            }
+
+            if (passengerReq.getSeatAssignments().size() != savedBooking.getFlightSegments().size()) {
+                throw new IllegalArgumentException("Passenger " + passenger.getFirstName() + " " + passenger.getLastName() +
+                        " must have exactly " + savedBooking.getFlightSegments().size() + " seat assignments (one for each segment).");
+            }
+
             // Create seat assignments for this passenger
-            if (seatsProvided && passengerReq.getSeatAssignments() != null) {
-                if (passengerReq.getSeatAssignments().size() != savedBooking.getFlightSegments().size()) {
-                    throw new IllegalArgumentException("Passenger " + passenger.getFirstName() + " " + passenger.getLastName() +
-                            " must have exactly " + savedBooking.getFlightSegments().size() + " seat assignments (one for each segment) or none at all.");
-                }
-                for (PassengerSeatRequest.SeatAssignmentRequest seatReq : passengerReq.getSeatAssignments()) {
+            for (PassengerSeatRequest.SeatAssignmentRequest seatReq : passengerReq.getSeatAssignments()) {
                 // Find the corresponding flight segment
                 FlightSegment segment = savedBooking.getFlightSegments().stream()
                         .filter(s -> s.getSegmentOrder().equals(seatReq.getSegmentOrder()))
@@ -1178,14 +1196,10 @@ public class BookingServiceImpl implements BookingService {
 
                 log.debug("Created seat assignment: passenger={}, segment={}, seat={}",
                         passenger.getFirstName(), segment.getSegmentOrder(), seat.getSeatNumber());
-                }
             }
         }
-        if (seatsProvided) {
-            log.info("Successfully created all seat assignments as provided in the request.");
-        } else {
-            log.info("No seats were selected during booking. Seats can be assigned later during check-in.");
-        }
+
+        log.info("Successfully created seat assignments. INFANT passengers don't require seats.");
     }
 
     private BigDecimal calculateAncillaryServicesAmount(List<BookingAncillaryServiceRequest> ancillaryServiceRequests, 
@@ -1872,7 +1886,7 @@ public class BookingServiceImpl implements BookingService {
                     log.info("No passenger name filter, processing all {} passengers in booking", passengersToProcess.size());
                 } else {
                     passengersToProcess = booking.getPassengers().stream()
-                        .filter(p -> (p.getFirstName() + " " + p.getLastName()).equalsIgnoreCase(fullName))
+                        .filter(p -> (p.getLastName() + " " + p.getFirstName()).equalsIgnoreCase(fullName))
                         .collect(Collectors.toList());
                     log.info("Filtered to {} passengers matching name: {}", passengersToProcess.size(), fullName);
                 }
@@ -1939,12 +1953,13 @@ public class BookingServiceImpl implements BookingService {
 
                     populateSeatTypeInformation(response, booking);
                     // Use new roundtrip-aware check-in logic
-                    // Nếu tìm theo bookingCode only: trả về tất cả checkinEligiblePassengers
-                    // Nếu tìm theo fullName: filter theo tên
-                    if (fullName == null || fullName.trim().isEmpty()) {
-                        response.setCheckinEligiblePassengers(getAllCheckinEligiblePassengers(bookingCode));
-                    } else {
+                    // Chỉ populate check-in eligibility khi có fullName (dùng cho check-in) hoặc khi được yêu cầu
+                    // Không populate khi chỉ tìm booking để thanh toán (bookingCode only)
+                    if (fullName != null && !fullName.trim().isEmpty()) {
                         response.setCheckinEligiblePassengers(getCheckinEligiblePassengers(bookingCode, fullName));
+                    } else {
+                        // Khi tìm theo bookingCode only, không populate check-in eligibility để tránh lỗi thời gian
+                        response.setCheckinEligiblePassengers(new ArrayList<>());
                     }
 
                     // Populate available seats using new segment-aware logic
@@ -1985,7 +2000,8 @@ public class BookingServiceImpl implements BookingService {
                     }
                     populateAncillaryServicesInformationForBooking(response, booking);
                     populateSeatTypeInformation(response, booking);
-                    response.setCheckinEligiblePassengers(getCheckinEligiblePassengers(bookingCode, fullName));
+                    // Trong catch block, không populate check-in eligibility để tránh lỗi
+                    response.setCheckinEligiblePassengers(new ArrayList<>());
                     populateAvailableSeatsInformation(response, booking);
                 }
 
@@ -2302,9 +2318,17 @@ public class BookingServiceImpl implements BookingService {
 
         // First verify booking exists and user has access
         Optional<Booking> bookingOpt = bookingRepository.findByBookingCodeAndPassengerFullName(bookingCode, fullName);
+        if (fullName == null || fullName.trim().isEmpty()) {
+            // Nếu không có tên, chỉ tìm theo bookingCode
+            bookingOpt = bookingRepository.findByBookingCode(bookingCode);
+        } else {
+            // Nếu có tên, tìm theo bookingCode và tên
+            bookingOpt = bookingRepository.findByBookingCodeAndPassengerFullName(bookingCode, fullName);
+        }
         if (bookingOpt.isEmpty()) {
             throw new ResourceNotFoundException("Booking not found or access denied");
         }
+
 
         Booking booking = bookingOpt.get();
 
@@ -2378,8 +2402,9 @@ public class BookingServiceImpl implements BookingService {
                 response.setPassengerId(passenger.getPassengerId());
                 response.setFirstName(passenger.getFirstName());
                 response.setLastName(passenger.getLastName());
-                response.setFullName(passenger.getFirstName() + " " + passenger.getLastName());
+                response.setFullName(passenger.getLastName() + " " + passenger.getFirstName());
                 response.setPassportNumber(passenger.getPassportNumber());
+                response.setType(passenger.getType());
                 
                 // Set flight-specific information
                 response.setFlightNumber(flight.getFlightNumber());
@@ -2439,8 +2464,9 @@ public class BookingServiceImpl implements BookingService {
                     response.setPassengerId(passenger.getPassengerId());
                     response.setFirstName(passenger.getFirstName());
                     response.setLastName(passenger.getLastName());
-                    response.setFullName(passenger.getFirstName() + " " + passenger.getLastName());
+                    response.setFullName(passenger.getLastName() + " " + passenger.getFirstName());
                     response.setPassportNumber(passenger.getPassportNumber());
+                    response.setType(passenger.getType());
                     response.setSeatNumber(passenger.getSeat() != null ? passenger.getSeat().getSeatNumber() : null);
                     response.setFlightNumber(flight.getFlightNumber());
                     response.setDepartureTime(flight.getDepartureTime());
@@ -2511,8 +2537,9 @@ public class BookingServiceImpl implements BookingService {
                 response.setPassengerId(passenger.getPassengerId());
                 response.setFirstName(passenger.getFirstName());
                 response.setLastName(passenger.getLastName());
-                response.setFullName(passenger.getFirstName() + " " + passenger.getLastName());
+                response.setFullName(passenger.getLastName() + " " + passenger.getFirstName());
                 response.setPassportNumber(passenger.getPassportNumber());
+                response.setType(passenger.getType());
 
                 // Set flight-specific information
                 response.setFlightNumber(flight.getFlightNumber());
@@ -2755,7 +2782,7 @@ public class BookingServiceImpl implements BookingService {
         return booking.getPassengers().stream()
                 .filter(passenger -> {
                     // Chỉ trả về hành khách có tên khớp với fullName truyền vào
-                    String passengerFullName = passenger.getFirstName() + " " + passenger.getLastName();
+                    String passengerFullName = passenger.getLastName() + " " + passenger.getFirstName();
                     return passengerFullName.equalsIgnoreCase(fullName);
                 })
                 .map(passenger -> {
@@ -2763,8 +2790,9 @@ public class BookingServiceImpl implements BookingService {
                     response.setPassengerId(passenger.getPassengerId());
                     response.setFirstName(passenger.getFirstName());
                     response.setLastName(passenger.getLastName());
-                    response.setFullName(passenger.getFirstName() + " " + passenger.getLastName());
+                    response.setFullName(passenger.getLastName() + " " + passenger.getFirstName());
                     response.setPassportNumber(passenger.getPassportNumber());
+                    response.setType(passenger.getType());
                     response.setSeatNumber(passenger.getSeat() != null ? passenger.getSeat().getSeatNumber() : null);
 
                     // Calculate ticket price per passenger based on passenger type
@@ -2960,49 +2988,65 @@ public class BookingServiceImpl implements BookingService {
 
         // For roundtrip bookings: Check if passenger is already checked in for THIS SPECIFIC SEGMENT
         // Not for all segments (passenger can check-in multiple segments in roundtrip)
+        FlightSegment targetSegment;
         if (request.getSegmentId() != null) {
-            FlightSegment targetSegment = booking.getFlightSegments().stream()
+            targetSegment = booking.getFlightSegments().stream()
                     .filter(s -> s.getSegmentId().equals(request.getSegmentId()))
                     .findFirst()
                     .orElseThrow(() -> new ResourceNotFoundException("Segment not found: " + request.getSegmentId()));
-
-            // Check if passenger is already checked in for this specific segment
-            boolean alreadyCheckedInForSegment = checkinRepository.existsByPassengerAndSegmentAndCompleted(passenger, targetSegment);
-            if (alreadyCheckedInForSegment) {
-                throw new IllegalStateException("Passenger is already checked in for this segment");
-            }
         } else {
-            // For backward compatibility: check if already checked in for any segment (single flight)
-            boolean alreadyCheckedIn = checkinRepository.existsByPassengerAndCompleted(passenger);
-            if (alreadyCheckedIn) {
-                throw new IllegalStateException("Passenger is already checked in");
+            // If segmentId not provided, determine target segment automatically
+            if (booking.getFlightSegments() != null && booking.getFlightSegments().size() > 1) {
+                // For roundtrip: find the eligible segment for check-in based on timing and previous check-ins
+                List<FlightSegment> sortedSegments = booking.getFlightSegments().stream()
+                        .sorted((s1, s2) -> s1.getFlight().getDepartureTime().compareTo(s2.getFlight().getDepartureTime()))
+                        .collect(Collectors.toList());
+                
+                targetSegment = null;
+                for (FlightSegment segment : sortedSegments) {
+                    // Check if segment is within check-in window
+                    boolean segmentInWindow = segment.getFlight().getDepartureTime().isAfter(now.plusHours(1)) &&
+                                            segment.getFlight().getDepartureTime().isBefore(now.plusDays(1));
+                    
+                    if (segmentInWindow) {
+                        // Check if already checked in for this segment
+                        boolean alreadyCheckedInForSegment = checkinRepository.existsByPassengerAndSegmentAndCompleted(passenger, segment);
+                        if (!alreadyCheckedInForSegment) {
+                            // For roundtrip: ensure sequential check-in
+                            if (canCheckInForRoundtripSegment(booking, passenger, segment)) {
+                                targetSegment = segment;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (targetSegment == null) {
+                    throw new IllegalStateException("No eligible segment found for check-in at this time");
+                }
+            } else {
+                // Single flight - use the first (and only) segment
+                targetSegment = booking.getFlightSegments().get(0);
             }
+        }
+        
+        // Check if passenger is already checked in for the target segment
+        boolean alreadyCheckedInForSegment = checkinRepository.existsByPassengerAndSegmentAndCompleted(passenger, targetSegment);
+        if (alreadyCheckedInForSegment) {
+            throw new IllegalStateException("Passenger is already checked in for this segment");
         }
 
         CheckinResponse response = new CheckinResponse();
         response.setPassengerId(passenger.getPassengerId());
-        response.setPassengerName(passenger.getFirstName() + " " + passenger.getLastName());
+        response.setPassengerName(passenger.getLastName() + " " + passenger.getFirstName());
         response.setBookingId(booking.getBookingId());
 
-        // For roundtrip bookings, get seat info for the specific segment being checked in
-        String currentSeatNumber;
-        String currentSeatType;
-        if (request.getSegmentId() != null) {
-            FlightSegment targetSegment = booking.getFlightSegments().stream()
-                    .filter(s -> s.getSegmentId().equals(request.getSegmentId()))
-                    .findFirst()
-                    .orElseThrow(() -> new ResourceNotFoundException("Segment not found: " + request.getSegmentId()));
-
-            currentSeatNumber = getSeatNumberForPassengerAndSegment(passenger, targetSegment);
-            // Get seat type from assignment if available
-            List<PassengerSeatAssignment> assignments = passengerSeatAssignmentRepository.findByPassengerAndSegment(
-                    passenger.getPassengerId(), targetSegment.getSegmentId());
-            currentSeatType = !assignments.isEmpty() ? assignments.get(0).getSeat().getType().toString() : null;
-        } else {
-            // For backward compatibility: use passenger's main seat
-            currentSeatNumber = passenger.getSeat() != null ? passenger.getSeat().getSeatNumber() : null;
-            currentSeatType = passenger.getSeat() != null ? passenger.getSeat().getType().toString() : null;
-        }
+        // Get seat info for the target segment being checked in
+        String currentSeatNumber = getSeatNumberForPassengerAndSegment(passenger, targetSegment);
+        // Get seat type from assignment if available
+        List<PassengerSeatAssignment> assignments = passengerSeatAssignmentRepository.findByPassengerAndSegment(
+                passenger.getPassengerId(), targetSegment.getSegmentId());
+        String currentSeatType = !assignments.isEmpty() ? assignments.get(0).getSeat().getType().toString() : null;
 
         response.setOldSeatNumber(currentSeatNumber);
         response.setSeatNumber(currentSeatNumber);
@@ -3015,21 +3059,17 @@ public class BookingServiceImpl implements BookingService {
 
         // Handle seat change if requested - Seat changes are always free/completed
         // Only process seat change if user explicitly requests it (newSeatId or newSeatNumber provided)
+        // INFANT passengers cannot change seats as they don't have seats
+        if (passenger.getType() == PassengerType.INFANT && (request.getNewSeatId() != null || request.getNewSeatNumber() != null)) {
+            throw new IllegalStateException("INFANT passengers cannot change seats as they don't have assigned seats.");
+        }
+
         Long newSeatId = null;
         if (request.getNewSeatId() != null) {
             newSeatId = request.getNewSeatId();
         } else if (request.getNewSeatNumber() != null) {
-            // For seat changes, find the correct flight based on segment
-            Long flightIdForSeat;
-            if (request.getSegmentId() != null) {
-                FlightSegment targetSegment = booking.getFlightSegments().stream()
-                        .filter(s -> s.getSegmentId().equals(request.getSegmentId()))
-                        .findFirst()
-                        .orElseThrow(() -> new ResourceNotFoundException("Segment not found: " + request.getSegmentId()));
-                flightIdForSeat = targetSegment.getFlight().getFlightId();
-            } else {
-                flightIdForSeat = booking.getFlight().getFlightId();
-            }
+            // For seat changes, use the target segment's flight
+            Long flightIdForSeat = targetSegment.getFlight().getFlightId();
 
             List<Seat> seats = seatRepository.findByFlightIdAndSeatNumber(flightIdForSeat, request.getNewSeatNumber());
             if (!seats.isEmpty()) {
@@ -3041,22 +3081,16 @@ public class BookingServiceImpl implements BookingService {
         if (newSeatId != null) {
             // Kiểm tra xem có phải là seat change thực sự không
             // For roundtrip bookings, check if the new seat is already assigned to this passenger for this segment
-            boolean isAlreadyAssigned = false;
-            if (request.getSegmentId() != null) {
-                List<PassengerSeatAssignment> assignments = passengerSeatAssignmentRepository
-                        .findByPassengerAndSegment(passenger.getPassengerId(), request.getSegmentId());
-                Long finalNewSeatId = newSeatId; // Create final variable for lambda
-                isAlreadyAssigned = assignments.stream()
-                        .anyMatch(assignment -> assignment.getSeat().getSeatId().equals(finalNewSeatId));
-            }
+            Long finalNewSeatId = newSeatId; // Create final variable for lambda
+            boolean isAlreadyAssigned = assignments.stream()
+                    .anyMatch(assignment -> assignment.getSeat().getSeatId().equals(finalNewSeatId));
 
             // Only process seat change if it's not already assigned to this passenger for this segment
             if (!isAlreadyAssigned) {
                 Seat currentSeat = passenger.getSeat();
                 if (currentSeat == null || !currentSeat.getSeatId().equals(newSeatId)) {
-                    // For roundtrip bookings, pass the segmentId to handleSeatChange
-                    Long segmentIdForSeatChange = request.getSegmentId();
-                    seatCharge = handleSeatChange(booking, passenger, newSeatId, segmentIdForSeatChange);
+                    // For roundtrip bookings, pass the target segment ID to handleSeatChange
+                    seatCharge = handleSeatChange(booking, passenger, newSeatId, targetSegment.getSegmentId());
                     response.setSeatChangeCharge(seatCharge);
                     response.setNewSeatNumber(passenger.getSeat() != null ? passenger.getSeat().getSeatNumber() : null);
                     totalCharge = totalCharge.add(seatCharge);
@@ -3068,7 +3102,7 @@ public class BookingServiceImpl implements BookingService {
             } else {
                 // Seat is already assigned to this passenger for this segment, no change needed
                 log.info("Seat {} is already assigned to passenger {} for segment {}, skipping seat change",
-                        newSeatId, passenger.getPassengerId(), request.getSegmentId());
+                        newSeatId, passenger.getPassengerId(), targetSegment.getSegmentId());
             }
         }
 
@@ -3105,35 +3139,22 @@ public class BookingServiceImpl implements BookingService {
             throw new IllegalStateException("No payment found for booking. Payment must be completed before check-in.");
         }
 
-        // Get the specific segment for check-in
-        FlightSegment segment;
-        if (request.getSegmentId() != null) {
-            segment = booking.getFlightSegments().stream()
-                    .filter(s -> s.getSegmentId().equals(request.getSegmentId()))
-                    .findFirst()
-                    .orElseThrow(() -> new ResourceNotFoundException("Segment not found: " + request.getSegmentId()));
-        } else {
-            // For backward compatibility: use first available segment for single flight
-            segment = booking.getFlightSegments().get(0);
-        }
-
         // Validate segment eligibility for check-in
-        if (!canCheckInForSegment(booking, passenger, segment)) {
+        if (!canCheckInForSegment(booking, passenger, targetSegment)) {
             throw new IllegalStateException("Check-in not available for this segment at this time");
         }
 
         // Update check-in status - find segment-specific check-in record
-        Optional<CheckIn> existingCheckIn = checkinRepository.findByPassengerAndSegment(passenger, segment);
+        Optional<CheckIn> existingCheckIn = checkinRepository.findByPassengerAndSegment(passenger, targetSegment);
 
         CheckIn checkIn;
         if (existingCheckIn.isPresent()) {
             checkIn = existingCheckIn.get();
             checkIn.setStatus(CheckinStatus.COMPLETED); // Always COMPLETED since payment is validated
             checkIn.setCheckedAt(LocalDateTime.now());
-            // Update seat number from passenger's current seat
-            if (passenger.getSeat() != null) {
-                checkIn.setSeatNumber(passenger.getSeat().getSeatNumber());
-            }
+            // Update seat number for this specific segment
+            String seatNumberForSegment = getSeatNumberForPassengerAndSegment(passenger, targetSegment);
+            checkIn.setSeatNumber(seatNumberForSegment);
             // Set ticket price if not already set
             if (checkIn.getTicketPrice() == null) {
                 checkIn.setTicketPrice(booking.getTotalAmount());
@@ -3144,15 +3165,15 @@ public class BookingServiceImpl implements BookingService {
             checkIn = new CheckIn();
             checkIn.setBooking(booking);
             checkIn.setPassenger(passenger);
-            checkIn.setFlightSegment(segment); // Associate with specific segment
+            checkIn.setFlightSegment(targetSegment); // Associate with specific segment
             checkIn.setStatus(CheckinStatus.COMPLETED); // Always COMPLETED since payment is validated
             checkIn.setCheckedAt(LocalDateTime.now());
             checkIn.setActive(true);
             // Set seat number for this specific segment
-            String seatNumberForSegment = getSeatNumberForPassengerAndSegment(passenger, segment);
+            String seatNumberForSegment = getSeatNumberForPassengerAndSegment(passenger, targetSegment);
             checkIn.setSeatNumber(seatNumberForSegment);
             // Set ticket price for this segment
-            BigDecimal segmentPrice = calculatePassengerTicketPriceForSegment(passenger, segment);
+            BigDecimal segmentPrice = calculatePassengerTicketPriceForSegment(passenger, targetSegment);
             checkIn.setTicketPrice(segmentPrice);
             checkinRepository.save(checkIn);
         }

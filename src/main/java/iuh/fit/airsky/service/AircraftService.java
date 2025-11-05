@@ -11,4 +11,6 @@ public interface AircraftService {
     List<AircraftResponse> getAllAircrafts();
     AircraftResponse getAircraftById(Long id);
     Aircraft findEntityById(Long id);
+    AircraftResponse updateAircraft(Long id, AircraftRequest request);
+    void deleteAircraft(Long id);
 }

@@ -183,4 +183,8 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
             @Param("dates") List<java.time.LocalDate> dates,
             @Param("minDepartureTime") java.time.LocalDateTime minDepartureTime
     );
+
+    @Query("SELECT CASE WHEN COUNT(f) > 0 THEN true ELSE false END FROM Flight f " +
+            "WHERE f.aircraft.aircraftId = :aircraftId AND f.status = iuh.fit.airsky.enums.FlightStatus.ON_TIME")
+    boolean existsOnTimeFlightByAircraftId(@Param("aircraftId") Long aircraftId);
 }

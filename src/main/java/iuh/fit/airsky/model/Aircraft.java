@@ -46,5 +46,4 @@ public class Aircraft extends BaseFullSoftDeleteEntity {
     @NotNull
     @Pattern(regexp = "^\\d+(-\\d+)+$", message = "Seat layout must be in format like '3-3', '3-2-3', '2-4-2'")
     private String seatLayout; // ví dụ "3-3" hoặc "3-2-3"
-
 }
