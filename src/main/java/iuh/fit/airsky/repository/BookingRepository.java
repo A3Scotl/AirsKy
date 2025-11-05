@@ -91,5 +91,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
         @Param("bookingStatus") BookingStatus bookingStatus,
         @Param("paymentStatus") PaymentStatus paymentStatus
     );
+    @Query("SELECT b FROM Booking b WHERE b.flight.flightId = :flightId")
+    List<Booking> findByFlightId(@Param("flightId") Long flightId);
 
 }

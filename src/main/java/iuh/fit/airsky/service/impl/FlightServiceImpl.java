@@ -995,45 +995,48 @@ public class FlightServiceImpl implements FlightService {
         if (reason == null || reason.trim().isEmpty()) {
             throw new IllegalArgumentException("Lý do hủy là bắt buộc (ví dụ: 'Thời tiết xấu')");
         }
+
         Flight flight = flightRepository.findById(flightId)
                 .orElseThrow(() -> new ResourceNotFoundException("Flight not found"));
+
         if (flight.getStatus() == FlightStatus.DEPARTED) {
             throw new IllegalStateException("Không thể hủy chuyến bay đã khởi hành");
         }
-        // Backup old status/time
+
+        // Cập nhật trạng thái chuyến bay
         flight.setStatus(FlightStatus.CANCELLED);
         flight.setCanceledReason(reason);
         flight.setUpdatedAt(LocalDateTime.now());
-
         Flight savedFlight = flightRepository.save(flight);
 
-        // Cascade: Cancel related bookings và refund
-        List<Booking> bookings = bookingRepository.findByFlightAndStatus(flight, BookingStatus.CONFIRMED);
-        for (Booking booking : bookings) {
+        // Lấy tất cả booking liên quan
+        List<Booking> allBookings = bookingRepository.findByFlightId(flight.getFlightId());
+
+        for (Booking booking : allBookings) {
+            if (booking.getStatus() == BookingStatus.CANCELLED)
+                continue;
+
             booking.setStatus(BookingStatus.CANCELLED);
             booking.setCancellationReason("Chuyến bay " + flight.getFlightNumber() + " bị hủy: " + reason);
-            bookingRepository.save(booking);
 
             Payment payment = booking.getPayment();
             if (payment != null && payment.getStatus() == PaymentStatus.COMPLETED) {
-                // Full refund (100% cho cancel)
-                BigDecimal refundAmt = booking.getTotalAmount(); // Hoặc trừ phí hủy nếu config
+                BigDecimal refundAmt = booking.getTotalAmount();
                 payment.setStatus(PaymentStatus.REFUNDED);
                 payment.setRefundAmount(refundAmt);
                 payment.setRefundDate(LocalDateTime.now());
                 payment.setRefundReason("Hủy chuyến bay: " + reason);
                 paymentRepository.save(payment);
 
-                // Gửi email cho từng passenger (sử dụng payerBankName trong nội dung)
-                if (booking.getUserId() != null || !booking.getPassengers().isEmpty()) {
-                    eventPublisher.publishEvent(new BookingCancelledEvent(this, booking, reason));
-                }
-                // bookingService.refundPointsForCancelledBooking(booking);
+                eventPublisher.publishEvent(new BookingCancelledEvent(this, booking, reason));
             }
+
+            bookingRepository.save(booking);
         }
 
         log.info("Flight {} ({} ) cancelled: Reason={}, Affected bookings: {}",
-                flightId, flight.getFlightNumber(), reason, bookings.size());
+                flightId, flight.getFlightNumber(), reason, allBookings.size());
+
         return flightMapper.toResponseDTO(savedFlight);
     }
 
@@ -1093,24 +1096,28 @@ public class FlightServiceImpl implements FlightService {
             booking.setUpdatedAt(LocalDateTime.now());
             bookingRepository.save(booking);
 
-            // // Notify: Gửi email cho từng passenger (tương tự cancel, nhưng cho delay)
+
             // if (booking.getUserId() != null || !booking.getPassengers().isEmpty()) {
-            //     String delayInfo = String.format("Chuyến bay %s bị delay %d phút, khởi hành mới lúc %s.",
-            //             savedFlight.getFlightNumber(), delayMinutes,
-            //             newDepartureTime.format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy"))); // Ví dụ: 05/11/2025
-            //     emailService.sendDelayEmail(booking, reason, delayInfo); // Giả sử method này tồn tại, tương tự
-            //                                                              // sendCancellationEmail
-            //     // Hoặc publish event mới: eventPublisher.publishEvent(new
-            //     // BookingDelayedEvent(this, booking, reason, delayInfo));
+            // String delayInfo = String.format("Chuyến bay %s bị delay %d phút, khởi hành
+            // mới lúc %s.",
+            // savedFlight.getFlightNumber(), delayMinutes,
+            // newDepartureTime.format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy"))); //
+            // Ví dụ: 05/11/2025
+            // emailService.sendDelayEmail(booking, reason, delayInfo); // Giả sử method này
+            // tồn tại, tương tự
+            // // sendCancellationEmail
+            // // Hoặc publish event mới: eventPublisher.publishEvent(new
+            // // BookingDelayedEvent(this, booking, reason, delayInfo));
             // }
             // Không hoàn points/deals vì không hủy
         }
 
-        // Log và return RA NGOÀI LOOP (sửa lỗi return early)
         log.info(
                 "Flight {} ({}) delayed on {}: Reason={}, New Departure={}, Delay Minutes={}, Affected bookings: {}",
                 flightId, savedFlight.getFlightNumber(), LocalDateTime.now(), reason, newDepartureTime,
                 delayMinutes, bookings.size()); // Di chuyển ra ngoài loop
         return flightMapper.toResponseDTO(savedFlight); // Di chuyển ra ngoài loop
     }
+
+    
 }
