@@ -16,6 +16,7 @@ import iuh.fit.airsky.service.UserBehaviorTrackingService;
 import iuh.fit.airsky.service.UserService;
 import iuh.fit.airsky.util.ApiResponseUtil;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -404,5 +405,34 @@ public class FlightController {
             ex.printStackTrace();
             return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "So sánh giá vé thất bại", ex.getMessage(), "/api/v1/flights/compare-prices");
         }
+    }
+    /**
+     * Hủy chuyến bay với lý do bắt buộc.
+     * @param flightId ID chuyến bay.
+     * @param reason Lý do hủy (bắt buộc).
+     * @return FlightResponse cập nhật (status = CANCELLED).
+     */
+    @PostMapping("/{flightId}/cancel")
+    public ResponseEntity<FlightResponse> cancelFlight(
+            @PathVariable Long flightId,
+            @RequestParam @NotBlank(message = "Lý do hủy không được để trống") String reason) {
+        FlightResponse response = flightService.cancelFlight(flightId, reason);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Delay chuyến bay với lý do và thời gian mới bắt buộc.
+     * @param flightId ID chuyến bay.
+     * @param reason Lý do delay (bắt buộc).
+     * @param newDepartureTime Thời gian khởi hành mới (ISO format: yyyy-MM-ddTHH:mm:ss).
+     * @return FlightResponse cập nhật (status = DELAYED, departureTime mới).
+     */
+    @PostMapping("/{flightId}/delay")
+    public ResponseEntity<FlightResponse> delayFlight(
+            @PathVariable Long flightId,
+            @RequestParam @NotBlank(message = "Lý do delay không được để trống") String reason,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime newDepartureTime) {
+        FlightResponse response = flightService.delayFlight(flightId, reason, newDepartureTime);
+        return ResponseEntity.ok(response);
     }
 }

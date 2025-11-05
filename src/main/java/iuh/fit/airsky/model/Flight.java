@@ -15,22 +15,21 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Entity
-@Table(name = "flights",
-        indexes = {
-                @Index(name = "idx_flight_number", columnList = "flight_number"),
-                @Index(name = "idx_airline", columnList = "airline_id"),
-                @Index(name = "idx_departure_airport", columnList = "departure_airport_id"),
-                @Index(name = "idx_arrival_airport", columnList = "arrival_airport_id"),
-                @Index(name = "idx_flight_status", columnList = "status"),
-                @Index(name = "idx_departure_arrival", columnList = "departure_airport_id,arrival_airport_id")
+@Table(name = "flights", indexes = {
+        @Index(name = "idx_flight_number", columnList = "flight_number"),
+        @Index(name = "idx_airline", columnList = "airline_id"),
+        @Index(name = "idx_departure_airport", columnList = "departure_airport_id"),
+        @Index(name = "idx_arrival_airport", columnList = "arrival_airport_id"),
+        @Index(name = "idx_flight_status", columnList = "status"),
+        @Index(name = "idx_departure_arrival", columnList = "departure_airport_id,arrival_airport_id")
 
-        })
+})
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Flight  extends BaseAuditOnlyEntity {
+public class Flight extends BaseAuditOnlyEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -78,11 +77,11 @@ public class Flight  extends BaseAuditOnlyEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(length = 50)
-    private FlightStatus status;//    ON_TIME,DELAYED,CANCELLED
+    private FlightStatus status;// ON_TIME,DELAYED,CANCELLED
 
     @Enumerated(EnumType.STRING)
     @Column(length = 50)
-    private FlightType type;//    DOMESTIC , INTERNATIONAL
+    private FlightType type;// DOMESTIC , INTERNATIONAL
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "aircraft_id")
@@ -98,6 +97,14 @@ public class Flight  extends BaseAuditOnlyEntity {
     @Version
     @Builder.Default
     private Integer version = 0;
+
+    @Column(name = "canceled_reason", length = 500)
+    private String canceledReason;
+    @Column(name = "delayed_reason", length = 500)
+    private String delayedReason;
+
+    @Column(name = "new_departure_time")
+    private LocalDateTime newDepartureTime;
 
     @OneToMany(mappedBy = "flight", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JsonManagedReference

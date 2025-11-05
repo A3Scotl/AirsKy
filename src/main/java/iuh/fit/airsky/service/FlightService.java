@@ -57,4 +57,7 @@ public interface FlightService {
 
     // So sánh giá vé các chuyến bay (one-way, roundtrip, multicity)
     Map<String, Object> compareFlightPrices(Map<String, Object> params);
+
+    FlightResponse cancelFlight(Long flightId, String reason);
+    FlightResponse delayFlight(Long flightId, String reason,LocalDateTime newDepartureTime);
 }
