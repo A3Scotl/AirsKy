@@ -75,6 +75,8 @@ public class SecurityConfig {
             "/websocket-test.html",
             "/api/v1/points-redemption/**",
             "/api/v1/analytics/**",
+            "/api/v1/health"
+
     };
     private static final String[] PERMISION_ROUTES = {
             "/api/v1/auth/change-password",
