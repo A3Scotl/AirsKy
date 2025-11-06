@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head><title>Hủy Vé</title></head>
+<body>
+    <h3>Xin chào ${contactName},</h3>
+    <p>Chúng tôi rất tiếc phải thông báo rằng đặt vé <b>${bookingCode}</b> của bạn đã bị hủy.</p>
+    <h4>Lý Do Hủy:</h4>
+    <p><b>${cancellationReason}</b></p>
+    <p>Hủy lúc: <b>${cancellationDate}</b> (05/11/2025 nếu hiện tại).</p>
+    
+    <h4>Thông Tin Chuyến Bay Bị Hủy:</h4>
+    <#list flightSegments as segment>
+        <p>Chuyến: ${segment.flightNumber} | Khởi hành: ${segment.departureTime} từ ${segment.departureAirport} | Đến: ${segment.arrivalTime} tại ${segment.arrivalAirport}</p>
+    </#list>
+    
+    <h4>Danh Sách Hành Khách:</h4>
+    <#list passengers as passenger>
+        <p>- ${passenger.firstName} ${passenger.lastName} (CMND/Hộ chiếu: ${passenger.passportNumber?if_exists})</p>
+    </#list>
+    
+    <h4>Hoàn Tiền:</h4>
+    <p>Số tiền hoàn: <b>${refundAmount}</b></p>
+    <p>Phương thức: ${paymentMethod}</p>
+    <p>${bankInfo}  (Hoàn tiền sẽ được xử lý thủ công trong 7-10 ngày làm việc).</p>
+    
+    <p>Nếu bạn có thắc mắc, vui lòng liên hệ hỗ trợ@airsky.com.</p>
+    <p>Trân trọng,<br/>AirSky Team</p>
+</body>
+</html>
