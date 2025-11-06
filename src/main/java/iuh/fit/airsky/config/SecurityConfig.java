@@ -82,8 +82,10 @@ public class SecurityConfig {
             "/api/v1/auth/change-password",
             "/api/v1/auth/profile/me"
     };
+
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, CustomAuthExceptionHandler customHandler) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, CustomAuthExceptionHandler customHandler)
+            throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
@@ -97,8 +99,7 @@ public class SecurityConfig {
                         .requestMatchers(PUBLIC_ROUTES).permitAll()
                         .requestMatchers(PERMISION_ROUTES)
                         .hasAnyRole("BUSINESS", "CUSTOMER", "ADMIN")
-                        .anyRequest().authenticated()
-                )
+                        .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -108,7 +109,10 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
 
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("https://www.airsky.online"));
+        config.setAllowedOrigins(List.of(
+                "https://www.airsky.online",
+                "http://localhost:5173" // Thêm dòng này
+        ));
         config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
         config.setAllowCredentials(true);
