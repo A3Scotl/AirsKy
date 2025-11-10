@@ -24,7 +24,7 @@ public class ReviewController {
     private final ReviewService reviewService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'BUSINESS')")
+    // @PreAuthorize("hasAnyRole('CUSTOMER', 'BUSINESS')")
     public ResponseEntity<ApiResponse<ReviewResponse>> createReview(@RequestBody ReviewRequest request) {
         ReviewResponse review = reviewService.createReview(request);
         return ApiResponseUtil.buildResponse(true, "Review created successfully", review, "/api/reviews");

@@ -10,7 +10,7 @@ import iuh.fit.airsky.model.User;
 import iuh.fit.airsky.repository.BookingRepository;
 import iuh.fit.airsky.service.CloudinaryService;
 import iuh.fit.airsky.service.DealService;
-import iuh.fit.airsky.service.UserBehaviorTrackingService;
+
 import iuh.fit.airsky.service.UserService;
 import iuh.fit.airsky.util.ApiResponseUtil;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +37,7 @@ public class DealController {
 
     private final DealService dealService;
     private final UserService userService;
-    private final UserBehaviorTrackingService behaviorTrackingService;
+    
     private final CloudinaryService cloudinaryService;
     private final BookingRepository bookingRepository;
 
@@ -301,7 +301,7 @@ public class DealController {
                 dealData.put("discountApplied", response.getDiscountAmount());
                 dealData.put("finalAmount", response.getFinalAmount());
                 
-                behaviorTrackingService.trackDealApplication(user.getId(), sessionId, dealData);
+              
             } catch (Exception trackingEx) {
                 log.warn("Failed to track deal application behavior", trackingEx);
                 // Don't fail the deal application if tracking fails

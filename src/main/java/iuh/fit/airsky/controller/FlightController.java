@@ -12,7 +12,7 @@ import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.exception.ResourceNotFoundException;
 import iuh.fit.airsky.service.FlightService;
 import iuh.fit.airsky.service.SeatService;
-import iuh.fit.airsky.service.UserBehaviorTrackingService;
+
 import iuh.fit.airsky.service.UserService;
 import iuh.fit.airsky.util.ApiResponseUtil;
 import jakarta.validation.Valid;
@@ -44,13 +44,13 @@ public class FlightController {
 
     private final FlightService flightService;
     private final SeatService seatService;
-    private final UserBehaviorTrackingService behaviorTrackingService;
+ 
     private final UserService userService;
 
-    public FlightController(FlightService flightService, SeatService seatService, UserBehaviorTrackingService behaviorTrackingService, UserService userService) {
+    public FlightController(FlightService flightService, SeatService seatService, UserService userService) {
         this.flightService = flightService;
         this.seatService = seatService;
-        this.behaviorTrackingService = behaviorTrackingService;
+        
         this.userService = userService;
     }
 
@@ -348,8 +348,7 @@ public class FlightController {
                         searchData.put("infantCount", request.getInfantCount());
                         searchData.put("travelClass", request.getTravelClass());
 
-                        // Track the search
-                        behaviorTrackingService.trackSearch(userId, sessionId, searchData);
+                     
                     }
                 }
             } catch (Exception trackingEx) {

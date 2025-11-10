@@ -2207,6 +2207,25 @@ public class BookingServiceImpl implements BookingService {
                     try {
                         SeatTypePrice seatTypePrice = SeatTypePrice.fromSeatType(seat.getType());
                         BigDecimal additionalPrice = seatTypePrice.getAdditionalPrice();
+
+                        // Check if this is a premium seat (EXTRA_LEGROOM or FRONT_ROW) for Business/First class
+                        // or ACCESSIBLE seat for First class
+                        boolean isPremiumSeat = seat.getType() == SeatTypes.EXTRA_LEGROOM || seat.getType() == SeatTypes.FRONT_ROW;
+                        boolean isFirstClass = booking.getTravelClass() != null &&
+                                "First".equalsIgnoreCase(booking.getTravelClass().getClassName());
+                        boolean isPremiumClass = booking.getTravelClass() != null &&
+                                ("Business".equalsIgnoreCase(booking.getTravelClass().getClassName()) ||
+                                 isFirstClass);
+
+                        // Premium seats are free for Business/First class passengers
+                        // ACCESSIBLE seats are free for First class passengers
+                        if ((isPremiumSeat && isPremiumClass) || (seat.getType() == SeatTypes.ACCESSIBLE && isFirstClass)) {
+                            additionalPrice = BigDecimal.ZERO;
+                            log.debug("Seat {} is free for {} class passenger {} (segment {})",
+                                    seat.getType(), booking.getTravelClass().getClassName(),
+                                    passenger.getFirstName(), assignment.getFlightSegment().getSegmentOrder());
+                        }
+
                         totalSeatTypeAmount = totalSeatTypeAmount.add(additionalPrice);
                         log.debug("Applied seat type {} with price {} for passenger {} (segment {})",
                                 seat.getType(), additionalPrice, passenger.getFirstName(),
@@ -2235,6 +2254,21 @@ public class BookingServiceImpl implements BookingService {
                 if (seat != null && seat.getType() != null && segment != null) {
                     SeatTypePrice seatTypePrice = SeatTypePrice.fromSeatType(seat.getType());
                     BigDecimal additionalPrice = seatTypePrice.getAdditionalPrice();
+
+                    // Check if this is a premium seat (EXTRA_LEGROOM or FRONT_ROW) for Business/First class
+                    // or ACCESSIBLE seat for First class
+                    boolean isPremiumSeat = seat.getType() == SeatTypes.EXTRA_LEGROOM || seat.getType() == SeatTypes.FRONT_ROW;
+                    boolean isFirstClass = booking.getTravelClass() != null &&
+                            "First".equalsIgnoreCase(booking.getTravelClass().getClassName());
+                    boolean isPremiumClass = booking.getTravelClass() != null &&
+                            ("Business".equalsIgnoreCase(booking.getTravelClass().getClassName()) ||
+                             isFirstClass);
+
+                    // Premium seats are free for Business/First class passengers
+                    // ACCESSIBLE seats are free for First class passengers
+                    if ((isPremiumSeat && isPremiumClass) || (seat.getType() == SeatTypes.ACCESSIBLE && isFirstClass)) {
+                        additionalPrice = BigDecimal.ZERO;
+                    }
 
                     totalSeatTypeAmount = totalSeatTypeAmount.add(additionalPrice);
 
@@ -3541,7 +3575,24 @@ public class BookingServiceImpl implements BookingService {
         if (seat == null)
             return BigDecimal.ZERO;
 
-        // Use the predefined seat type pricing from enum
+        // Check if this is a Business or First class seat with premium type
+        // Premium seats (EXTRA_LEGROOM, FRONT_ROW) are included in Business/First class fare
+        // ACCESSIBLE seats are included in First class fare
+        if (seat.getTravelClass() != null) {
+            String className = seat.getTravelClass().getClassName();
+            boolean isFirstClass = "First".equalsIgnoreCase(className);
+            if (("Business".equalsIgnoreCase(className) || isFirstClass) &&
+                (seat.getType() == SeatTypes.EXTRA_LEGROOM || seat.getType() == SeatTypes.FRONT_ROW)) {
+                // Premium seats are free for Business/First class passengers
+                return BigDecimal.ZERO;
+            }
+            if (isFirstClass && seat.getType() == SeatTypes.ACCESSIBLE) {
+                // ACCESSIBLE seats are free for First class passengers
+                return BigDecimal.ZERO;
+            }
+        }
+
+        // Use the predefined seat type pricing from enum for Economy or non-premium seats
         SeatTypePrice seatTypePrice = SeatTypePrice.fromSeatType(seat.getType());
         return seatTypePrice.getAdditionalPrice();
     }

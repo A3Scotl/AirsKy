@@ -3,11 +3,15 @@ package iuh.fit.airsky.dto.request;
 import iuh.fit.airsky.enums.TripType;
 import jakarta.validation.constraints.*;
 import lombok.Data;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class FlightSearchRequest {
     @NotNull(message = "Trip type is required")
     private TripType tripType;
@@ -25,6 +29,10 @@ public class FlightSearchRequest {
     // Travel class (optional, defaults to ECONOMY)
     private String travelClass = "ECONOMY"; // ECONOMY, BUSINESS, PREMIUM_ECONOMY, FIRST_CLASS
 
+    // Support for frontend "passengers" field (alternative to individual counts)
+    @JsonProperty("passengers")
+    private Map<String, Integer> passengers;
+
     // Unified fields for all trip types (required for ONE_WAY and ROUND_TRIP)
     private Long departureAirportId;
 
@@ -41,6 +49,23 @@ public class FlightSearchRequest {
 
     // Derived segments for processing (filled by backend or client based on trip type)
     private List<SearchSegment> segments;
+
+    // Support for frontend "passengers" field mapping
+    @JsonProperty("passengers")
+    public void setPassengers(Map<String, Integer> passengers) {
+        this.passengers = passengers;
+        if (passengers != null) {
+            if (passengers.containsKey("adults")) {
+                this.adultCount = passengers.get("adults");
+            }
+            if (passengers.containsKey("children")) {
+                this.childCount = passengers.get("children");
+            }
+            if (passengers.containsKey("infants")) {
+                this.infantCount = passengers.get("infants");
+            }
+        }
+    }
 
     @AssertTrue(message = "Outbound departure date must be today or in the future")
     public boolean isValidOutboundDate() {
@@ -61,7 +86,7 @@ public class FlightSearchRequest {
                 if (departureAirportId == null || arrivalAirportId == null || outboundDepartureDate == null) {
                     return false;
                 }
-                if (departureAirportId.equals(arrivalAirportId)) {
+                if (departureAirportId != null && arrivalAirportId != null && departureAirportId.equals(arrivalAirportId)) {
                     return false; // Prevent same airport
                 }
                 // Construct segments for one-way
@@ -73,10 +98,10 @@ public class FlightSearchRequest {
                 if (departureAirportId == null || arrivalAirportId == null || outboundDepartureDate == null || returnDate == null) {
                     return false;
                 }
-                if (departureAirportId.equals(arrivalAirportId)) {
+                if (departureAirportId != null && arrivalAirportId != null && departureAirportId.equals(arrivalAirportId)) {
                     return false; // Prevent same airport
                 }
-                if (!returnDate.isAfter(outboundDepartureDate)) {
+                if (returnDate != null && outboundDepartureDate != null && !returnDate.isAfter(outboundDepartureDate)) {
                     return false; // Return date must be after outbound
                 }
                 // Construct segments for round-trip
@@ -95,7 +120,8 @@ public class FlightSearchRequest {
                     seg.getDepartureAirportId() != null &&
                     seg.getArrivalAirportId() != null &&
                     seg.getDepartureDate() != null &&
-                    !seg.getDepartureAirportId().equals(seg.getArrivalAirportId())
+                    (seg.getDepartureAirportId() == null || seg.getArrivalAirportId() == null ||
+                     !seg.getDepartureAirportId().equals(seg.getArrivalAirportId()))
                 );
             default:
                 return false;
