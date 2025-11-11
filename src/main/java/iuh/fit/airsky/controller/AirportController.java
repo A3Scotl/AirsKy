@@ -1,0 +1,140 @@
+package iuh.fit.airsky.controller;
+
+import iuh.fit.airsky.dto.request.AirportRequest;
+import iuh.fit.airsky.dto.response.AirportResponse;
+import iuh.fit.airsky.dto.response.ApiResponse;
+import iuh.fit.airsky.dto.response.PageResponse;
+import iuh.fit.airsky.exception.ResourceNotFoundException;
+import iuh.fit.airsky.service.AirportService;
+import iuh.fit.airsky.service.CloudinaryService;
+import iuh.fit.airsky.util.ApiResponseUtil;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+
+@Slf4j
+@RestController
+@RequestMapping("/api/v1/airports")
+@RequiredArgsConstructor
+public class AirportController {
+
+    private final AirportService airportService;
+    private final CloudinaryService cloudinaryService;
+
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<AirportResponse>> getAirport(@PathVariable Long id) {
+        try {
+            return airportService.findById(id)
+                    .map(response -> ApiResponseUtil.buildResponse(true, "Airport retrieved successfully", response, "/api/v1/airports/" + id))
+                    .orElseGet(() -> ApiResponseUtil.buildErrorResponse(HttpStatus.NOT_FOUND, "Airport not found", "RESOURCE_NOT_FOUND", "/api/v1/airports/" + id));
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Retrieval failed", ex.getMessage(), "/api/v1/airports/" + id);
+        }
+    }
+
+    @GetMapping
+    public ResponseEntity<ApiResponse<PageResponse<AirportResponse>>> getAllAirports(Pageable pageable) {
+        try {
+            PageResponse<AirportResponse> response = airportService.findAll(pageable);
+            return ApiResponseUtil.buildResponse(true, "Airports retrieved successfully", response, "/api/v1/airports");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Retrieval failed", ex.getMessage(), "/api/v1/airports");
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
+    public ResponseEntity<ApiResponse<Void>> deleteAirport(@PathVariable Long id) {
+        try {
+            airportService.softDelete(id);
+            return ApiResponseUtil.buildResponse(true, "Airport soft deleted successfully", null, "/api/v1/airports/" + id);
+        } catch (ResourceNotFoundException ex) {
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), "RESOURCE_NOT_FOUND", "/api/v1/airports/" + id);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Deletion failed", ex.getMessage(), "/api/v1/airports/" + id);
+        }
+    }
+
+    @PostMapping(consumes = {"multipart/form-data"})
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
+    public ResponseEntity<ApiResponse<AirportResponse>> createAirportWithImage(
+            @ModelAttribute AirportRequest request,
+            @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail) {
+        try {
+            if (thumbnail != null && !thumbnail.isEmpty()) {
+                String imageUrl = cloudinaryService.uploadFile(thumbnail);
+                request.setThumbnailUrl(imageUrl); // Gán lại url ảnh upload vào request
+                log.info("Thumbnail uploaded successfully: {}", imageUrl);
+            }
+            // Validate các trường cần thiết
+            if (request.getAirportCode() == null || request.getAirportCode().trim().isEmpty()) {
+                return ApiResponseUtil.buildResponse(false, "Mã sân bay không được để trống", null, "/api/v1/airports/upload");
+            }
+            if (request.getAirportName() == null || request.getAirportName().trim().isEmpty()) {
+                return ApiResponseUtil.buildResponse(false, "Tên sân bay không được để trống", null, "/api/v1/airports/upload");
+            }
+
+            AirportResponse response = airportService.createAirport(request);
+            return ApiResponseUtil.buildResponse(true, "Tạo sân bay thành công", response, "/api/v1/airports/upload");
+        } catch (Exception e) {
+            log.error("Error creating airport with image", e);
+            return ApiResponseUtil.buildResponse(false, "Có lỗi xảy ra khi tạo sân bay: " + e.getMessage(), null, "/api/v1/airports/upload");
+        }
+    }
+
+    @PutMapping(value = "/{id}", consumes = {"multipart/form-data"})
+    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
+    public ResponseEntity<ApiResponse<AirportResponse>> updateAirportWithImage(
+            @PathVariable Long id,
+            @ModelAttribute AirportRequest request,
+            @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail,
+            @RequestParam(value = "existingThumbnail", required = false) String existingThumbnail) {
+        try {
+            // Xử lý ảnh: nếu upload file thì set lại thumbnailUrl, nếu không thì giữ nguyên thumbnailUrl hoặc lấy existingThumbnail
+            if (thumbnail != null && !thumbnail.isEmpty()) {
+                String imageUrl = cloudinaryService.uploadFile(thumbnail);
+                request.setThumbnailUrl(imageUrl);
+                log.info("Thumbnail uploaded successfully: {}", imageUrl);
+            } else if ((request.getThumbnailUrl() == null || request.getThumbnailUrl().trim().isEmpty())
+                    && existingThumbnail != null && !existingThumbnail.trim().isEmpty()) {
+                request.setThumbnailUrl(existingThumbnail);
+            }
+            // Validate các trường cần thiết
+            if (request.getAirportCode() == null || request.getAirportCode().trim().isEmpty()) {
+                return ApiResponseUtil.buildResponse(false, "Mã sân bay không được để trống", null, "/api/v1/airports/" + id + "/upload");
+            }
+            if (request.getAirportName() == null || request.getAirportName().trim().isEmpty()) {
+                return ApiResponseUtil.buildResponse(false, "Tên sân bay không được để trống", null, "/api/v1/airports/" + id + "/upload");
+            }
+
+            AirportResponse response = airportService.updateAirport(id, request);
+            return ApiResponseUtil.buildResponse(true, "Cập nhật sân bay thành công", response, "/api/v1/airports/" + id + "/upload");
+        } catch (ResourceNotFoundException e) {
+            return ApiResponseUtil.buildResponse(false, e.getMessage(), null, "/api/v1/airports/" + id + "/upload");
+        } catch (Exception e) {
+            log.error("Error updating airport with image", e);
+            return ApiResponseUtil.buildResponse(false, "Có lỗi xảy ra khi cập nhật sân bay: " + e.getMessage(), null, "/api/v1/airports/" + id + "/upload");
+        }
+    }
+
+    @GetMapping("/code/{airportCode}")
+    public ResponseEntity<ApiResponse<AirportResponse>> getAirportByCode(@PathVariable String airportCode) {
+        try {
+            return airportService.findByAirportCode(airportCode)
+                    .map(response -> ApiResponseUtil.buildResponse(true, "Airport retrieved successfully", response, "/api/v1/airports/code/" + airportCode))
+                    .orElseGet(() -> ApiResponseUtil.buildErrorResponse(HttpStatus.NOT_FOUND, "Airport not found", "RESOURCE_NOT_FOUND", "/api/v1/airports/code/" + airportCode));
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ApiResponseUtil.buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Retrieval failed", ex.getMessage(), "/api/v1/airports/code/" + airportCode);
+        }
+    }
+}

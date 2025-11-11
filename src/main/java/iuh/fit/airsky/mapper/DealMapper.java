@@ -1,0 +1,43 @@
+package iuh.fit.airsky.mapper;
+
+import iuh.fit.airsky.dto.request.DealRequest;
+import iuh.fit.airsky.dto.response.DealResponse;
+import iuh.fit.airsky.model.Deal;
+
+import java.util.List;
+
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+
+@Mapper(componentModel = "spring")
+public interface DealMapper {
+    
+    @Mapping(target = "dealId", ignore = true)
+    @Mapping(target = "departureAirport", ignore = true)
+    @Mapping(target = "arrivalAirport", ignore = true)
+    @Mapping(target = "usedCount", ignore = true)
+    @Mapping(target = "totalUsageLimit", expression = "java(dto.getTotalUsageLimit() != null ? dto.getTotalUsageLimit() : dto.getUsageLimit())")
+    @Mapping(target = "isGuestOnly", source = "isGuestOnly")
+    @Mapping(target = "requiredLoyaltyTier", source = "requiredLoyaltyTier")
+    @Mapping(target = "isLoyaltyExclusive", source = "isLoyaltyExclusive")
+    Deal toEntity(DealRequest dto);
+
+    @Mapping(target = "departureAirportId", source = "departureAirport.airportId")
+    @Mapping(target = "departureAirportName", source = "departureAirport.airportName")
+    @Mapping(target = "departureAirportCode", source = "departureAirport.airportCode")
+    @Mapping(target = "arrivalAirportId", source = "arrivalAirport.airportId")
+    @Mapping(target = "arrivalAirportName", source = "arrivalAirport.airportName")
+    @Mapping(target = "arrivalAirportCode", source = "arrivalAirport.airportCode")
+    @Mapping(target = "remainingUsage", expression = "java(entity.getTotalUsageLimit() != null && entity.getUsedCount() != null ? entity.getTotalUsageLimit() - entity.getUsedCount() : 0)")
+
+    @Mapping(target = "status", expression = "java(iuh.fit.airsky.mapper.DealMapperUtils.calculateStatus(entity))")
+    @Mapping(target = "isGuestOnly", source = "isGuestOnly")
+    @Mapping(target = "requiredLoyaltyTier", source = "requiredLoyaltyTier")
+    @Mapping(target = "isLoyaltyExclusive", source = "isLoyaltyExclusive")
+    @Mapping(target = "pointsRequired", source = "pointsRequired")
+    @Mapping(target = "isPointsRedemption", source = "isPointsRedemption")
+    @Mapping(target = "fixedDiscountAmount", source = "fixedDiscountAmount")
+    DealResponse toResponseDTO(Deal entity);
+
+    List<DealResponse> toResponseDTOList(List<Deal> deals);
+}

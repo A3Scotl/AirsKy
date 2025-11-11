@@ -10,5 +10,6 @@ package iuh.fit.airsky.service;
 public interface JwtService {
 
     String generateAccessToken(String email, String role);
+    String generateAccessToken(Long userId, String email, String role); // Thêm hàm này để sinh token có id
     String generateRefreshToken(String email);
 }

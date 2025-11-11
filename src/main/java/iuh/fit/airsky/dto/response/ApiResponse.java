@@ -1,4 +1,5 @@
 package iuh.fit.airsky.dto.response;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -13,6 +14,7 @@ public class ApiResponse<T> {
     private String message;
     private T data;
     private String error;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ssXXX")
     private ZonedDateTime timestamp;
     private String path;
 }

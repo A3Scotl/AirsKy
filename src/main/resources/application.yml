@@ -2,15 +2,42 @@ spring:
   application:
     name: AirsKy
   datasource:
-    url: jdbc:mariadb://localhost:3306/fly
-    username: root
-    password: root
-    driver-class-name: org.mariadb.jdbc.Driver
-#  datasource:
-#    url: ${DB_URL}
-#    username: ${DB_USERNAME}
-#    password: ${DB_PASSWORD}
-#    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://mysql-a5364d8-nkha3561.j.aivencloud.com:17244/defaultdb?ssl-mode=REQUIRED
+    username: avnadmin
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+      connection-timeout: 60000
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
+      validation-timeout: 5000
+      connection-test-query: SELECT 1
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+  mvc:
+    dispatch-options-request: true
+  web:
+    resources:
+      add-mappings: true # test websocket in web
+      static-locations: classpath:/static/, file:./
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+      file-size-threshold: 2KB
+  #  redis:
+  #    host: localhost
+  #    port: 6379
+  #    password:
+  #  datasource:
+  #    url: ${DB_URL}
+  #    username: ${DB_USERNAME}
+  #    password: ${DB_PASSWORD}
+  #    driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
       ddl-auto: update
@@ -19,13 +46,14 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
         ssl: true
+  #        globally_quoted_identifiers: true
+  freemarker:
+    template-loader-path: classpath:/email
+    charset: UTF-8
+    enabled: true
   sql:
     init:
       mode: always
-  data:
-    redis:
-      host: localhost
-      port: 6379
   mail:
     host: smtp.gmail.com
     port: 587
@@ -55,3 +83,46 @@ cloudinary:
 #recaptcha:
 #  secret: ${RECAPTCHA_SECRET_KEY}
 
+# application.yml
+google:
+  client-id: ${GOOGLE_CLIENT_ID}
+
+logging:
+  level:
+    iuh.fit.airsky.service.impl: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+# PayPal Configuration
+paypal:
+  client-id: ${PAYPAL_CLIENT_ID:}
+  client-secret: ${PAYPAL_CLIENT_SECRET:}
+  mode: ${PAYPAL_MODE:sandbox} # or 'live' for production
+  success-url-web: ${PAYPAL_SUCCESS_URL_WEB:https://www.airsky.online/payment-success}
+  cancel-url-web: ${PAYPAL_CANCEL_URL_WEB:https://www.airsky.online/payment-cancel}
+  success-url-mobile: ${PAYPAL_SUCCESS_URL_MOBILE:exp://192.168.1.87:8081/--/payment-result}
+  cancel-url-mobile: ${PAYPAL_CANCEL_URL_MOBILE:exp://192.168.1.87:8081/--/payment-result}
+
+# sepay Configuration
+sepay:
+  api-key: FRT7YMJW2CP268P567ULDTN1XZBYI3QQGYP8USUF1HV3WCFUGJ0XMLGLRMMSEWDP
+  qr:
+    account: "0964133949" # số tài khoản nhận tiền
+    bank: "MBBank" # mã ngân hàng
+    template: "compact"
+
+# Application URL
+app:
+  url: ${APP_URL:http://localhost:8080}
+  boarding-pass:
+    storage-path: ${BOARDING_PASS_STORAGE_PATH:boarding-passes}
+    base-url: ${BOARDING_PASS_BASE_URL:http://localhost:8080/api/v1/boarding-passes}
+
+# Data Mining Service Configuration
+data-mining:
+  service:
+    url: ${DATA_MINING_SERVICE_URL:http://localhost:5000}
+    timeout: 30000 # 30 seconds timeout for API calls
+    retry:
+      max-attempts: 3
+      backoff-multiplier: 2.0

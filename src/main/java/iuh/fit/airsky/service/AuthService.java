@@ -13,8 +13,9 @@ package iuh.fit.airsky.service;
  * @version 1.0
  */
 
-import iuh.fit.airsky.dto.request.*;
+import iuh.fit.airsky.dto.request.auth.*;
 import iuh.fit.airsky.dto.response.AuthResponse;
+import iuh.fit.airsky.dto.response.UserResponse;
 
 public interface AuthService {
     AuthResponse register(RegisterRequest request);
@@ -24,5 +25,6 @@ public interface AuthService {
     AuthResponse resetPassword(ResetPasswordRequest request);
     AuthResponse changePassword(ChangePasswordRequest request);
     AuthResponse verifyRegistration(VerifyOtpRequest request);
+    UserResponse getUserByEmail(String email);
 
 }

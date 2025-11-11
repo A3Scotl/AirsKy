@@ -11,5 +11,7 @@ package iuh.fit.airsky.service;
  * @version 1.0
 */
 public interface EmailService {
-    void sendVerificationEmail(String to, String subject, String body);
+    void sendEmail(String to, String subject, String body);
+    void sendHtmlTemplateEmail(String to, String subject, String templateName, Object model);
+    void sendReviewInvitationEmail(String to, String userName, Long bookingId, String flightNumber);
 }

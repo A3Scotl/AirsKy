@@ -1,4 +1,3 @@
-
 /*
  * @ (#) SecurityConfig.java 1.0 7/12/2025
  *
@@ -21,11 +20,16 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.List;
 
 /*
  * @description: Security configuration for JWT-based authentication and CORS
@@ -40,9 +44,51 @@ import java.util.Arrays;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private static final String[] PUBLIC_ROUTES = {
+            "/api/v1/auth/login",
+            "/api/v1/auth/logout",
+            "/api/v1/auth/register",
+            "/api/v1/auth/forgot-password",
+            "/api/v1/auth/resend-verification",
+            "/api/v1/auth/verify-registration",
+            "/api/v1/auth/reset-password",
+            "/api/v1/auth/google-login",
+            "/api/v1/airports/**",
+            "/api/v1/flights/**",
+            "/api/v1/countries/**",
+            "/api/v1/airlines/**",
+            "/api/v1/bookings/**",
+            "/api/v1/aircrafts/**",
+            "/api/v1/deals/**",
+            "/api/v1/blogs/**",
+            "/api/v1/categories/**",
+            "/api/v1/blog-likes/**",
+            "/api/v1/travel-classes/**",
+            "/api/v1/users/**",
+            "/api/v1/checkins/**",
+
+            "/api/v1/reviews/**",
+            "/api/v1/payments/**",
+            "/api/v1/notifications/**",
+            "/api/v1/gates/**",
+            "/api/v1/ancillary-services/**",
+            "/api/v1/boarding-passes/**",
+            "/api/v1/loyalty/**",
+            "/ws/**",
+            "/websocket-test.html",
+            "/api/v1/points-redemption/**",
+            "/api/v1/analytics/**",
+            "/api/v1/health"
+
+    };
+    private static final String[] PERMISION_ROUTES = {
+            "/api/v1/auth/change-password",
+            "/api/v1/auth/profile/me"
+    };
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, CustomAuthExceptionHandler customHandler) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, CustomAuthExceptionHandler customHandler)
+            throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
@@ -52,17 +98,11 @@ public class SecurityConfig {
                         .accessDeniedHandler(customHandler) // xử lý 403
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                "/api/v1/auth/login",
-                                "/api/v1/auth/logout",
-                                "/api/v1/auth/register",
-                                "/api/v1/auth/forgot-password",
-                                "/api/v1/auth/resend-verification",
-                                "/api/v1/auth/verify-registration"
-                        ).permitAll()
-                        .requestMatchers("/api/v1/auth/change-password")
-                        .hasAnyRole("USER", "ADMIN")
-                )
+
+                        .requestMatchers(PUBLIC_ROUTES).permitAll()
+                        .requestMatchers(PERMISION_ROUTES)
+                        .hasAnyRole("BUSINESS", "CUSTOMER", "ADMIN")
+                        .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -70,14 +110,18 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:5173"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Accept"));
-        configuration.setAllowCredentials(true);
+
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(List.of(
+                "https://www.airsky.online",
+                "http://localhost:5173" // Thêm dòng này
+        ));
+        config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
+        config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
+        source.registerCorsConfiguration("/**", config);
         return source;
     }
 
@@ -85,4 +129,25 @@ public class SecurityConfig {
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
         return authConfig.getAuthenticationManager();
     }
+
+    @Bean
+    public RestTemplate restTemplate() {
+        RestTemplate restTemplate = new RestTemplate();
+
+        // Ensure JSON message converter is available
+        MappingJackson2HttpMessageConverter jsonConverter = new MappingJackson2HttpMessageConverter();
+        restTemplate.getMessageConverters().add(0, jsonConverter);
+
+        return restTemplate;
+    }
+
+    // @Bean
+    // public ObjectMapper objectMapper() {
+    //     ObjectMapper objectMapper = new ObjectMapper();
+    //     // Register Java time module so ZonedDateTime / LocalDateTime are serialized
+    //     objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+    //     // Use ISO dates instead of timestamps
+    //     objectMapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    //     return objectMapper;
+    // }
 }
