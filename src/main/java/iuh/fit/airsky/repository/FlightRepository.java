@@ -24,13 +24,13 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
             "(:departureAirportId IS NULL OR f.departureAirport.airportId = :departureAirportId) " +
             "AND (:arrivalAirportId IS NULL OR f.arrivalAirport.airportId = :arrivalAirportId) " +
             "AND f.departureTime BETWEEN :startTime AND :endTime " +
-            "AND (:status IS NULL OR f.status = :status) " +
+            "AND ((:statuses) IS NULL OR f.status IN (:statuses)) " +
             "AND (:tripType IS NULL OR f.tripType = :tripType)")
     Page<Flight> searchFlights(@Param("departureAirportId") Long departureAirportId,
                                @Param("arrivalAirportId") Long arrivalAirportId,
                                @Param("startTime") LocalDateTime startTime,
                                @Param("endTime") LocalDateTime endTime,
-                               @Param("status") FlightStatus status,
+                               @Param("statuses") List<FlightStatus> statuses,
                                @Param("tripType") TripType tripType,
                                Pageable pageable);
 
@@ -176,6 +176,7 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
             "AND f.arrivalAirport.airportId IN :arrivalAirportIds " +
             "AND FUNCTION('DATE', f.departureTime) IN :dates " +
             "AND f.departureTime > :minDepartureTime " +
+            "AND f.status <> iuh.fit.airsky.enums.FlightStatus.CANCELLED " +
             "GROUP BY f.departureAirport.airportId, f.arrivalAirport.airportId, FUNCTION('DATE', f.departureTime)")
     List<Object[]> findMinPriceByRouteAndDatesWithMinDepartureTime(
             @Param("departureAirportIds") List<Long> departureAirportIds,

@@ -539,8 +539,8 @@ public class FlightServiceImpl implements FlightService {
                 departureAirportId, arrivalAirportId, startTime, endTime, status, tripType);
 
         // Tối ưu: Luôn chỉ tìm các chuyến bay có thể đặt vé
-        // 1. Trạng thái phải là ON_TIME
-        status = FlightStatus.ON_TIME;
+        // 1. Trạng thái phải là ON_TIME hoặc DELAYED
+        List<FlightStatus> statuses = List.of(FlightStatus.ON_TIME, FlightStatus.DELAYED);
         // 2. Thời gian khởi hành phải sau thời điểm hiện tại ít nhất 4 tiếng
         LocalDateTime minDepartureTime = LocalDateTime.now().plusHours(4);
         if (startTime == null || startTime.isBefore(minDepartureTime)) {
@@ -552,7 +552,7 @@ public class FlightServiceImpl implements FlightService {
                 arrivalAirportId == null &&
                 startTime == null &&
                 endTime == null &&
-                status == null &&
+                statuses == null &&
                 tripType == null) {
             return findAll(pageable);
         }
@@ -573,7 +573,7 @@ public class FlightServiceImpl implements FlightService {
                 arrivalAirportId,
                 startTime,
                 endTime,
-                status,
+                statuses,
                 tripTypeEnum,
                 pageable);
 

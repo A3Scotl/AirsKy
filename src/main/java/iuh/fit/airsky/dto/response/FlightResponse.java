@@ -37,5 +37,6 @@ public class FlightResponse {
     private AirportResponse arrivalAirport;
     private AirlineResponse airline;
     private List<FlightTravelClassResponse> flightTravelClasses;
-
+    private String cancelReason;
+    private String delayReason;
 }

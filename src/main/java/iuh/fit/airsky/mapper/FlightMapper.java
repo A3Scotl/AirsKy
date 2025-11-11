@@ -33,6 +33,8 @@ public abstract class FlightMapper {
     @Mapping(target = "airline", source = "airline")
     @Mapping(target = "stopsList", source = "stopsList")
     @Mapping(target = "flightTravelClasses", expression = "java(entity.getFlightTravelClasses() != null ? flightTravelClassMapper.toResponseDTOList(entity.getFlightTravelClasses()) : null)")
+    @Mapping(target = "cancelReason", source = "canceledReason")
+    @Mapping(target = "delayReason", source = "delayedReason")
     public abstract FlightResponse toResponseDTO(Flight entity);
 
     @Mapping(target = "business.id", source = "businessId")
