@@ -1,14 +1,9 @@
-/*
- * @ (#) BaseAuditOnlyEntity.java 1.0 8/16/2025
- *
- * Copyright (c) 2025 IUH.All rights reserved
- */
-
 package iuh.fit.airsky.base;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.MappedSuperclass;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -20,7 +15,8 @@ import java.time.LocalDateTime;
  * @date : 8/16/2025
  * @version 1.0
  */
-@Data
+@Getter
+@Setter
 @MappedSuperclass
 public class BaseAuditOnlyEntity {
     @CreationTimestamp

@@ -1898,6 +1898,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Optional<BookingResponse> findByBookingCodeAndPassengerName(String bookingCode, String fullName) {
         log.info("Finding booking by booking code: {} and passenger name: {}", bookingCode, fullName);
 
@@ -1915,8 +1916,36 @@ public class BookingServiceImpl implements BookingService {
 
         if (bookingOpt.isPresent()) {
             Booking booking = bookingOpt.get();
+
+            // Passengers are already loaded via EntityGraph
+            log.info("Loaded passengers for booking {}: {}", booking.getBookingId(), booking.getPassengers().size());
+
+            // Load flight segments separately
+            Optional<Booking> bookingWithFlightSegments = bookingRepository.findByIdWithFlightSegments(booking.getBookingId());
+            if (bookingWithFlightSegments.isPresent()) {
+                booking.setFlightSegments(bookingWithFlightSegments.get().getFlightSegments());
+                log.info("Loaded flightSegments for booking {}: {}", booking.getBookingId(), booking.getFlightSegments() != null ? booking.getFlightSegments().size() : 0);
+            } else {
+                log.warn("No flightSegments found for booking {}", booking.getBookingId());
+            }
+
+            // Load check-ins separately
+            Optional<Booking> bookingWithCheckIns = bookingRepository.findByIdWithCheckIns(booking.getBookingId());
+            if (bookingWithCheckIns.isPresent()) {
+                booking.setCheckIns(bookingWithCheckIns.get().getCheckIns());
+                log.info("Loaded checkIns for booking {}: {}", booking.getBookingId(), booking.getCheckIns() != null ? booking.getCheckIns().size() : 0);
+            } else {
+                log.warn("No checkIns found for booking {}", booking.getBookingId());
+            }
+
             try {
                 BookingResponse response = bookingMapper.toResponseDTO(booking);
+
+                // Populate payment timestamps manually
+                if (response.getPayment() != null && booking.getPayment() != null) {
+                    response.getPayment().setCreatedAt(booking.getPayment().getCreatedAt());
+                    response.getPayment().setUpdatedAt(booking.getPayment().getUpdatedAt());
+                }
 
                 // Populate basic booking information that should always be available
                 if (booking.getFlight() != null) {
@@ -2588,11 +2617,12 @@ public class BookingServiceImpl implements BookingService {
         boolean canCheckIn = flight.getDepartureTime().isAfter(now.plusHours(1)) &&
                 flight.getDepartureTime().isBefore(now.plusDays(1));
 
-        if (!canCheckIn) {
-            throw new IllegalStateException("Check-in not available for this flight at this time");
-        }
-
         return booking.getPassengers().stream()
+                .filter(passenger -> {
+                    // Include if eligible or already checked in
+                    boolean alreadyCheckedIn = checkinRepository.existsByPassengerAndCompleted(passenger);
+                    return canCheckIn || alreadyCheckedIn;
+                })
                 .map(passenger -> {
                     CheckinEligiblePassengerResponse response = new CheckinEligiblePassengerResponse();
                     response.setPassengerId(passenger.getPassengerId());
@@ -2605,6 +2635,9 @@ public class BookingServiceImpl implements BookingService {
                     response.setFlightNumber(flight.getFlightNumber());
                     response.setDepartureTime(flight.getDepartureTime());
                     response.setArrivalTime(flight.getArrivalTime());
+                    response.setDepartureAirport(flight.getDepartureAirport().getAirportCode());
+                    response.setArrivalAirport(flight.getArrivalAirport().getAirportCode());
+                    response.setSegmentOrder(1); // For single flight, segment order is 1
 
                     // Calculate ticket price per passenger based on passenger type
                     BigDecimal ticketPrice = calculatePassengerTicketPrice(passenger, booking);

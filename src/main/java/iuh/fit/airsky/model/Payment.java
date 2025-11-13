@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Payment {
+public class Payment extends BaseAuditOnlyEntity {
         @Id
         @GeneratedValue(strategy = GenerationType.IDENTITY)
         private Long paymentId;
