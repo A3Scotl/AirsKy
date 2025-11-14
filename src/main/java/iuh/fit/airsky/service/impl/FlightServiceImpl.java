@@ -9,6 +9,7 @@ import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.dto.response.RoundTripFlightResponse;
 import iuh.fit.airsky.dto.response.UnifiedFlightSearchResponse;
 import iuh.fit.airsky.enums.BookingStatus;
+import iuh.fit.airsky.enums.CheckinStatus;
 import iuh.fit.airsky.enums.FlightStatus;
 import iuh.fit.airsky.enums.PaymentMethod;
 import iuh.fit.airsky.enums.PaymentStatus;
@@ -21,6 +22,7 @@ import iuh.fit.airsky.mapper.StopMapper;
 import iuh.fit.airsky.model.Aircraft;
 import iuh.fit.airsky.model.Airport;
 import iuh.fit.airsky.model.Booking;
+import iuh.fit.airsky.model.CheckIn;
 import iuh.fit.airsky.model.Flight;
 import iuh.fit.airsky.model.FlightSegment;
 import iuh.fit.airsky.model.FlightTravelClass;
@@ -67,6 +69,7 @@ public class FlightServiceImpl implements FlightService {
 
     private final FlightRepository flightRepository;
     private final BookingRepository bookingRepository;
+    private final CheckinRepository checkinRepository;
     private final FlightMapper flightMapper;
     private final AirlineRepository airlineRepository;
     private final AirportRepository airportRepository;
@@ -92,6 +95,7 @@ public class FlightServiceImpl implements FlightService {
             TravelClassRepository travelClassRepository, SeatService seatService,
             SeatRepository seatRepository,
             BookingRepository bookingRepository,
+            CheckinRepository checkinRepository,
             PaymentRepository paymentRepository,
             PaymentService paymentService,
             BookingService bookingService,
@@ -110,6 +114,7 @@ public class FlightServiceImpl implements FlightService {
         this.seatService = seatService;
         this.seatRepository = seatRepository;
         this.bookingRepository = bookingRepository;
+        this.checkinRepository = checkinRepository;
         this.paymentRepository = paymentRepository;
         this.paymentService = paymentService;
         this.bookingService = bookingService;
@@ -1051,6 +1056,16 @@ public class FlightServiceImpl implements FlightService {
                 paymentRepository.save(payment);
 
                 eventPublisher.publishEvent(new BookingCancelledEvent(this, booking, reason));
+            }
+
+            // Update check-in status to CANCELLED for all check-ins of this booking
+            List<CheckIn> checkIns = checkinRepository.findByBookingId(booking.getBookingId());
+            for (CheckIn checkIn : checkIns) {
+                if (checkIn.getStatus() != CheckinStatus.COMPLETED) {
+                    checkIn.setStatus(CheckinStatus.CANCELLED);
+                    checkinRepository.save(checkIn);
+                    log.debug("Updated check-in {} status to CANCELLED for cancelled booking {}", checkIn.getCheckInId(), booking.getBookingId());
+                }
             }
 
             bookingRepository.save(booking);

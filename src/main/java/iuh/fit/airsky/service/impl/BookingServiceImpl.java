@@ -876,6 +876,12 @@ public class BookingServiceImpl implements BookingService {
             // 2. Auto-complete bookings for departed flights
             autoCompleteBookingsForDepartedFlights(now);
 
+            // 3. Update check-in statuses for departed flights
+            updateCheckinStatusesForDepartedFlights(now);
+
+            // 4. Update check-in statuses for cancelled bookings
+            updateCheckinStatusesForCancelledBookings(now);
+
             log.info("Automatic flight and booking completion check completed successfully");
         } catch (Exception e) {
             log.error("Error during automatic flight and booking completion: {}", e.getMessage(), e);
@@ -950,6 +956,16 @@ public class BookingServiceImpl implements BookingService {
         // Hoàn điểm thưởng nếu booking đã sử dụng deal đổi điểm
         refundPointsForCancelledBooking(booking);
 
+        // Update check-in status to CANCELLED for all check-ins of this booking
+        List<CheckIn> checkIns = checkinRepository.findByBookingId(booking.getBookingId());
+        for (CheckIn checkIn : checkIns) {
+            if (checkIn.getStatus() != CheckinStatus.COMPLETED) {
+                checkIn.setStatus(CheckinStatus.CANCELLED);
+                checkinRepository.save(checkIn);
+                log.debug("Updated check-in {} status to CANCELLED for cancelled booking {}", checkIn.getCheckInId(), booking.getBookingId());
+            }
+        }
+
         // Phát sự kiện BookingCancelledEvent để các listener khác xử lý (gửi email,
         // socket,...)
         eventPublisher.publishEvent(new BookingCancelledEvent(this, booking, reason));
@@ -1021,6 +1037,50 @@ public class BookingServiceImpl implements BookingService {
                         booking.getBookingId(), booking.getFlight().getFlightNumber());
             } catch (Exception e) {
                 log.error("Failed to auto-complete booking {}: {}", booking.getBookingId(), e.getMessage());
+            }
+        }
+    }
+
+    private void updateCheckinStatusesForDepartedFlights(LocalDateTime now) {
+        log.info("Updating check-in statuses for departed flights...");
+
+        // Find all check-in records with PENDING status for departed flights
+        List<CheckIn> pendingCheckinsForDepartedFlights = checkinRepository
+                .findPendingCheckinsForDepartedFlights(now);
+
+        for (CheckIn checkIn : pendingCheckinsForDepartedFlights) {
+            try {
+                // Update check-in status to FLIGHT_DEPARTED
+                checkIn.setStatus(CheckinStatus.FLIGHT_DEPARTED);
+                checkinRepository.save(checkIn);
+
+                log.info("Updated check-in {} status to FLIGHT_DEPARTED for departed flight {}",
+                        checkIn.getCheckInId(), checkIn.getFlightSegment().getFlight().getFlightNumber());
+            } catch (Exception e) {
+                log.error("Failed to update check-in {} status: {}", checkIn.getCheckInId(), e.getMessage());
+            }
+        }
+    }
+
+    private void updateCheckinStatusesForCancelledBookings(LocalDateTime now) {
+        log.info("Updating check-in statuses for cancelled bookings...");
+
+        // Find all check-in records with non-CANCELLED status for cancelled bookings
+        List<CheckIn> checkinsForCancelledBookings = checkinRepository
+                .findCheckinsForCancelledBookings();
+
+        for (CheckIn checkIn : checkinsForCancelledBookings) {
+            try {
+                // Update check-in status to CANCELLED if not already COMPLETED
+                if (checkIn.getStatus() != CheckinStatus.COMPLETED) {
+                    checkIn.setStatus(CheckinStatus.CANCELLED);
+                    checkinRepository.save(checkIn);
+
+                    log.info("Updated check-in {} status to CANCELLED for cancelled booking {}",
+                            checkIn.getCheckInId(), checkIn.getBooking().getBookingId());
+                }
+            } catch (Exception e) {
+                log.error("Failed to update check-in {} status: {}", checkIn.getCheckInId(), e.getMessage());
             }
         }
     }
@@ -2473,6 +2533,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<CheckinEligiblePassengerResponse> getCheckinEligiblePassengers(String bookingCode, String fullName) {
         log.info("Getting check-in eligible passengers for booking: {} and passenger: {}", bookingCode, fullName);
 
@@ -2508,6 +2569,7 @@ public class BookingServiceImpl implements BookingService {
     /**
      * Get all check-in eligible passengers for a booking (không filter theo tên)
      */
+    @Transactional(readOnly = true)
     public List<CheckinEligiblePassengerResponse> getAllCheckinEligiblePassengers(String bookingCode) {
         log.info("Getting all check-in eligible passengers for booking: {}", bookingCode);
 
@@ -2619,9 +2681,9 @@ public class BookingServiceImpl implements BookingService {
 
         return booking.getPassengers().stream()
                 .filter(passenger -> {
-                    // Include if eligible or already checked in
-                    boolean alreadyCheckedIn = checkinRepository.existsByPassengerAndCompleted(passenger);
-                    return canCheckIn || alreadyCheckedIn;
+                    // Include if eligible or has any check-in record (regardless of status)
+                    boolean hasCheckinRecord = checkinRepository.existsByPassengerAndBooking(passenger, booking);
+                    return canCheckIn || hasCheckinRecord;
                 })
                 .map(passenger -> {
                     CheckinEligiblePassengerResponse response = new CheckinEligiblePassengerResponse();
@@ -2666,6 +2728,13 @@ public class BookingServiceImpl implements BookingService {
                         response.setCheckinStatus(CheckinStatus.BOOKING_NOT_CONFIRMED);
                     } else if (!isPaid) {
                         response.setCheckinStatus(CheckinStatus.BOOKING_NOT_CONFIRMED); // Not paid yet
+                    } else if (!canCheckIn) {
+                        // Check if flight has departed
+                        if (flight.getDepartureTime().isBefore(now)) {
+                            response.setCheckinStatus(CheckinStatus.FLIGHT_DEPARTED);
+                        } else {
+                            response.setCheckinStatus(CheckinStatus.CHECKIN_NOT_OPEN);
+                        }
                     } else {
                         response.setCheckinStatus(CheckinStatus.ELIGIBLE);
                     }

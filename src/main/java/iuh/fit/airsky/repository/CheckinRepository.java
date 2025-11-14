@@ -34,6 +34,9 @@ public interface CheckinRepository extends JpaRepository<CheckIn, Long> {
     @Query("SELECT c FROM CheckIn c LEFT JOIN FETCH c.baggage WHERE c.booking.bookingId = :bookingId AND c.deleted = false")
     List<CheckIn> findByBookingIdWithBaggage(@Param("bookingId") Long bookingId);
 
+    @Query("SELECT c FROM CheckIn c WHERE c.booking.bookingId = :bookingId AND c.deleted = false")
+    List<CheckIn> findByBookingId(@Param("bookingId") Long bookingId);
+
     @Modifying
     @Transactional
     @Query("UPDATE CheckIn c SET c.deleted = true, c.deletedAt = :now, c.active = false WHERE c.passenger = :passenger")
@@ -55,8 +58,18 @@ public interface CheckinRepository extends JpaRepository<CheckIn, Long> {
     @Query("SELECT c FROM CheckIn c LEFT JOIN FETCH c.baggage WHERE c.passenger = :passenger AND c.deleted = false ORDER BY c.flightSegment.segmentOrder")
     List<CheckIn> findByPassengerWithSegments(@Param("passenger") Passenger passenger);
 
-    @Query("SELECT c FROM CheckIn c WHERE c.booking = :booking AND c.flightSegment = :segment AND c.deleted = false")
-    List<CheckIn> findByBookingAndSegment(@Param("booking") Booking booking, @Param("segment") FlightSegment segment);
+    
 
+    @Query("SELECT COUNT(c) > 0 FROM CheckIn c WHERE c.passenger = :passenger AND c.booking = :booking AND c.deleted = false")
+    boolean existsByPassengerAndBooking(@Param("passenger") Passenger passenger, @Param("booking") Booking booking);
+
+    @Query("SELECT c FROM CheckIn c WHERE c.status = 'PENDING' AND c.flightSegment.flight.departureTime < :now AND c.deleted = false")
+    List<CheckIn> findPendingCheckinsForDepartedFlights(@Param("now") LocalDateTime now);
+
+    @Query("SELECT c FROM CheckIn c WHERE c.booking.status = 'CANCELLED' AND c.status != 'CANCELLED' AND c.status != 'COMPLETED' AND c.deleted = false")
+    List<CheckIn> findCheckinsForCancelledBookings();
+
+    @Query("SELECT c FROM CheckIn c WHERE c.booking = :booking AND c.flightSegment = :segment AND c.deleted = false")
+    Optional<CheckIn> findByBookingAndSegment(@Param("booking") Booking booking, @Param("segment") FlightSegment segment);
 
 }
