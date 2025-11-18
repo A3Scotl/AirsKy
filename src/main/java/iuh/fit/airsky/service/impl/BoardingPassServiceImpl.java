@@ -9,16 +9,11 @@ import iuh.fit.airsky.dto.response.QRVerificationResponse;
 import iuh.fit.airsky.enums.CheckinStatus;
 import iuh.fit.airsky.model.CheckIn;
 import iuh.fit.airsky.repository.CheckinRepository;
-import iuh.fit.airsky.service.BoardingPassService;
-import iuh.fit.airsky.service.CloudinaryService;
+import iuh.fit.airsky.service.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
@@ -33,16 +28,16 @@ import javax.imageio.ImageIO;
 @Slf4j
 public class BoardingPassServiceImpl implements BoardingPassService {
 
-    private final JavaMailSender mailSender;
+    private final EmailService emailService;
     private final CloudinaryService cloudinaryService;
     private final CheckinRepository checkinRepository;
 
     @Value("${app.boarding-pass.base-url:http://localhost:8080/api/v1/boarding-passes}")
     private String baseUrl;
 
-    public BoardingPassServiceImpl(JavaMailSender mailSender, CloudinaryService cloudinaryService,
+    public BoardingPassServiceImpl(EmailService emailService, CloudinaryService cloudinaryService,
                                    CheckinRepository checkinRepository) {
-        this.mailSender = mailSender;
+        this.emailService = emailService;
         this.cloudinaryService = cloudinaryService;
         this.checkinRepository = checkinRepository;
     }
@@ -73,17 +68,14 @@ public class BoardingPassServiceImpl implements BoardingPassService {
                 log.warn("No email address found for passenger {}", checkIn.getPassenger().getPassengerId());
                 return;
             }
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setTo(passengerEmail);
-            helper.setSubject("Your AirsKy Boarding Pass - " + checkIn.getBooking().getBookingCode());
-            helper.setFrom("noreply@airsky.com");
+            String subject = "Your AirsKy Boarding Pass - " + checkIn.getBooking().getBookingCode();
             String emailContent = buildEmailContent(checkIn, pdfUrl);
-            helper.setText(emailContent, true);
-            mailSender.send(message);
+
+            emailService.sendEmail(passengerEmail, subject, emailContent);
+
             log.info("Boarding pass email sent successfully to {} for check-in {}",
                     passengerEmail, checkIn.getCheckInId());
-        } catch (MessagingException e) {
+        } catch (Exception e) {
             log.error("Error sending boarding pass email for check-in {}: {}", checkIn.getCheckInId(), e.getMessage(), e);
         }
     }

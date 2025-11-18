@@ -1,10 +1,13 @@
 package iuh.fit.airsky.service.impl;
 
+import com.resend.Resend;
+import com.resend.core.exception.ResendException;
+import com.resend.services.emails.model.CreateEmailOptions;
+import com.resend.services.emails.model.CreateEmailResponse;
+
 import iuh.fit.airsky.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.ui.freemarker.FreeMarkerTemplateUtils;
@@ -12,8 +15,6 @@ import org.springframework.web.servlet.view.freemarker.FreeMarkerConfigurer;
 
 import freemarker.template.Template;
 import freemarker.template.TemplateException;
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import java.io.IOException;
 import java.util.Map;
 
@@ -22,23 +23,27 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class EmailServiceImpl implements EmailService {
 
-    private final JavaMailSender mailSender;
+    private final Resend resend;
     private final FreeMarkerConfigurer freeMarkerConfigurer;
+
+    private static final String FROM_EMAIL = "AirsKy <noreply@airsky.online>";
 
     @Override
     @Async
     public void sendEmail(String to, String subject, String body) {
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, "utf-8");
-            helper.setText(body, true);
-            helper.setTo(to);
-            helper.setSubject(subject);
-            mailSender.send(message);
-            log.info("Email sent to: {}", to);
-        } catch (MessagingException e) {
+            CreateEmailOptions params = CreateEmailOptions.builder()
+                    .from(FROM_EMAIL)
+                    .to(to)
+                    .subject(subject)
+                    .html(body)  
+                    .build();
+
+            CreateEmailResponse response = resend.emails().send(params);
+            log.info("Email sent to: {} with ID: {}", to, response.getId());
+        } catch (ResendException e) {
             log.error("Failed to send email to: {}", to, e);
-            throw new IllegalStateException("Failed to send email");
+            throw new IllegalStateException("Failed to send email: " + e.getMessage());
         }
     }
 
@@ -49,17 +54,21 @@ public class EmailServiceImpl implements EmailService {
             Template template = freeMarkerConfigurer.getConfiguration().getTemplate(templateName);
             String htmlBody = FreeMarkerTemplateUtils.processTemplateIntoString(template, (Map<String, Object>) model);
 
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, "utf-8");
-            helper.setText(htmlBody, true);
-            helper.setTo(to);
-            helper.setSubject(subject);
-            mailSender.send(message);
+            CreateEmailOptions params = CreateEmailOptions.builder()
+                    .from(FROM_EMAIL)
+                    .to(to)
+                    .subject(subject)
+                    .html(htmlBody)
+                    .build();
 
-            log.info("Template email sent to: {} with template: {}", to, templateName);
-        } catch (MessagingException | IOException | TemplateException e) {
+            CreateEmailResponse response = resend.emails().send(params);
+            log.info("Template email sent to: {} with template: {} and ID: {}", to, templateName, response.getId());
+        } catch (ResendException e) {
             log.error("Failed to send template email to: {} with template: {}", to, templateName, e);
-            throw new IllegalStateException("Failed to send template email");
+            throw new IllegalStateException("Failed to send template email: " + e.getMessage());
+        } catch (IOException | TemplateException ex) {
+            log.error("Failed to process template: {}", templateName, ex);
+            throw new IllegalStateException("Failed to process template email");
         }
     }
 
@@ -71,14 +80,14 @@ public class EmailServiceImpl implements EmailService {
                 "userName", userName,
                 "bookingId", bookingId,
                 "flightNumber", flightNumber,
-                "reviewUrl", "http://localhost:3000/my-bookings/" + bookingId + "/review" // Frontend URL
+                "reviewUrl", "https://www.airsky.online/my-bookings/" + bookingId + "/review" // Frontend URL
             );
 
             sendHtmlTemplateEmail(to, "Please share your flight experience with AirsKy", "ReviewInvitation.html", model);
             log.info("Review invitation email sent to: {} for booking: {}", to, bookingId);
         } catch (Exception e) {
             log.error("Failed to send review invitation email to: {} for booking: {}", to, bookingId, e);
-            throw new IllegalStateException("Failed to send review invitation email");
+            throw new IllegalStateException("Failed to send review invitation email: " + e.getMessage());
         }
     }
 }
