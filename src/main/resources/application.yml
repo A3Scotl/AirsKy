@@ -55,17 +55,17 @@ spring:
   sql:
     init:
       mode: always
-  mail:
-    host: smtp.gmail.com
-    port: 587
-    username: ${SPRING_MAIL_USERNAME}
-    password: ${SPRING_MAIL_PASSWORD}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
+  # mail:
+  #   host: smtp.gmail.com
+  #   port: 587
+  #   username: ${SPRING_MAIL_USERNAME}
+  #   password: ${SPRING_MAIL_PASSWORD}
+  #   properties:
+  #     mail:
+  #       smtp:
+  #         auth: true
+  #         starttls:
+  #           enable: true
 jwt:
   secret: ${JWT_SECRET}
   access:
@@ -99,8 +99,8 @@ paypal:
   client-id: ${PAYPAL_CLIENT_ID:}
   client-secret: ${PAYPAL_CLIENT_SECRET:}
   mode: ${PAYPAL_MODE:sandbox} # or 'live' for production
-  success-url-web: ${PAYPAL_SUCCESS_URL_WEB:https://www.airsky.online/payment-success}
-  cancel-url-web: ${PAYPAL_CANCEL_URL_WEB:https://www.airsky.online/payment-cancel}
+  success-url-web: ${PAYPAL_SUCCESS_URL_WEB}
+  cancel-url-web: ${PAYPAL_CANCEL_URL_WEB}
   success-url-mobile: ${PAYPAL_SUCCESS_URL_MOBILE:exp://192.168.1.87:8081/--/payment-result}
   cancel-url-mobile: ${PAYPAL_CANCEL_URL_MOBILE:exp://192.168.1.87:8081/--/payment-result}
 
@@ -127,3 +127,6 @@ data-mining:
     retry:
       max-attempts: 3
       backoff-multiplier: 2.0
+resend:
+  api:
+    key: ${RESEND_API_KEY}  # Set biến môi trường RESEND_API_KEY=re_xxxxxxxxx
