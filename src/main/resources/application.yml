@@ -101,8 +101,8 @@ paypal:
   mode: ${PAYPAL_MODE:sandbox} # or 'live' for production
   success-url-web: ${PAYPAL_SUCCESS_URL_WEB}
   cancel-url-web: ${PAYPAL_CANCEL_URL_WEB}
-  success-url-mobile: ${PAYPAL_SUCCESS_URL_MOBILE:exp://192.168.1.87:8081/--/payment-result}
-  cancel-url-mobile: ${PAYPAL_CANCEL_URL_MOBILE:exp://192.168.1.87:8081/--/payment-result}
+  success-url-mobile: ${PAYPAL_SUCCESS_URL_MOBILE:airskyapp://payment-result}
+  cancel-url-mobile: ${PAYPAL_CANCEL_URL_MOBILE:airskyapp://payment-result}
 
 # sepay Configuration
 sepay:
