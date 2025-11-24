@@ -66,7 +66,6 @@ public class SecurityConfig {
             "/api/v1/travel-classes/**",
             "/api/v1/users/**",
             "/api/v1/checkins/**",
-
             "/api/v1/reviews/**",
             "/api/v1/payments/**",
             "/api/v1/notifications/**",
@@ -79,7 +78,6 @@ public class SecurityConfig {
             "/api/v1/points-redemption/**",
             "/api/v1/analytics/**",
             "/api/v1/health"
-
     };
     private static final String[] PERMISION_ROUTES = {
             "/api/v1/auth/change-password",
@@ -112,13 +110,16 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
 
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(
+        config.setAllowedOriginPatterns(List.of(
                 "https://www.airsky.online",
-                "http://localhost:5173" 
+                "http://localhost:*",
+                "https://localhost:*",
+                "*" // Allow email clients and other origins for review submissions
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
-        config.setAllowCredentials(true);
+        config.setAllowedHeaders(List.of("*")); // Allow all headers
+        config.setAllowCredentials(false); // Set to false for wildcard origins
+        config.setMaxAge(3600L); // Cache preflight for 1 hour
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

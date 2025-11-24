@@ -357,12 +357,11 @@ public class ReviewServiceImpl implements ReviewService {
                     continue;
                 }
 
-                // Gửi email mời review
+                // Gửi email mời review với thông tin đầy đủ
                 String userEmail = review.getUser().getEmail();
                 String userName = review.getUser().getFirstName() + " " + review.getUser().getLastName();
-                String flightNumber = review.getFlight().getFlightNumber();
 
-                emailService.sendReviewInvitationEmail(userEmail, userName, review.getBooking().getBookingId(), flightNumber);
+                emailService.sendReviewInvitationEmailWithFullInfo(userEmail, userName, review);
 
                 // Cập nhật status và sentAt
                 review.setStatus(Review.ReviewStatus.SENT);
@@ -408,9 +407,8 @@ public class ReviewServiceImpl implements ReviewService {
             try {
                 String userEmail = review.getUser().getEmail();
                 String userName = review.getUser().getFirstName() + " " + review.getUser().getLastName();
-                String flightNumber = review.getFlight().getFlightNumber();
 
-                emailService.sendReviewInvitationEmail(userEmail, userName, review.getBooking().getBookingId(), flightNumber);
+                emailService.sendReviewInvitationEmailWithFullInfo(userEmail, userName, review);
 
                 // Reset error và cập nhật status
                 review.setStatus(Review.ReviewStatus.SENT);
@@ -433,4 +431,3 @@ public class ReviewServiceImpl implements ReviewService {
         log.info("Finished retrying failed review emails. Success: {}, Permanent failures: {}", successCount, permanentFailureCount);
     }
 }
-

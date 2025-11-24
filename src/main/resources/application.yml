@@ -117,6 +117,7 @@ app:
   boarding-pass:
     storage-path: ${BOARDING_PASS_STORAGE_PATH:boarding-passes}
     base-url: ${BOARDING_PASS_BASE_URL}
+  base-url: ${APP_BASE_URL:https://www.airsky.online}
   cleanup:
     reviews:
       enabled: ${CLEANUP_REVIEWS_ENABLED:false}

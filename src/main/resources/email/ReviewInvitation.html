@@ -164,13 +164,132 @@
         <!-- Review Section -->
         <div class="section review-section">
             <h3 style="background: none; color: #333; margin-bottom: 20px;">Đánh Giá Trải Nghiệm Của Bạn</h3>
-            <div class="stars">★★★★★</div>
-            <p style="margin: 20px 0; font-size: 16px;">Ý kiến của bạn giúp chúng tôi cải thiện dịch vụ tốt hơn!</p>
-            <a href="${reviewUrl}" class="review-button">Đánh Giá Ngay</a>
-            <p style="margin-top: 15px; font-size: 12px; color: #666;">
-                Link đánh giá có hiệu lực trong 7 ngày kể từ khi nhận email này.
-            </p>
+
+            <!-- Simple Review Form -->
+            <form id="reviewForm" method="POST" action="${baseUrl}/api/v1/reviews/submit-simple">
+                <input type="hidden" name="bookingId" value="${bookingId}">
+                <input type="hidden" name="userId" value="${userId}">
+                <input type="hidden" name="flightId" value="${flightId}">
+                <input type="hidden" name="passengerName" value="${passengerName}">
+                <input type="hidden" name="bookingCode" value="${bookingCode}">
+                <input type="hidden" name="flightNumber" value="${flightNumber}">
+
+                <div style="margin: 20px 0;">
+                    <!-- 5-star rating using radio buttons -->
+                    <div style="text-align: center; margin: 25px 0;">
+                        <fieldset style="border: none; padding: 0; margin: 0; display: inline-block;">
+                            <legend style="font-size: 18px; font-weight: bold; color: #333; margin-bottom: 15px;">Đánh
+                                giá chuyến bay:</legend>
+
+                            <div style="display: flex; flex-direction: column; gap: 15px; align-items: center;">
+                                <div style="display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;">
+                                    <div style="text-align: center;">
+                                        <input type="radio" name="rating" value="1" id="rating1"
+                                            style="display: inline-block; margin: 0 5px 10px 0; transform: scale(1.2);">
+                                        <label for="rating1" class="star-radio" data-rating="1"
+                                            style="display: inline-block; padding: 10px 15px; border-radius: 8px; background: rgba(255,255,255,0.1); border: 2px solid transparent; transition: all 0.2s; cursor: pointer; -webkit-tap-highlight-color: transparent;">
+                                            <div style="font-size: 20px; color: #ffc107; margin-bottom: 3px;">★</div>
+                                            <div style="font-size: 11px; color: #666; font-weight: 500;">Rất tệ</div>
+                                        </label>
+                                    </div>
+
+                                    <div style="text-align: center;">
+                                        <input type="radio" name="rating" value="2" id="rating2"
+                                            style="display: inline-block; margin: 0 5px 10px 0; transform: scale(1.2);">
+                                        <label for="rating2" class="star-radio" data-rating="2"
+                                            style="display: inline-block; padding: 10px 15px; border-radius: 8px; background: rgba(255,255,255,0.1); border: 2px solid transparent; transition: all 0.2s; cursor: pointer; -webkit-tap-highlight-color: transparent;">
+                                            <div style="font-size: 20px; color: #ffc107;">★★</div>
+                                            <div style="font-size: 11px; color: #666; font-weight: 500;">Tệ</div>
+                                        </label>
+                                    </div>
+
+                                    <div style="text-align: center;">
+                                        <input type="radio" name="rating" value="3" id="rating3"
+                                            style="display: inline-block; margin: 0 5px 10px 0; transform: scale(1.2);">
+                                        <label for="rating3" class="star-radio" data-rating="3"
+                                            style="display: inline-block; padding: 10px 15px; border-radius: 8px; background: rgba(255,255,255,0.1); border: 2px solid transparent; transition: all 0.2s; cursor: pointer; -webkit-tap-highlight-color: transparent;">
+                                            <div style="font-size: 20px; color: #ffc107;">★★★</div>
+                                            <div style="font-size: 11px; color: #666; font-weight: 500;">Bình thường
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    <div style="text-align: center;">
+                                        <input type="radio" name="rating" value="4" id="rating4"
+                                            style="display: inline-block; margin: 0 5px 10px 0; transform: scale(1.2);">
+                                        <label for="rating4" class="star-radio" data-rating="4"
+                                            style="display: inline-block; padding: 10px 15px; border-radius: 8px; background: rgba(255,255,255,0.1); border: 2px solid transparent; transition: all 0.2s; cursor: pointer; -webkit-tap-highlight-color: transparent;">
+                                            <div style="font-size: 20px; color: #ffc107;">★★★★</div>
+                                            <div style="font-size: 11px; color: #666; font-weight: 500;">Tốt</div>
+                                        </label>
+                                    </div>
+
+                                    <div style="text-align: center;">
+                                        <input type="radio" name="rating" value="5" id="rating5"
+                                            style="display: inline-block; margin: 0 5px 10px 0; transform: scale(1.2);">
+                                        <label for="rating5" class="star-radio" data-rating="5"
+                                            style="display: inline-block; padding: 10px 15px; border-radius: 8px; background: rgba(255,255,255,0.1); border: 2px solid transparent; transition: all 0.2s; cursor: pointer; -webkit-tap-highlight-color: transparent;">
+                                            <div style="font-size: 20px; color: #ffc107;">★★★★★</div>
+                                            <div style="font-size: 11px; color: #666; font-weight: 500;">Xuất sắc</div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </fieldset>
+
+                        <p id="ratingText" style="margin-top: 15px; font-size: 16px; color: #666; font-weight: 500;">
+                            Nhấn vào ngôi sao để đánh giá</p>
+                    </div>
+
+                    <div style="margin: 25px 0;">
+                        <label for="comment"
+                            style="display: block; margin-bottom: 12px; font-weight: bold; font-size: 16px; color: #333;">Nhận
+                            xét của bạn (tùy chọn):</label>
+                        <textarea id="comment" name="comment" rows="4"
+                            style="width: 100%; max-width: 100%; min-height: 100px; padding: 15px; border: 2px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 16px; resize: vertical; box-sizing: border-box; line-height: 1.4; -webkit-appearance: none; appearance: none; -webkit-text-size-adjust: 100%;"
+                            placeholder="Chia sẻ trải nghiệm của bạn về chuyến bay này..."></textarea>
+                    </div>
+
+                    <div style="text-align: center; margin: 30px 0;">
+                        <button type="submit" id="submitBtn"
+                            style="background: #dc3545 !important; color: white !important; padding: 15px 40px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer !important; transition: all 0.3s; min-height: 50px; min-width: 200px;">
+                            Gửi Đánh Giá
+                        </button>
+                    </div>
+            </form>
+
+
         </div>
+
+        <!-- Enhanced star rating with radio buttons -->
+        <script>
+            // Simplified test functions
+            function forceEnable() {
+                const btn = document.getElementById('submitBtn');
+                btn.disabled = false;
+                btn.style.background = '#28a745';
+                btn.style.cursor = 'pointer';
+                btn.style.opacity = '1';
+                document.getElementById('debugInfo').textContent = 'Force enabled!';
+                alert('Submit button force enabled!');
+            }
+
+            function testRadio() {
+                const radio1 = document.getElementById('rating1');
+                if (radio1) {
+                    radio1.checked = true;
+                    document.getElementById('debugInfo').textContent = 'Radio 1 checked! Value: ' + radio1.value;
+                    alert('Radio 1 checked! Value: ' + radio1.value + '. Now try submit button.');
+                } else {
+                    alert('Radio button not found!');
+                }
+            }
+
+            // Simple page load check
+            window.onload = function () {
+                document.getElementById('debugInfo').textContent = 'Page loaded successfully!';
+            };
+        </script>
 
         <!-- Benefits -->
         <div class="section">

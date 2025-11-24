@@ -14,4 +14,6 @@ public interface EmailService {
     void sendEmail(String to, String subject, String body);
     void sendHtmlTemplateEmail(String to, String subject, String templateName, Object model);
     void sendReviewInvitationEmail(String to, String userName, Long bookingId, String flightNumber);
+    void sendReviewInvitationEmailWithFullInfo(String to, String userName, iuh.fit.airsky.model.Review review);
+    void sendReviewInvitationEmailWithFullInfo(Long bookingId, Long userId, String email);
 }

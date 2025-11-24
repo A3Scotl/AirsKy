@@ -5,8 +5,11 @@ import iuh.fit.airsky.dto.response.ApiResponse;
 import iuh.fit.airsky.dto.response.PageResponse;
 import iuh.fit.airsky.dto.response.ReviewResponse;
 import iuh.fit.airsky.service.ReviewService;
+import iuh.fit.airsky.service.EmailService;
 import iuh.fit.airsky.util.ApiResponseUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Pageable;
@@ -19,9 +22,12 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/reviews")
 @RequiredArgsConstructor
+@Slf4j
+@CrossOrigin(origins = "*", maxAge = 3600) // Allow all origins for email submissions
 public class ReviewController {
 
     private final ReviewService reviewService;
+    private final EmailService emailService;
 
     @PostMapping
     // @PreAuthorize("hasAnyRole('CUSTOMER', 'BUSINESS')")
@@ -30,16 +36,7 @@ public class ReviewController {
         return ApiResponseUtil.buildResponse(true, "Review created successfully", review, "/api/reviews");
     }
 
-    // API để submit review từ email link (không cần auth vì đã verify qua email)
-    @PostMapping("/submit")
-    public ResponseEntity<ApiResponse<ReviewResponse>> submitReviewFromEmail(@RequestBody ReviewRequest request) {
-        // Validate required fields for email submission
-        if (request.getBookingId() == null || request.getUserId() == null || request.getFlightId() == null) {
-            return ApiResponseUtil.buildErrorResponse(HttpStatus.BAD_REQUEST, "Missing required fields", "VALIDATION_FAILED", "/api/reviews");
-        }
-        ReviewResponse review = reviewService.createReview(request);
-        return ApiResponseUtil.buildResponse(true, "Review submitted successfully", review, "/api/reviews");
-    }
+
 
     // API để lấy review request của user (để hiển thị form review)
     @GetMapping("/my-review-requests")
@@ -138,11 +135,63 @@ public class ReviewController {
         return ApiResponseUtil.buildResponse(true, "Review requests created for completed flights", null, "/api/reviews/create-review-requests");
     }
 
-    @GetMapping("/pending")
-    @PreAuthorize("hasAnyRole('ADMIN', 'FLIGHT_MANAGER')")
-    public ResponseEntity<ApiResponse<List<ReviewResponse>>> getPendingReviewRequests() {
-        // Thêm method này vào service sau
-        List<ReviewResponse> pendingReviews = reviewService.findPendingReviewRequests();
-        return ApiResponseUtil.buildResponse(true, "Pending review requests retrieved", pendingReviews, "/api/reviews/pending");
+
+
+    // Simple submit endpoint without token validation (for direct email forms)
+    @PostMapping("/submit-simple")
+    @CrossOrigin(origins = "*")
+    public ResponseEntity<String> submitSimpleReview(
+            @RequestParam Long bookingId,
+            @RequestParam Long userId, 
+            @RequestParam Long flightId,
+            @RequestParam Integer rating,
+            @RequestParam(required = false) String comment) {
+        
+        try {
+            log.info("Received simple review submission - bookingId: {}, userId: {}, flightId: {}, rating: {}", 
+                    bookingId, userId, flightId, rating);
+            
+            // Validate required fields
+            if (rating == null || rating < 1 || rating > 5) {
+                log.warn("Invalid rating: {}", rating);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("<html><head><meta charset='UTF-8'></head><body><h1>Đánh giá không hợp lệ</h1><p>Đánh giá phải từ 1 đến 5 sao.</p></body></html>");
+            }
+            
+            // Create review request
+            ReviewRequest request = new ReviewRequest();
+            request.setBookingId(bookingId);
+            request.setUserId(userId);
+            request.setFlightId(flightId);
+            request.setRating(rating);
+            request.setComment(comment);
+            
+            log.info("Creating review for bookingId: {}, userId: {}", bookingId, userId);
+            reviewService.createReview(request);
+            
+            log.info("Review created successfully for bookingId: {}", bookingId);
+            
+            // Return simple success page
+            String stars = "★".repeat(rating) + "☆".repeat(5-rating);
+            String successHtml = "<!DOCTYPE html><html lang=\"vi\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>Cảm ơn - AirsKy</title></head>" +
+                "<body style=\"font-family: Arial; text-align: center; padding: 50px; background: #f8f9fa;\">" +
+                "<div style=\"background: white; padding: 30px; border-radius: 10px; max-width: 500px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1);\">" +
+                "<h1 style=\"color: #28a745;\">Cảm ơn đánh giá!</h1>" +
+                "<p style=\"font-size: 24px; color: #ffd700; margin: 20px 0;\">" + stars + "</p>" +
+                "<p>Đánh giá " + rating + " sao của bạn đã được ghi nhận.</p>" +
+                (comment != null && !comment.trim().isEmpty() ? "<p style=\"font-style: italic; color: #666;\">\"" + comment + "\"</p>" : "") +
+                "<p>Cảm ơn bạn đã tin tưởng AirsKy Airlines!</p>" +
+                
+                "</div></body></html>";
+            
+            return ResponseEntity.ok()
+                .header("Content-Type", "text/html; charset=UTF-8")
+                .body(successHtml);
+            
+        } catch (Exception e) {
+            log.error("Error submitting simple review for bookingId: {}, userId: {}", bookingId, userId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("<html><head><meta charset='UTF-8'></head><body><h1>Có lỗi xảy ra</h1><p>" + e.getMessage() + "</p></body></html>");
+        }
     }
 }
