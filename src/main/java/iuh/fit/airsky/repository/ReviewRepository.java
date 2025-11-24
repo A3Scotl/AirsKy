@@ -26,8 +26,13 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     @Query("SELECT AVG(r.rating) FROM Review r WHERE r.flight.flightId = :flightId AND r.isApproved = true")
     Double findAverageRatingByFlightId(@Param("flightId") Long flightId);
 
-    @Query("SELECT r FROM Review r WHERE r.booking.bookingId = :bookingId AND r.user.id = :userId")
-    Optional<Review> findByBookingIdAndUserId(@Param("bookingId") Long bookingId, @Param("userId") Long userId);
+    @Query("SELECT r FROM Review r WHERE r.booking.bookingId = :bookingId AND r.user.id = :userId ORDER BY r.createdAt DESC")
+    List<Review> findByBookingIdAndUserIdOrderByCreatedAtDesc(@Param("bookingId") Long bookingId, @Param("userId") Long userId);
+
+    default Optional<Review> findLatestByBookingIdAndUserId(Long bookingId, Long userId) {
+        List<Review> reviews = findByBookingIdAndUserIdOrderByCreatedAtDesc(bookingId, userId);
+        return reviews.isEmpty() ? Optional.empty() : Optional.of(reviews.get(0));
+    }
 
     @Query("SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END FROM Review r WHERE r.booking.bookingId = :bookingId AND r.user.id = :userId")
     boolean existsByBookingIdAndUserId(@Param("bookingId") Long bookingId, @Param("userId") Long userId);
@@ -40,7 +45,8 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
            "AND fs.flight.status = 'DEPARTED' " +
            "AND b.status = 'CONFIRMED' " +
            "AND b.userId.id IS NOT NULL " +
-           "AND NOT EXISTS (SELECT r FROM Review r WHERE r.booking.bookingId = b.bookingId)")
+           "AND NOT EXISTS (SELECT r FROM Review r WHERE r.booking.bookingId = b.bookingId " +
+           "                 AND r.user.id = b.userId.id AND r.flight.flightId = fs.flight.flightId)")
     List<Object[]> findCompletedBookingsWithoutReviewRequests();
 
     @Query("SELECT r FROM Review r WHERE r.status = 'PENDING'")

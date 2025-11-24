@@ -87,7 +87,7 @@ public class ReviewServiceImpl implements ReviewService {
 
         // Tìm review request đã có hoặc tạo mới
         // Điều này ngăn việc tạo nhiều review request cho cùng một booking
-        Review review = reviewRepository.findByBookingIdAndUserId(request.getBookingId(), request.getUserId())
+        Review review = reviewRepository.findLatestByBookingIdAndUserId(request.getBookingId(), request.getUserId())
                 .orElseGet(() -> {
                     Review newReview = new Review();
                     newReview.setUser(user);
@@ -255,7 +255,7 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     public ReviewResponse findReviewByBookingAndUser(Long bookingId, Long userId) {
-        Optional<Review> review = reviewRepository.findByBookingIdAndUserId(bookingId, userId);
+        Optional<Review> review = reviewRepository.findLatestByBookingIdAndUserId(bookingId, userId);
         return review.map(reviewMapper::toResponseDTO).orElse(null);
     }
 
@@ -287,6 +287,12 @@ public class ReviewServiceImpl implements ReviewService {
             Long flightId = (Long) bookingData[2];
 
             try {
+                // Kiểm tra xem đã có review request chưa để tránh duplicate
+                if (reviewRepository.existsByBookingIdAndUserId(bookingId, userId)) {
+                    log.debug("Review request already exists for booking ID: {}, user ID: {}", bookingId, userId);
+                    continue;
+                }
+
                 // Tạo ReviewRequest cho review request
                 ReviewRequest reviewRequest = new ReviewRequest();
                 reviewRequest.setBookingId(bookingId);

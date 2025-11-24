@@ -13,6 +13,9 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_booking", columnList = "booking_id"),
                 @Index(name = "idx_user", columnList = "user_id"),
                 @Index(name = "idx_flight", columnList = "flight_id")
+        },
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_reviews_booking_user", columnNames = {"booking_id", "user_id"})
         })
 @Getter
 @Setter

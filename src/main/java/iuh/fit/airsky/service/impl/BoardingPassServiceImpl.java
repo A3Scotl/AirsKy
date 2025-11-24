@@ -32,7 +32,7 @@ public class BoardingPassServiceImpl implements BoardingPassService {
     private final CloudinaryService cloudinaryService;
     private final CheckinRepository checkinRepository;
 
-    @Value("${app.boarding-pass.base-url:http://localhost:8080/api/v1/boarding-passes}")
+    @Value("${app.boarding-pass.base-url}")
     private String baseUrl;
 
     public BoardingPassServiceImpl(EmailService emailService, CloudinaryService cloudinaryService,
