@@ -39,7 +39,7 @@ public class BookingResponse {
 
     // Enhanced: Check-in eligibility for passengers
     private List<CheckinEligiblePassengerResponse> checkinEligiblePassengers;
-
+    private String cancellationReason;
     // Enhanced: Available seats for current travel class grouped by segment
     private List<AvailableSeatsResponse> availableSeats;
 
