@@ -42,7 +42,6 @@ public class DealController {
     private final BookingRepository bookingRepository;
 
     @PostMapping(consumes = {"multipart/form-data"})
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<DealResponse>> createDeal(
             @RequestParam("dealCode") String dealCode,
             @RequestParam("title") String title,
@@ -350,3 +349,4 @@ public class DealController {
         return ApiResponseUtil.buildResponse(true, "Lấy danh sách mã giảm giá với trạng thái mới nhất thành công", response, "/api/v1/deals/refresh-status");
     }
 }
+
